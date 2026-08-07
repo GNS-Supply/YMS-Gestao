@@ -8,14 +8,11 @@
 // (arquivo firestore.rules), não do sigilo dessas chaves.
 // =====================================================================
 
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
+// Sem etapa de build no front-end, então TODOS os módulos do SDK
+// precisam vir do mesmo CDN (não misturar com "firebase/app" do npm).
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
