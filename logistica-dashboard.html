@@ -25,7 +25,7 @@
       <button class="tab-btn ativo" data-tab="solicitacoes">Solicitações Pendentes</button>
       <button class="tab-btn" data-tab="hoje">Agendamentos de Hoje</button>
       <button class="tab-btn" data-tab="todos">Todos os Agendamentos</button>
-      <button class="tab-btn" data-tab="slots">Gestão de Vagas/Horários</button>
+      <button class="tab-btn" data-tab="slots">Gestão de Horários e Vagas</button>
       <button class="tab-btn" data-tab="usuarios">Aprovação de Usuários</button>
       <button class="tab-btn" data-tab="processos">Tipos de Processo</button>
     </div>
@@ -68,46 +68,87 @@
     </div>
 
     <div class="tab-conteudo" id="tab-slots">
+
       <div class="card">
-        <h3>Cadastrar Vagas por Período / Data</h3>
+        <h3>1. Criar Regra Recorrente / Padrão Semanal</h3>
         <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
-          Defina a data, o intervalo de horário e a capacidade máxima de veículos para liberar agendamentos no pátio.
+          Defina regras gerais (ex: Seg a Sex, 06:00 às 00:00, 2 veículos/h) ou exceções por janela (ex: Horário de almoço das 11:00 às 14:00 com 1 veículo/h, ou Sábados das 06:00 às 14:00).
         </p>
 
-        <form id="form-slot">
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
-            <div class="campo">
-              <label for="slotData">Data</label>
-              <input type="date" id="slotData" required>
-            </div>
-            <div class="campo">
-              <label for="slotHoraInicio">Horário Início</label>
-              <input type="time" id="slotHoraInicio" required>
-            </div>
-            <div class="campo">
-              <label for="slotHoraFim">Horário Fim</label>
-              <input type="time" id="slotHoraFim" required>
-            </div>
-            <div class="campo">
-              <label for="slotCapacidade">Limite de Veículos</label>
-              <input type="number" id="slotCapacidade" min="1" value="2" required>
+        <form id="form-regra-slot">
+          <div style="margin-bottom:12px;">
+            <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:6px;">Dias da Semana Aplicáveis:</label>
+            <div style="display:flex; flex-wrap:wrap; gap:12px; font-size:0.85rem;">
+              <label><input type="checkbox" name="diasSemana" value="1" checked> Seg</label>
+              <label><input type="checkbox" name="diasSemana" value="2" checked> Ter</label>
+              <label><input type="checkbox" name="diasSemana" value="3" checked> Quar</label>
+              <label><input type="checkbox" name="diasSemana" value="4" checked> Qui</label>
+              <label><input type="checkbox" name="diasSemana" value="5" checked> Sex</label>
+              <label><input type="checkbox" name="diasSemana" value="6"> Sáb</label>
+              <label><input type="checkbox" name="diasSemana" value="0"> Dom</label>
             </div>
           </div>
-          <button type="submit" class="btn-primario" style="margin-top:12px; max-width:220px;">Criar Vaga / Horário</button>
-          <div class="erro" id="slot-error"></div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;">
+            <div class="campo">
+              <label for="regraHoraInicio">Horário Início</label>
+              <input type="time" id="regraHoraInicio" value="06:00" required>
+            </div>
+            <div class="campo">
+              <label for="regraHoraFim">Horário Fim</label>
+              <input type="time" id="regraHoraFim" value="00:00" required>
+            </div>
+            <div class="campo">
+              <label for="regraCapacidade">Veículos por Hora</label>
+              <input type="number" id="regraCapacidade" min="1" value="2" required>
+            </div>
+          </div>
+
+          <button type="submit" class="btn-primario" style="margin-top:12px; max-width:260px;">Salvar Regra Recorrente</button>
+          <div class="erro" id="regra-error"></div>
         </form>
+
+        <h4 style="margin-top:24px; margin-bottom:8px;">Regras Recorrentes Ativas</h4>
+        <div id="lista-regras" class="lista-agendamentos">
+          <div class="estado-vazio">Carregando regras...</div>
+        </div>
       </div>
 
       <div class="card">
-        <h3>Horários Configurados</h3>
-        <div style="margin-bottom: 12px; display:flex; gap:10px; align-items:center;">
-          <label for="filtroDataSlot" style="font-size:0.85rem; font-weight:600;">Filtrar por Data:</label>
+        <h3>2. Gerar Janelas em Massa no Calendário</h3>
+        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
+          Aplique as regras recorrentes acima para um período do calendário (ex: próximos 30 ou 60 dias).
+        </p>
+        <form id="form-gerar-massa" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">
+          <div class="campo" style="flex:1; min-width:150px;">
+            <label for="gerarDataInicio">Data Inicial</label>
+            <input type="date" id="gerarDataInicio" required>
+          </div>
+          <div class="campo" style="flex:1; min-width:150px;">
+            <label for="gerarDataFim">Data Final</label>
+            <input type="date" id="gerarDataFim" required>
+          </div>
+          <button type="submit" class="btn-primario" style="max-width:260px;">Gerar Vagas em Lote</button>
+        </form>
+        <div class="erro" id="gerar-error"></div>
+      </div>
+
+      <div class="card">
+        <h3>3. Edição Manual / Ajuste Pontual por Data</h3>
+        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:12px;">
+          Consulte e altere a capacidade ou remova horários para um dia específico.
+        </p>
+
+        <div style="margin-bottom: 16px; display:flex; gap:10px; align-items:center;">
+          <label for="filtroDataSlot" style="font-size:0.85rem; font-weight:600;">Data do Ajuste:</label>
           <input type="date" id="filtroDataSlot" style="padding:6px 10px; border:1px solid var(--cinza-borda); border-radius:6px;">
         </div>
+
         <div id="lista-slots" class="lista-agendamentos">
-          <div class="estado-vazio">Selecione uma data para visualizar as vagas.</div>
+          <div class="estado-vazio">Selecione uma data para alterar.</div>
         </div>
       </div>
+
     </div>
 
     <div class="tab-conteudo" id="tab-usuarios">
