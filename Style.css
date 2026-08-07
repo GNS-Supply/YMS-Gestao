@@ -72,6 +72,7 @@ body {
   border: 1px solid var(--cinza-borda);
   border-radius: 6px;
   font-size: 0.95rem;
+  font-family: inherit;
   transition: border-color .15s;
 }
 
@@ -146,3 +147,91 @@ button.btn-primario:disabled { opacity: 0.6; cursor: not-allowed; }
 .badge.pendente { background: #fff3e0; color: var(--laranja); }
 .badge.aprovado { background: #e6f7ed; color: var(--verde); }
 .badge.recusado, .badge.expirado { background: #fdeaea; color: var(--vermelho); }
+
+/* ---------- Abas ---------- */
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--cinza-borda);
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  padding: 10px 18px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+}
+
+.tab-btn.ativo { color: var(--azul); border-bottom-color: var(--azul); }
+
+.tab-conteudo { display: none; }
+.tab-conteudo.ativo { display: block; }
+
+/* ---------- Seleção de horário (agendamento) ---------- */
+.slots-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.slot-opcao {
+  border: 1px solid var(--cinza-borda);
+  border-radius: 6px;
+  padding: 9px 14px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  background: var(--branco);
+  transition: all .15s;
+}
+
+.slot-opcao:hover { border-color: var(--azul); }
+
+.slot-opcao.selecionado {
+  background: var(--azul);
+  border-color: var(--azul);
+  color: var(--branco);
+  font-weight: 600;
+}
+
+.slot-opcao small { display: block; font-weight: 400; opacity: .8; font-size: 0.75rem; }
+
+.slots-msg { font-size: 0.85rem; color: var(--texto-suave); margin-top: 6px; }
+
+/* ---------- Aviso de suporte ---------- */
+.aviso-suporte {
+  background: #eef5ff;
+  border: 1px solid #cfe2ff;
+  color: var(--azul-escuro);
+  font-size: 0.85rem;
+  padding: 12px 14px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+}
+
+/* ---------- Lista de agendamentos ---------- */
+.lista-agendamentos { display: flex; flex-direction: column; gap: 12px; }
+
+.item-agendamento {
+  border: 1px solid var(--cinza-borda);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.item-agendamento .linha-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.item-agendamento .data-hora { font-weight: 700; }
+
+.item-agendamento .detalhes { font-size: 0.85rem; color: var(--texto-suave); line-height: 1.5; }
+
+.estado-vazio { text-align: center; color: var(--texto-suave); padding: 30px 0; font-size: 0.9rem; }
