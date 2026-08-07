@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agendamento de Pátio - Painel de Logística</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="marca">🚛 Agendamento de Pátio — Painel Operacional</div>
+    <div>
+      <span id="user-nome" style="margin-right:16px; font-size:0.9rem; opacity:.85;"></span>
+      <button id="btn-logout">Sair</button>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <div class="tabs">
+      <button class="tab-btn ativo" data-tab="solicitacoes">Solicitações Pendentes</button>
+      <button class="tab-btn" data-tab="hoje">Agendamentos de Hoje</button>
+      <button class="tab-btn" data-tab="todos">Todos os Agendamentos</button>
+    </div>
+
+    <div class="tab-conteudo ativo" id="tab-solicitacoes">
+      <div class="card">
+        <h3>Solicitações Aguardando Aprovação</h3>
+        <div class="tabela-wrapper">
+          <table class="tabela-padrao">
+            <thead>
+              <tr>
+                <th>Data / Hora</th>
+                <th>Empresa</th>
+                <th>Processo</th>
+                <th>Placas (Cavalo / Carreta)</th>
+                <th>Motorista</th>
+                <th>Obs.</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tabela-pendentes">
+              <tr>
+                <td colspan="7" class="estado-vazio">Carregando solicitações...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-conteudo" id="tab-hoje">
+      <div class="card">
+        <h3>Programação do Pátio (Hoje)</h3>
+        <div class="tabela-wrapper">
+          <table class="tabela-padrao">
+            <thead>
+              <tr>
+                <th>Horário</th>
+                <th>Empresa</th>
+                <th>Processo</th>
+                <th>Cavalo / Carreta</th>
+                <th>Motorista</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="tabela-hoje">
+              <tr>
+                <td colspan="6" class="estado-vazio">Carregando agenda do dia...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-conteudo" id="tab-todos">
+      <div class="card">
+        <h3>Consulta Geral</h3>
+        <div class="campo" style="max-width: 250px; margin-bottom: 20px;">
+          <label for="filtro-data">Filtrar por Data</label>
+          <input type="date" id="filtro-data">
+        </div>
+
+        <div class="tabela-wrapper">
+          <table class="tabela-padrao">
+            <thead>
+              <tr>
+                <th>Data / Hora</th>
+                <th>Empresa</th>
+                <th>Processo</th>
+                <th>Cavalo / Carreta</th>
+                <th>Motorista</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="tabela-todos">
+              <tr>
+                <td colspan="6" class="estado-vazio">Selecione uma data para consultar.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script type="module" src="firebase-config.js"></script>
+  <script type="module" src="logistica-dashboard.js"></script>
+</body>
+</html>
