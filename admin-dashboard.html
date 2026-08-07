@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agendamento de Pátio - Painel Administrativo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="marca">⚙️ Painel do Administrador</div>
+    <div>
+      <span id="user-empresa" style="margin-right:16px; font-size:0.9rem; opacity:.85;"></span>
+      <button id="btn-logout">Sair</button>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <div class="tabs">
+      <button class="tab-btn ativo" data-tab="usuarios">Aprovação de Usuários</button>
+      <button class="tab-btn" data-tab="gestao-usuarios">Gestão de Usuários</button>
+      <button class="tab-btn" data-tab="processos">Tipos de Processo</button>
+    </div>
+
+    <div class="tab-conteudo ativo" id="tab-usuarios">
+      <div class="card">
+        <h3>Solicitações de Acesso Pendentes</h3>
+        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
+          Aprove os novos colaboradores para que eles possam acessar o sistema.
+        </p>
+        <div id="lista-pendentes" class="lista-agendamentos">
+          <div class="estado-vazio">Carregando solicitações...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-conteudo" id="tab-gestao-usuarios">
+      <div class="card">
+        <h3>Usuários Cadastrados</h3>
+        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
+          Gerencie papéis e níveis de acesso de cada usuário.
+        </p>
+        <div class="tabela-wrapper">
+          <table class="tabela-padrao">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>E-mail</th>
+                <th>Vínculo</th>
+                <th>Perfil de Acesso</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tb-todos-usuarios">
+              <tr>
+                <td colspan="5" class="estado-vazio">Carregando usuários...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-conteudo" id="tab-processos">
+      <div class="card">
+        <h3>Novo Tipo de Processo</h3>
+        <form id="form-processo" style="margin-top:16px;">
+          <div class="campo">
+            <label for="nomeProcesso">Nome do Processo</label>
+            <input type="text" id="nomeProcesso" placeholder="Ex: Carga Geral, Descarga Seca, Container..." required>
+          </div>
+          <button type="submit" class="btn-primario" style="max-width:200px;">Cadastrar Processo</button>
+          <div class="erro" id="processo-error"></div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h3>Processos Configurados</h3>
+        <div id="lista-processos" class="lista-agendamentos" style="margin-top:16px;">
+          <div class="estado-vazio">Carregando processos...</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script type="module" src="firebase-config.js"></script>
+  <script type="module" src="auth.js"></script>
+  <script type="module" src="admin-dashboard.js"></script>
+</body>
+</html>
