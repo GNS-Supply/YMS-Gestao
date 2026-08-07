@@ -1,5 +1,5 @@
 import { auth, db } from "./firebase-config.js";
-import { ROTAS_POR_TIPO } from "./Auth.js";
+import { ROTAS_POR_TIPO } from "./auth.js";
 import {
   createUserWithEmailAndPassword,
   signOut,
