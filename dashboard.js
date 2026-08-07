@@ -1,5 +1,5 @@
-import { auth, db } from "../Firebase-config.js";
-import { protegerPagina, logout } from "../Auth.js";
+import { auth, db } from "./Firebase-config.js";
+import { protegerPagina, logout } from "./Auth.js";
 import {
   collection, doc, getDocs,
   query, where, orderBy, runTransaction, serverTimestamp
@@ -7,12 +7,11 @@ import {
 
 let usuarioAtual = null;
 let perfilAtual = null;
-let horariosDisponiveis = []; // timeSlots do dia selecionado, já filtrados por vaga
+let horariosDisponiveis = [];
 
 document.getElementById("btn-logout").addEventListener("click", logout);
 document.getElementById("data").min = new Date().toISOString().split("T")[0];
 
-// ---- Abas ----
 document.querySelectorAll(".tab-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("ativo"));
@@ -23,7 +22,6 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
   });
 });
 
-// ---- Protege a página: somente tipo 1 (Transportadora) ----
 protegerPagina([1], (user, perfil) => {
   usuarioAtual = user;
   perfilAtual = perfil;
@@ -32,7 +30,6 @@ protegerPagina([1], (user, perfil) => {
   carregarTiposProcesso();
 });
 
-// ---- Dropdown de Tipos de Processo ----
 async function carregarTiposProcesso() {
   const select = document.getElementById("tipoProcesso");
   const snap = await getDocs(query(collection(db, "processTypes"), where("ativo", "==", true)));
@@ -44,7 +41,6 @@ async function carregarTiposProcesso() {
   });
 }
 
-// ---- Ao escolher a data, carrega horários com vaga disponível ----
 document.getElementById("data").addEventListener("change", carregarHorariosDoDia);
 
 async function carregarHorariosDoDia() {
@@ -58,7 +54,6 @@ async function carregarHorariosDoDia() {
   if (!dataStr) return;
   msg.textContent = "Carregando horários...";
 
-  // 0=domingo ... 6=sábado — usar T00:00:00 evita problema de fuso horário
   const diaSemana = new Date(dataStr + "T00:00:00").getDay();
 
   const slotsSnap = await getDocs(query(collection(db, "timeSlots"), where("ativo", "==", true)));
@@ -72,7 +67,6 @@ async function carregarHorariosDoDia() {
     return;
   }
 
-  // Conta agendamentos Pendente/Aprovado já existentes nesse dia
   const bookingsSnap = await getDocs(query(
     collection(db, "bookings"),
     where("dataAgendada", "==", dataStr),
@@ -89,7 +83,7 @@ async function carregarHorariosDoDia() {
   slotsDoDia.forEach(slot => {
     const ocupadas = contagemPorHora[slot.horaInicio] || 0;
     const vagasLivres = slot.limiteVeiculos - ocupadas;
-    if (vagasLivres <= 0) return; // omite horário lotado
+    if (vagasLivres <= 0) return;
 
     algumDisponivel = true;
     horariosDisponiveis.push(slot);
@@ -110,7 +104,6 @@ async function carregarHorariosDoDia() {
     : "Não há vagas disponíveis para essa data. Escolha outra data ou contate a logística.";
 }
 
-// ---- Envio do formulário ----
 document.getElementById("form-agendamento").addEventListener("submit", async (e) => {
   e.preventDefault();
   const errorBox = document.getElementById("agendamento-error");
@@ -155,10 +148,6 @@ document.getElementById("form-agendamento").addEventListener("submit", async (e)
   btn.textContent = "Agendando...";
 
   try {
-    // Documento contador por vaga (data + horário). Usado porque a
-    // transaction do Firestore no client SDK só lê/escreve documentos
-    // específicos, não o resultado de uma query — então não dá pra
-    // "contar bookings" diretamente dentro da transaction.
     const contadorId = `${dataStr}_${horaInicio}`;
     const contadorRef = doc(db, "slotCounts", contadorId);
     const timeSlotRef = doc(db, "timeSlots", slot.id);
@@ -211,7 +200,6 @@ document.getElementById("form-agendamento").addEventListener("submit", async (e)
   }
 });
 
-// ---- Meus Agendamentos ----
 async function carregarMeusAgendamentos() {
   const lista = document.getElementById("lista-agendamentos");
   lista.innerHTML = '<div class="estado-vazio">Carregando...</div>';
