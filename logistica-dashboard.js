@@ -12,6 +12,7 @@ import {
   query,
   where,
   serverTimestamp,
+  writeBatch,
   onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
@@ -33,13 +34,19 @@ const listaHoje = document.getElementById("lista-hoje");
 const listaTodos = document.getElementById("lista-todos");
 const filtroDataGeral = document.getElementById("filtroDataGeral");
 
-// Gestão de Vagas (Slots)
-const formSlot = document.getElementById("form-slot");
-const slotDataInput = document.getElementById("slotData");
-const slotHoraInicio = document.getElementById("slotHoraInicio");
-const slotHoraFim = document.getElementById("slotHoraFim");
-const slotCapacidade = document.getElementById("slotCapacidade");
-const slotError = document.getElementById("slot-error");
+// Regras e Vagas em Massa
+const formRegraSlot = document.getElementById("form-regra-slot");
+const regraHoraInicio = document.getElementById("regraHoraInicio");
+const regraHoraFim = document.getElementById("regraHoraFim");
+const regraCapacidade = document.getElementById("regraCapacidade");
+const regraError = document.getElementById("regra-error");
+const listaRegras = document.getElementById("lista-regras");
+
+const formGerarMassa = document.getElementById("form-gerar-massa");
+const gerarDataInicio = document.getElementById("gerarDataInicio");
+const gerarDataFim = document.getElementById("gerarDataFim");
+const gerarError = document.getElementById("gerar-error");
+
 const filtroDataSlot = document.getElementById("filtroDataSlot");
 const listaSlots = document.getElementById("lista-slots");
 
@@ -62,13 +69,17 @@ protegerPagina([2, 3], (user, perfil) => {
   document.getElementById("user-nome").textContent = perfil.nome || user.email;
   document.getElementById("user-tipo").textContent = perfil.tipo === 3 ? "Administrador" : "Logística";
 
-  // Define datas padrão nos inputs de filtro
+  // Datas padrão nos campos
   const hojeStr = dataDeHojeStr();
   if (filtroDataGeral) filtroDataGeral.value = hojeStr;
-  if (slotDataInput) slotDataInput.value = hojeStr;
   if (filtroDataSlot) filtroDataSlot.value = hojeStr;
+  if (gerarDataInicio) gerarDataInicio.value = hojeStr;
+  if (gerarDataFim) {
+    const dFim = new Date();
+    dFim.setDate(dFim.getDate() + 30);
+    gerarDataFim.value = formatarDataISO(dFim);
+  }
 
-  // Carrega visão inicial
   carregarSolicitacoes();
 });
 
@@ -85,7 +96,6 @@ function ativarAba(tab) {
   document.querySelector(`.tab-btn[data-tab="${tab}"]`)?.classList.add("ativo");
   document.getElementById(`tab-${tab}`)?.classList.add("ativo");
 
-  // Só mantém o listener em tempo real ativo enquanto a aba "hoje" está visível
   if (tab !== "hoje" && unsubscribeHoje) {
     unsubscribeHoje();
     unsubscribeHoje = null;
@@ -94,7 +104,10 @@ function ativarAba(tab) {
   if (tab === "solicitacoes") carregarSolicitacoes();
   if (tab === "hoje") carregarAgendamentosHoje();
   if (tab === "todos") carregarTodosAgendamentos(filtroDataGeral?.value || dataDeHojeStr());
-  if (tab === "slots") carregarSlotsGerenciamento(filtroDataSlot?.value || dataDeHojeStr());
+  if (tab === "slots") {
+    carregarRegrasRecorrentes();
+    carregarSlotsGerenciamento(filtroDataSlot?.value || dataDeHojeStr());
+  }
   if (tab === "usuarios") carregarUsuariosPendentes();
   if (tab === "processos") carregarTiposProcesso();
 }
@@ -170,7 +183,6 @@ async function responderAgendamento(idBooking, novoStatus) {
       atualizadoEm: serverTimestamp()
     });
 
-    // Registra Log de Auditoria
     await addDoc(collection(db, "auditLogs"), {
       bookingId: idBooking,
       acao: novoStatus === "Aprovado" ? "APROVAR_AGENDAMENTO" : "RECUSAR_AGENDAMENTO",
@@ -274,65 +286,213 @@ async function carregarTodosAgendamentos(dataStr) {
 }
 
 /* ===================================================================
-   4. ABA: GESTÃO DE VAGAS E HORÁRIOS (TIMESLOTS)
+   4. ABA: GESTÃO EM MASSA DE VAGAS E HORÁRIOS (REGRAS RECORRENTES)
    =================================================================== */
-formSlot?.addEventListener("submit", async (e) => {
+
+// CADASTRAR REGRA RECORRENTE
+formRegraSlot?.addEventListener("submit", async (e) => {
   e.preventDefault();
-  slotError.textContent = "";
+  regraError.textContent = "";
 
-  const dataStr = slotDataInput.value;
-  const horaInicio = slotHoraInicio.value;
-  const horaFim = slotHoraFim.value;
-  const capacidade = Number(slotCapacidade.value);
+  const diasCheck = Array.from(document.querySelectorAll("input[name='diasSemana']:checked")).map(cb => Number(cb.value));
+  const hInicio = regraHoraInicio.value;
+  const hFim = regraHoraFim.value;
+  const capacidade = Number(regraCapacidade.value);
 
-  if (horaInicio >= horaFim) {
-    slotError.textContent = "O horário de início deve ser menor que o horário de término.";
+  if (diasCheck.length === 0) {
+    regraError.textContent = "Selecione pelo menos um dia da semana.";
     return;
   }
 
-  const btn = formSlot.querySelector("button[type=submit]");
+  const btn = formRegraSlot.querySelector("button[type=submit]");
   btn.disabled = true;
-  btn.textContent = "Criando...";
 
   try {
-    // ID único e padronizado por data e hora para evitar duplicidades
-    const slotId = `${dataStr}_${horaInicio.replace(":", "-")}`;
-    const docRef = doc(db, "timeSlots", slotId);
-
-    await setDoc(docRef, {
-      data: dataStr,
-      horaInicio: horaInicio,
-      horaFim: horaFim,
+    await addDoc(collection(db, "timeSlotRules"), {
+      diasSemana: diasCheck,
+      horaInicio: hInicio,
+      horaFim: hFim,
       capacidadeMax: capacidade,
-      ocupados: 0,
       ativo: true,
       criadoEm: serverTimestamp()
-    }, { merge: true });
+    });
 
-    alert("Horário/Vaga cadastrado com sucesso!");
-    formSlot.reset();
-    slotDataInput.value = dataStr;
-    slotCapacidade.value = 2;
-    carregarSlotsGerenciamento(dataStr);
+    alert("Regra recorrente salva com sucesso!");
+    carregarRegrasRecorrentes();
   } catch (err) {
-    console.error("Erro ao criar horário:", err);
-    slotError.textContent = "Erro ao salvar o horário. Verifique as permissões.";
+    console.error("Erro ao salvar regra:", err);
+    regraError.textContent = "Erro ao salvar regra recorrente.";
   } finally {
     btn.disabled = false;
-    btn.textContent = "Criar Vaga / Horário";
   }
 });
 
+// LISTAR REGRAS RECORRENTES
+async function carregarRegrasRecorrentes() {
+  if (!listaRegras) return;
+  listaRegras.innerHTML = '<div class="estado-vazio">Carregando regras...</div>';
+
+  try {
+    const snap = await getDocs(collection(db, "timeSlotRules"));
+    if (snap.empty) {
+      listaRegras.innerHTML = '<div class="estado-vazio">Nenhuma regra recorrente cadastrada.</div>';
+      return;
+    }
+
+    const nomesDias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+    listaRegras.innerHTML = "";
+
+    snap.docs.forEach(docSnap => {
+      const r = docSnap.data();
+      const diasTxt = r.diasSemana.map(d => nomesDias[d]).join(", ");
+
+      const div = document.createElement("div");
+      div.className = "item-agendamento";
+      div.style.display = "flex";
+      div.style.justifyContent = "space-between";
+      div.style.alignItems = "center";
+
+      div.innerHTML = `
+        <div>
+          <strong>${r.horaInicio} às ${r.horaFim}</strong> (${r.capacidadeMax} veíq/h)<br>
+          <small style="color:var(--texto-suave)">Dias: ${diasTxt}</small>
+        </div>
+        <button class="btn-excluir-regra" data-id="${docSnap.id}" style="background:var(--vermelho); color:white; border:none; padding:4px 10px; border-radius:4px; font-size:0.8rem; cursor:pointer;">
+          Excluir Regra
+        </button>
+      `;
+
+      listaRegras.appendChild(div);
+    });
+
+    document.querySelectorAll(".btn-excluir-regra").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        if (confirm("Deseja remover esta regra recorrente? (Não afetará as vagas já geradas)")) {
+          await deleteDoc(doc(db, "timeSlotRules", e.target.dataset.id));
+          carregarRegrasRecorrentes();
+        }
+      });
+    });
+
+  } catch (err) {
+    console.error(err);
+    listaRegras.innerHTML = '<div class="estado-vazio">Erro ao carregar regras.</div>';
+  }
+}
+
+// GERAR VAGAS EM MASSA
+formGerarMassa?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  gerarError.textContent = "";
+
+  const dtInicio = new Date(gerarDataInicio.value + "T00:00:00");
+  const dtFim = new Date(gerarDataFim.value + "T00:00:00");
+
+  if (dtInicio > dtFim) {
+    gerarError.textContent = "A data inicial não pode ser maior que a data final.";
+    return;
+  }
+
+  const btn = formGerarMassa.querySelector("button[type=submit]");
+  btn.disabled = true;
+  btn.textContent = "Gerando vagas...";
+
+  try {
+    const snapRegras = await getDocs(query(collection(db, "timeSlotRules"), where("ativo", "==", true)));
+    if (snapRegras.empty) {
+      gerarError.textContent = "Cadastre pelo menos uma regra recorrente antes de gerar em massa.";
+      btn.disabled = false;
+      btn.textContent = "Gerar Vagas em Lote";
+      return;
+    }
+
+    const regras = snapRegras.docs.map(d => d.data());
+    let totalCriados = 0;
+    let curr = new Date(dtInicio);
+
+    // Iteração dia a dia no intervalo fornecido
+    while (curr <= dtFim) {
+      const diaDaSemana = curr.getDay(); // 0-6
+      const dataStr = formatarDataISO(curr);
+
+      // Busca regras aplicáveis a esse dia da semana
+      const regrasDia = regras.filter(r => r.diasSemana.includes(diaDaSemana));
+
+      if (regrasDia.length > 0) {
+        const batch = writeBatch(db);
+
+        regrasDia.forEach(r => {
+          const janelas = gerarJanelasHoraria(r.horaInicio, r.horaFim);
+
+          janelas.forEach(j => {
+            const slotId = `${dataStr}_${j.horaInicio.replace(":", "-")}`;
+            const refDoc = doc(db, "timeSlots", slotId);
+
+            // Cria/Sobrescreve a vaga mantendo o que já estava configurado
+            batch.set(refDoc, {
+              data: dataStr,
+              horaInicio: j.horaInicio,
+              horaFim: j.horaFim,
+              capacidadeMax: r.capacidadeMax,
+              ocupados: 0,
+              ativo: true,
+              criadoEm: serverTimestamp()
+            }, { merge: true });
+
+            totalCriados++;
+          });
+        });
+
+        await batch.commit();
+      }
+
+      curr.setDate(curr.getDate() + 1);
+    }
+
+    alert(`Sucesso! ${totalCriados} horários/vagas foram gerados ou atualizados em massa.`);
+    carregarSlotsGerenciamento(filtroDataSlot?.value || dataDeHojeStr());
+
+  } catch (err) {
+    console.error("Erro ao gerar vagas em massa:", err);
+    gerarError.textContent = "Erro ao processar a geração em lote.";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Gerar Vagas em Lote";
+  }
+});
+
+// AUXILIAR: Quebra janelas de 1 em 1 hora
+function gerarJanelasHoraria(hInicio, hFim) {
+  const janelas = [];
+  let [hIni, mIni] = hInicio.split(":").map(Number);
+  let [hEnd, mEnd] = hFim.split(":").map(Number);
+
+  if (hEnd === 0 && mEnd === 0) hEnd = 24; // Trata meia-noite (00:00) como hora 24
+
+  let atual = hIni;
+  while (atual < hEnd) {
+    let proximo = atual + 1;
+    let strInicio = `${String(atual).padStart(2, "0")}:00`;
+    let strFim = `${String(proximo === 24 ? 0 : proximo).padStart(2, "0")}:00`;
+
+    janelas.push({ horaInicio: strInicio, horaFim: strFim });
+    atual++;
+  }
+
+  return janelas;
+}
+
+// EDITAR/LISTAR SLOTS DA DATA SELECIONADA (EDIÇÃO PONTUAL)
 async function carregarSlotsGerenciamento(dataStr) {
   if (!listaSlots) return;
-  listaSlots.innerHTML = '<div class="estado-vazio">Carregando horários...</div>';
+  listaSlots.innerHTML = '<div class="estado-vazio">Carregando horários da data...</div>';
 
   try {
     const qSlots = query(collection(db, "timeSlots"), where("data", "==", dataStr));
     const snap = await getDocs(qSlots);
 
     if (snap.empty) {
-      listaSlots.innerHTML = `<div class="estado-vazio">Nenhum horário cadastrado para ${formatarData(dataStr)}.</div>`;
+      listaSlots.innerHTML = `<div class="estado-vazio">Nenhum horário gerado para ${formatarData(dataStr)}.</div>`;
       return;
     }
 
@@ -351,10 +511,14 @@ async function carregarSlotsGerenciamento(dataStr) {
             Ocupação: ${slot.ocupados || 0} / ${slot.capacidadeMax}
           </span>
         </div>
-        <div class="detalhes" style="margin-top:6px; display:flex; justify-content:space-between; align-items:center;">
-          <div>Data: <strong>${formatarData(slot.data)}</strong></div>
+        <div class="detalhes" style="margin-top:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <div>
+            Alterar Vagas: 
+            <input type="number" class="input-cap-slot" data-id="${slot.id}" value="${slot.capacidadeMax}" min="0" style="width:60px; padding:2px 6px;">
+            <button class="btn-salvar-cap-slot" data-id="${slot.id}" style="background:var(--azul); color:white; border:none; padding:4px 8px; border-radius:4px; font-size:0.8rem; cursor:pointer;">Salvar</button>
+          </div>
           <button class="btn-excluir-slot" data-id="${slot.id}" style="background:var(--vermelho); color:white; border:none; padding:4px 10px; border-radius:4px; font-size:0.8rem; cursor:pointer;">
-            Remover Vaga
+            Remover Vaga Desta Data
           </button>
         </div>
       `;
@@ -362,10 +526,28 @@ async function carregarSlotsGerenciamento(dataStr) {
       listaSlots.appendChild(div);
     });
 
+    // Salvar capacidade alterada pontualmente
+    document.querySelectorAll(".btn-salvar-cap-slot").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        const idSlot = e.target.dataset.id;
+        const novaCap = Number(document.querySelector(`.input-cap-slot[data-id="${idSlot}"]`).value);
+
+        try {
+          await updateDoc(doc(db, "timeSlots", idSlot), { capacidadeMax: novaCap });
+          alert("Capacidade da vaga atualizada para esta data!");
+          carregarSlotsGerenciamento(dataStr);
+        } catch (err) {
+          console.error(err);
+          alert("Erro ao alterar vaga.");
+        }
+      });
+    });
+
+    // Remover vaga pontualmente daquela data
     document.querySelectorAll(".btn-excluir-slot").forEach(btn => {
       btn.addEventListener("click", async (e) => {
         const idSlot = e.target.dataset.id;
-        if (confirm("Tem certeza que deseja remover esta vaga de horário?")) {
+        if (confirm("Remover esta vaga para esta data específica?")) {
           try {
             await deleteDoc(doc(db, "timeSlots", idSlot));
             carregarSlotsGerenciamento(dataStr);
@@ -568,10 +750,13 @@ async function obterTiposProcessoMap() {
 }
 
 function dataDeHojeStr() {
-  const agora = new Date();
-  const ano = agora.getFullYear();
-  const mes = String(agora.getMonth() + 1).padStart(2, "0");
-  const dia = String(agora.getDate()).padStart(2, "0");
+  return formatarDataISO(new Date());
+}
+
+function formatarDataISO(d) {
+  const ano = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
   return `${ano}-${mes}-${dia}`;
 }
 
