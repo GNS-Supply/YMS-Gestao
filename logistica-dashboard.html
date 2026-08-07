@@ -25,6 +25,7 @@
       <button class="tab-btn ativo" data-tab="solicitacoes">Solicitações Pendentes</button>
       <button class="tab-btn" data-tab="hoje">Agendamentos de Hoje</button>
       <button class="tab-btn" data-tab="todos">Todos os Agendamentos</button>
+      <button class="tab-btn" data-tab="slots">Gestão de Vagas/Horários</button>
       <button class="tab-btn" data-tab="usuarios">Aprovação de Usuários</button>
       <button class="tab-btn" data-tab="processos">Tipos de Processo</button>
     </div>
@@ -32,80 +33,79 @@
     <div class="tab-conteudo ativo" id="tab-solicitacoes">
       <div class="card">
         <h3>Solicitações Aguardando Aprovação</h3>
-        <div class="tabela-wrapper">
-          <table class="tabela-padrao">
-            <thead>
-              <tr>
-                <th>Data / Hora</th>
-                <th>Empresa</th>
-                <th>Processo</th>
-                <th>Placas (Cavalo / Carreta)</th>
-                <th>Motorista</th>
-                <th>Obs.</th>
-                <th>Ações</th>
-              </tr>
-            </thead>
-            <tbody id="tabela-pendentes">
-              <tr>
-                <td colspan="7" class="estado-vazio">Carregando solicitações...</td>
-              </tr>
-            </tbody>
-          </table>
+        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
+          Análise e aprovação de novos agendamentos submetidos pelas transportadoras.
+        </p>
+        <div id="lista-solicitacoes" class="lista-agendamentos">
+          <div class="estado-vazio">Carregando solicitações...</div>
         </div>
       </div>
     </div>
 
     <div class="tab-conteudo" id="tab-hoje">
       <div class="card">
-        <h3>Programação do Pátio (Hoje)</h3>
-        <div class="tabela-wrapper">
-          <table class="tabela-padrao">
-            <thead>
-              <tr>
-                <th>Horário</th>
-                <th>Empresa</th>
-                <th>Processo</th>
-                <th>Cavalo / Carreta</th>
-                <th>Motorista</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="tabela-hoje">
-              <tr>
-                <td colspan="6" class="estado-vazio">Carregando agenda do dia...</td>
-              </tr>
-            </tbody>
-          </table>
+        <h3>Agendamentos de Hoje (Tempo Real)</h3>
+        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
+          Acompanhamento das entradas e operações agendadas para a data atual.
+        </p>
+        <div id="lista-hoje" class="lista-agendamentos">
+          <div class="estado-vazio">Carregando agendamentos do dia...</div>
         </div>
       </div>
     </div>
 
     <div class="tab-conteudo" id="tab-todos">
       <div class="card">
-        <h3>Consulta Geral</h3>
-        <div class="campo" style="max-width: 250px; margin-bottom: 20px;">
-          <label for="filtro-data">Filtrar por Data</label>
-          <input type="date" id="filtro-data">
+        <h3>Consulta Geral de Agendamentos</h3>
+        <div style="margin-bottom: 16px; display:flex; gap:12px; align-items:center;">
+          <label for="filtroDataGeral" style="font-size:0.85rem; font-weight:600;">Filtrar por Data:</label>
+          <input type="date" id="filtroDataGeral" style="padding:6px 10px; border:1px solid var(--cinza-borda); border-radius:6px;">
         </div>
+        <div id="lista-todos" class="lista-agendamentos">
+          <div class="estado-vazio">Selecione uma data para filtrar.</div>
+        </div>
+      </div>
+    </div>
 
-        <div class="tabela-wrapper">
-          <table class="tabela-padrao">
-            <thead>
-              <tr>
-                <th>Data / Hora</th>
-                <th>Empresa</th>
-                <th>Processo</th>
-                <th>Cavalo / Carreta</th>
-                <th>Motorista</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="tabela-todos">
-              <tr>
-                <td colspan="6" class="estado-vazio">Selecione uma data para consultar.</td>
-              </tr>
-            </tbody>
-          </table>
+    <div class="tab-conteudo" id="tab-slots">
+      <div class="card">
+        <h3>Cadastrar Vagas por Período / Data</h3>
+        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
+          Defina a data, o intervalo de horário e a capacidade máxima de veículos para liberar agendamentos no pátio.
+        </p>
+
+        <form id="form-slot">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+            <div class="campo">
+              <label for="slotData">Data</label>
+              <input type="date" id="slotData" required>
+            </div>
+            <div class="campo">
+              <label for="slotHoraInicio">Horário Início</label>
+              <input type="time" id="slotHoraInicio" required>
+            </div>
+            <div class="campo">
+              <label for="slotHoraFim">Horário Fim</label>
+              <input type="time" id="slotHoraFim" required>
+            </div>
+            <div class="campo">
+              <label for="slotCapacidade">Limite de Veículos</label>
+              <input type="number" id="slotCapacidade" min="1" value="2" required>
+            </div>
+          </div>
+          <button type="submit" class="btn-primario" style="margin-top:12px; max-width:220px;">Criar Vaga / Horário</button>
+          <div class="erro" id="slot-error"></div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h3>Horários Configurados</h3>
+        <div style="margin-bottom: 12px; display:flex; gap:10px; align-items:center;">
+          <label for="filtroDataSlot" style="font-size:0.85rem; font-weight:600;">Filtrar por Data:</label>
+          <input type="date" id="filtroDataSlot" style="padding:6px 10px; border:1px solid var(--cinza-borda); border-radius:6px;">
+        </div>
+        <div id="lista-slots" class="lista-agendamentos">
+          <div class="estado-vazio">Selecione uma data para visualizar as vagas.</div>
         </div>
       </div>
     </div>
