@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agendamento de Pátio - Transportadora</title>
+  <link rel="stylesheet" href="../Style.css">
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="marca">🚛 Agendamento de Pátio</div>
+    <div>
+      <span id="user-empresa" style="margin-right:16px; font-size:0.9rem; opacity:.85;"></span>
+      <button id="btn-logout">Sair</button>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <div class="tabs">
+      <button class="tab-btn ativo" data-tab="novo">Novo Agendamento</button>
+      <button class="tab-btn" data-tab="meus">Meus Agendamentos</button>
+    </div>
+
+    <!-- ===== Aba: Novo Agendamento ===== -->
+    <div class="tab-conteudo ativo" id="tab-novo">
+      <div class="card">
+        <div class="aviso-suporte">
+          Caso não encontre o horário desejado, entre em contato diretamente com a equipe de logística pelo canal oficial.
+        </div>
+
+        <form id="form-agendamento">
+          <div class="campo">
+            <label for="empresa">Nome da Empresa</label>
+            <input type="text" id="empresa" required>
+          </div>
+
+          <div class="campo">
+            <label for="tipoProcesso">Tipo de Processo</label>
+            <select id="tipoProcesso" required>
+              <option value="">Selecione...</option>
+            </select>
+          </div>
+
+          <div class="campo">
+            <label for="data">Data</label>
+            <input type="date" id="data" required>
+          </div>
+
+          <div class="campo">
+            <label>Horário</label>
+            <div class="slots-grid" id="slots-grid"></div>
+            <div class="slots-msg" id="slots-msg">Selecione uma data para ver os horários disponíveis.</div>
+            <input type="hidden" id="horaInicioSelecionada">
+          </div>
+
+          <div class="campo">
+            <label for="placaCavalo">Placa do Cavalo</label>
+            <input type="text" id="placaCavalo" required maxlength="8" style="text-transform:uppercase;">
+          </div>
+
+          <div class="campo">
+            <label for="placaCarreta">Placa da Carreta</label>
+            <input type="text" id="placaCarreta" maxlength="8" style="text-transform:uppercase;">
+          </div>
+
+          <div class="campo">
+            <label for="motorista">Nome do Motorista</label>
+            <input type="text" id="motorista" required>
+          </div>
+
+          <div class="campo">
+            <label for="observacoes">Observações</label>
+            <textarea id="observacoes" rows="3" placeholder="Detalhes da carga, restrições de acesso, etc."></textarea>
+          </div>
+
+          <button type="submit" class="btn-primario">Confirmar Agendamento</button>
+          <div class="erro" id="agendamento-error"></div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ===== Aba: Meus Agendamentos ===== -->
+    <div class="tab-conteudo" id="tab-meus">
+      <div class="card">
+        <div class="lista-agendamentos" id="lista-agendamentos">
+          <div class="estado-vazio">Carregando...</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script type="module" src="dashboard.js"></script>
+</body>
+</html>
