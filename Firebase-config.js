@@ -14,7 +14,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/fireba
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
-// Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyAD93H9nQu9JOdpvjunsR_sB_noBQEeMfs",
   authDomain: "yms-gestao.firebaseapp.com",
@@ -24,7 +23,6 @@ const firebaseConfig = {
   appId: "1:721351714653:web:b429986b886b009461aab4"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
