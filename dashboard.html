@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Agendamento de Pátio - Transportadora</title>
-  <link rel="stylesheet" href="../Style.css">
+  <link rel="stylesheet" href="Style.css">
 </head>
 <body>
 
@@ -23,7 +23,6 @@
       <button class="tab-btn" data-tab="meus">Meus Agendamentos</button>
     </div>
 
-    <!-- ===== Aba: Novo Agendamento ===== -->
     <div class="tab-conteudo ativo" id="tab-novo">
       <div class="card">
         <div class="aviso-suporte">
@@ -81,7 +80,6 @@
       </div>
     </div>
 
-    <!-- ===== Aba: Meus Agendamentos ===== -->
     <div class="tab-conteudo" id="tab-meus">
       <div class="card">
         <div class="lista-agendamentos" id="lista-agendamentos">
@@ -92,6 +90,8 @@
 
   </div>
 
-  <script type="module" src="dashboard.js"></script>
+  <script type="module" src="Firebase-config.js"></script>
+  <script type="module" src="Auth.js"></script>
+  <script type="module" src="transportadora-dashboard.js"></script>
 </body>
 </html>
