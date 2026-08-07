@@ -1,4 +1,372 @@
-/* ---------- Tabelas e Ações da Administração ---------- */
+:root {
+  --azul-escuro: #0f2942;
+  --azul: #1a5f9e;
+  --laranja: #f28c28;
+  --verde: #2e9e5b;
+  --vermelho: #d64545;
+  --cinza-bg: #f4f6f8;
+  --cinza-borda: #d9dee3;
+  --texto: #1f2937;
+  --texto-suave: #6b7280;
+  --branco: #ffffff;
+  --sombra: 0 2px 8px rgba(15, 41, 66, 0.08);
+  --raio: 10px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--cinza-bg);
+  color: var(--texto);
+  min-height: 100vh;
+}
+
+/* ---------- Tela de Login / Cadastro / Recuperação ---------- */
+.login-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(160deg, var(--azul-escuro), var(--azul));
+  padding: 20px;
+}
+
+.login-card {
+  background: var(--branco);
+  border-radius: var(--raio);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  max-width: 400px;
+  padding: 32px 28px;
+}
+
+.login-card-larga {
+  max-width: 520px;
+}
+
+.logo {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--azul-escuro);
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.subtitulo {
+  font-size: 0.88rem;
+  color: var(--texto-suave);
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.campo {
+  margin-bottom: 16px;
+}
+
+.campo label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--texto);
+  margin-bottom: 6px;
+}
+
+.campo input[type="text"],
+.campo input[type="email"],
+.campo input[type="password"],
+.campo input[type="date"],
+.campo select,
+.campo textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--cinza-borda);
+  border-radius: 6px;
+  font-size: 0.92rem;
+  color: var(--texto);
+  background: var(--branco);
+  transition: border-color .15s;
+}
+
+.campo input:focus,
+.campo select:focus,
+.campo textarea:focus {
+  outline: none;
+  border-color: var(--azul);
+}
+
+.campo-radio {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.radio-opcao {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.btn-primario {
+  width: 100%;
+  padding: 12px;
+  background: var(--azul);
+  color: var(--branco);
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+  margin-top: 8px;
+}
+
+.btn-primario:hover {
+  background: var(--azul-escuro);
+}
+
+.btn-primario:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.erro {
+  color: var(--vermelho);
+  font-size: 0.85rem;
+  margin-top: 10px;
+  text-align: center;
+}
+
+.sucesso {
+  color: var(--verde);
+  font-size: 0.85rem;
+  margin-top: 10px;
+  text-align: center;
+}
+
+.login-links {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.login-links a {
+  color: var(--azul);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.login-links a:hover {
+  text-decoration: underline;
+}
+
+.separador {
+  margin: 0 8px;
+  color: var(--texto-suave);
+}
+
+/* ---------- Topbar ---------- */
+.topbar {
+  background: var(--azul-escuro);
+  color: var(--branco);
+  padding: 14px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.topbar .marca {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.topbar button {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--branco);
+  border: none;
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background .15s;
+}
+
+.topbar button:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ---------- Estrutura Principal ---------- */
+.container {
+  max-width: 900px;
+  margin: 30px auto;
+  padding: 0 16px;
+}
+
+.card {
+  background: var(--branco);
+  border-radius: var(--raio);
+  padding: 24px;
+  box-shadow: var(--sombra);
+  margin-bottom: 20px;
+}
+
+.card h3 {
+  font-size: 1.1rem;
+  color: var(--azul-escuro);
+  margin-bottom: 12px;
+}
+
+/* ---------- Abas ---------- */
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--cinza-borda);
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  padding: 10px 16px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: all .15s;
+}
+
+.tab-btn:hover {
+  color: var(--azul);
+}
+
+.tab-btn.ativo {
+  color: var(--azul);
+  border-bottom-color: var(--azul);
+}
+
+.tab-conteudo {
+  display: none;
+}
+
+.tab-conteudo.ativo {
+  display: block;
+}
+
+/* ---------- Slots de Horários ---------- */
+.slots-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.slot-opcao {
+  border: 1px solid var(--cinza-borda);
+  border-radius: 6px;
+  padding: 9px 14px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  background: var(--branco);
+  transition: all .15s;
+}
+
+.slot-opcao:hover {
+  border-color: var(--azul);
+}
+
+.slot-opcao.selecionado {
+  background: var(--azul);
+  border-color: var(--azul);
+  color: var(--branco);
+  font-weight: 600;
+}
+
+.slot-opcao small {
+  display: block;
+  font-weight: 400;
+  opacity: .8;
+  font-size: 0.75rem;
+}
+
+.slots-msg {
+  font-size: 0.85rem;
+  color: var(--texto-suave);
+  margin-top: 6px;
+}
+
+/* ---------- Avisos de Alerta e Suporte ---------- */
+.aviso-suporte {
+  background: #eef5ff;
+  border: 1px solid #cfe2ff;
+  color: var(--azul-escuro);
+  font-size: 0.85rem;
+  padding: 12px 14px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+}
+
+/* ---------- Listas de Agendamentos e Cards de Itens ---------- */
+.lista-agendamentos {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.item-agendamento {
+  border: 1px solid var(--cinza-borda);
+  border-radius: 8px;
+  padding: 16px;
+  background: var(--branco);
+}
+
+.item-agendamento .linha-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.item-agendamento .data-hora {
+  font-weight: 700;
+  color: var(--azul-escuro);
+  font-size: 0.95rem;
+}
+
+.badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.badge.pendente { background: #fff3cd; color: #856404; }
+.badge.aprovado { background: #d4edda; color: #155724; }
+.badge.recusado { background: #f8d7da; color: #721c24; }
+
+.item-agendamento .detalhes {
+  font-size: 0.88rem;
+  color: var(--texto-suave);
+  line-height: 1.4;
+}
+
+.estado-vazio {
+  text-align: center;
+  color: var(--texto-suave);
+  font-size: 0.9rem;
+  padding: 24px 0;
+}
+
+/* ---------- Tabelas e Ações do Painel Administrativo / Logística ---------- */
 .tabela-wrapper {
   overflow-x: auto;
   margin-top: 10px;
@@ -11,7 +379,8 @@
   text-align: left;
 }
 
-.tabela-padrao th, .tabela-padrao td {
+.tabela-padrao th, 
+.tabela-padrao td {
   padding: 12px;
   border-bottom: 1px solid var(--cinza-borda);
 }
@@ -34,8 +403,19 @@
   transition: opacity .15s;
 }
 
-.btn-acao:hover { opacity: 0.9; }
-.btn-acao:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-acao:hover {
+  opacity: 0.9;
+}
 
-.btn-aprovar { background: var(--verde); }
-.btn-desativar { background: var(--vermelho); }
+.btn-acao:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-aprovar {
+  background: var(--verde);
+}
+
+.btn-desativar {
+  background: var(--vermelho);
+}
