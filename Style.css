@@ -22,7 +22,7 @@ body {
   min-height: 100vh;
 }
 
-/* ---------- Tela de Login ---------- */
+/* ---------- Tela de Login / Cadastro / Recuperação ---------- */
 .login-wrap {
   min-height: 100vh;
   display: flex;
@@ -40,6 +40,8 @@ body {
   width: 100%;
   max-width: 380px;
 }
+
+.login-card-larga { max-width: 460px; }
 
 .login-card .logo {
   text-align: center;
@@ -104,6 +106,53 @@ button.btn-primario:disabled { opacity: 0.6; cursor: not-allowed; }
   min-height: 18px;
   text-align: center;
 }
+
+.sucesso {
+  color: var(--verde);
+  font-size: 0.85rem;
+  margin-top: 12px;
+  text-align: center;
+}
+
+.login-links {
+  text-align: center;
+  margin-top: 22px;
+  font-size: 0.85rem;
+}
+
+.login-links a {
+  color: var(--azul);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.login-links a:hover { text-decoration: underline; }
+
+.login-links .separador {
+  color: var(--texto-suave);
+  margin: 0 8px;
+}
+
+/* ---------- Campos de rádio (Cadastro) ---------- */
+.campo-radio {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.radio-opcao {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 400;
+  border: 1px solid var(--cinza-borda);
+  border-radius: 6px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.radio-opcao input { width: auto; }
 
 /* ---------- Layout geral dos dashboards ---------- */
 .topbar {
