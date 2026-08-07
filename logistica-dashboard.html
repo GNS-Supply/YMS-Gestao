@@ -25,6 +25,7 @@
       <button class="tab-btn ativo" data-tab="solicitacoes">Solicitações Pendentes</button>
       <button class="tab-btn" data-tab="hoje">Agendamentos de Hoje</button>
       <button class="tab-btn" data-tab="todos">Todos os Agendamentos</button>
+      <button class="tab-btn" data-tab="processos">Tipos de Processo</button>
     </div>
 
     <div class="tab-conteudo ativo" id="tab-solicitacoes">
@@ -104,6 +105,27 @@
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-conteudo" id="tab-processos">
+      <div class="card">
+        <h3>Novo Tipo de Processo</h3>
+        <form id="form-processo" style="margin-top:16px;">
+          <div class="campo">
+            <label for="nomeProcesso">Nome do Processo</label>
+            <input type="text" id="nomeProcesso" placeholder="Ex: Carga Geral, Descarga Seca, Container..." required>
+          </div>
+          <button type="submit" class="btn-primario" style="max-width:200px;">Cadastrar Processo</button>
+          <div class="erro" id="processo-error"></div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h3>Processos Configurados</h3>
+        <div id="lista-processos" class="lista-agendamentos" style="margin-top:16px;">
+          <div class="estado-vazio">Carregando processos...</div>
         </div>
       </div>
     </div>
