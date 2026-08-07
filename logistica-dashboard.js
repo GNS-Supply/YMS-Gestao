@@ -4,7 +4,10 @@ import {
   collection,
   doc,
   getDocs,
+  getDoc,
   addDoc,
+  setDoc,
+  deleteDoc,
   updateDoc,
   query,
   where,
@@ -16,11 +19,58 @@ let usuarioAtual = null;
 let perfilAtual = null;
 let tiposProcessoCache = null;
 
-// Listener em tempo real da aba "Agendamentos de Hoje" (precisa ser
-// desligado ao sair da aba para não continuar consumindo leituras)
+// Listener em tempo real da aba "Agendamentos de Hoje"
 let unsubscribeHoje = null;
 
 document.getElementById("btn-logout")?.addEventListener("click", logout);
+
+/* ===================================================================
+   ELEMENTOS DO DOM
+   =================================================================== */
+// Agendamentos
+const listaSolicitacoes = document.getElementById("lista-solicitacoes");
+const listaHoje = document.getElementById("lista-hoje");
+const listaTodos = document.getElementById("lista-todos");
+const filtroDataGeral = document.getElementById("filtroDataGeral");
+
+// Gestão de Vagas (Slots)
+const formSlot = document.getElementById("form-slot");
+const slotDataInput = document.getElementById("slotData");
+const slotHoraInicio = document.getElementById("slotHoraInicio");
+const slotHoraFim = document.getElementById("slotHoraFim");
+const slotCapacidade = document.getElementById("slotCapacidade");
+const slotError = document.getElementById("slot-error");
+const filtroDataSlot = document.getElementById("filtroDataSlot");
+const listaSlots = document.getElementById("lista-slots");
+
+// Usuários Pendentes
+const listaPendentesUsuarios = document.getElementById("lista-pendentes-usuarios");
+
+// Tipos de Processo
+const formProcesso = document.getElementById("form-processo");
+const nomeProcessoInput = document.getElementById("nomeProcesso");
+const processoError = document.getElementById("processo-error");
+const listaProcessos = document.getElementById("lista-processos");
+
+/* ===================================================================
+   PROTEÇÃO DE PÁGINA (Permite tipos 2 - Logística e 3 - Admin)
+   =================================================================== */
+protegerPagina([2, 3], (user, perfil) => {
+  usuarioAtual = user;
+  perfilAtual = perfil;
+
+  document.getElementById("user-nome").textContent = perfil.nome || user.email;
+  document.getElementById("user-tipo").textContent = perfil.tipo === 3 ? "Administrador" : "Logística";
+
+  // Define datas padrão nos inputs de filtro
+  const hojeStr = dataDeHojeStr();
+  if (filtroDataGeral) filtroDataGeral.value = hojeStr;
+  if (slotDataInput) slotDataInput.value = hojeStr;
+  if (filtroDataSlot) filtroDataSlot.value = hojeStr;
+
+  // Carrega visão inicial
+  carregarSolicitacoes();
+});
 
 /* ===================================================================
    NAVEGAÇÃO POR ABAS
@@ -41,400 +91,442 @@ function ativarAba(tab) {
     unsubscribeHoje = null;
   }
 
-  if (tab === "solicitacoes") carregarSolicitacoesPendentes();
-  if (tab === "hoje") observarAgendamentosHoje();
-  if (tab === "todos") {
-    const dataFiltro = document.getElementById("filtro-data").value;
-    if (dataFiltro) carregarTodosAgendamentos(dataFiltro);
-  }
+  if (tab === "solicitacoes") carregarSolicitacoes();
+  if (tab === "hoje") carregarAgendamentosHoje();
+  if (tab === "todos") carregarTodosAgendamentos(filtroDataGeral?.value || dataDeHojeStr());
+  if (tab === "slots") carregarSlotsGerenciamento(filtroDataSlot?.value || dataDeHojeStr());
   if (tab === "usuarios") carregarUsuariosPendentes();
   if (tab === "processos") carregarTiposProcesso();
 }
 
-/* ===================================================================
-   PROTEÇÃO DE PÁGINA (Tipo 2 - Logística, Tipo 3 - Admin Master)
-   =================================================================== */
-protegerPagina([2, 3], (user, perfil) => {
-  usuarioAtual = user;
-  perfilAtual = perfil;
-
-  document.getElementById("user-nome").textContent = perfil.nome || user.email;
-  document.getElementById("user-tipo").textContent = perfil.tipo === 3 ? "Administrador" : "Logística";
-
-  carregarSolicitacoesPendentes();
-});
+filtroDataGeral?.addEventListener("change", (e) => carregarTodosAgendamentos(e.target.value));
+filtroDataSlot?.addEventListener("change", (e) => carregarSlotsGerenciamento(e.target.value));
 
 /* ===================================================================
-   NOMES DOS TIPOS DE PROCESSO (cache usado nas tabelas)
+   1. ABA: SOLICITAÇÕES PENDENTES DE AGENDAMENTO
    =================================================================== */
-async function carregarNomesTiposProcesso(forcarAtualizacao = false) {
-  if (tiposProcessoCache && !forcarAtualizacao) return tiposProcessoCache;
-  tiposProcessoCache = {};
-  try {
-    const snap = await getDocs(collection(db, "processTypes"));
-    snap.forEach(d => {
-      const dados = d.data();
-      tiposProcessoCache[d.id] = dados.nome || dados.titulo || d.id;
-    });
-  } catch (err) {
-    console.error("Erro ao carregar tipos de processo:", err);
-  }
-  return tiposProcessoCache;
-}
-
-/* ===================================================================
-   1. SOLICITAÇÕES PENDENTES (Aprovar / Recusar agendamentos)
-   =================================================================== */
-async function carregarSolicitacoesPendentes() {
-  const tbody = document.getElementById("tabela-pendentes");
-  tbody.innerHTML = '<tr><td colspan="7" class="estado-vazio">Carregando solicitações...</td></tr>';
+async function carregarSolicitacoes() {
+  if (!listaSolicitacoes) return;
+  listaSolicitacoes.innerHTML = '<div class="estado-vazio">Carregando solicitações...</div>';
 
   try {
-    const [snap, tipos] = await Promise.all([
-      getDocs(query(collection(db, "bookings"), where("status", "==", "Pendente"))),
-      carregarNomesTiposProcesso()
-    ]);
+    const tipos = await obterTiposProcessoMap();
+    const q = query(collection(db, "bookings"), where("status", "==", "Pendente"));
+    const snap = await getDocs(q);
 
     if (snap.empty) {
-      tbody.innerHTML = '<tr><td colspan="7" class="estado-vazio">Nenhuma solicitação pendente no momento.</td></tr>';
+      listaSolicitacoes.innerHTML = '<div class="estado-vazio">Nenhuma solicitação pendente no momento.</div>';
       return;
     }
 
-    const pendentes = [];
-    snap.forEach(d => pendentes.push({ id: d.id, ...d.data() }));
-    pendentes.sort((a, b) =>
-      `${a.dataAgendada || ""} ${a.horaInicio || ""}`.localeCompare(`${b.dataAgendada || ""} ${b.horaInicio || ""}`)
-    );
+    listaSolicitacoes.innerHTML = "";
+    snap.docs.forEach(docSnap => {
+      const a = docSnap.data();
+      const idDoc = docSnap.id;
 
-    tbody.innerHTML = "";
-    pendentes.forEach(b => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${formatarData(b.dataAgendada)} ${escapeHtml(b.horaInicio || "-")}</td>
-        <td>${escapeHtml(b.empresa || "-")}</td>
-        <td>${escapeHtml(tipos[b.tipoProcessoId] || "-")}</td>
-        <td>${escapeHtml(b.placaCavalo || "-")}${b.placaCarreta ? " / " + escapeHtml(b.placaCarreta) : ""}</td>
-        <td>${escapeHtml(b.motorista || "-")}</td>
-        <td>${escapeHtml(b.observacoes || "-")}</td>
-        <td style="white-space:nowrap;">
-          <button class="btn-acao btn-aprovar" data-id="${b.id}" style="margin-right:6px;">Aprovar</button>
-          <button class="btn-acao btn-desativar" data-id="${b.id}">Recusar</button>
-        </td>
+      const div = document.createElement("div");
+      div.className = "item-agendamento";
+      div.innerHTML = `
+        <div class="linha-topo">
+          <span class="data-hora">📅 ${formatarData(a.dataAgendada)} às ${escapeHtml(a.horaInicio || "-")}</span>
+          <span class="badge pendente">Pendente</span>
+        </div>
+        <div class="detalhes" style="margin-bottom:10px;">
+          Empresa: <strong>${escapeHtml(a.empresa || "-")}</strong><br>
+          Processo: <strong>${escapeHtml(tipos[a.tipoProcessoId] || "-")}</strong><br>
+          Placas: ${escapeHtml(a.placaCavalo || "-")}${a.placaCarreta ? " / " + escapeHtml(a.placaCarreta) : ""}<br>
+          Motorista: ${escapeHtml(a.motorista || "-")}<br>
+          ${a.observacoes ? `Obs.: ${escapeHtml(a.observacoes)}<br>` : ""}
+          <small style="color:var(--texto-suave)">Solicitado por UID: ${a.usuarioId}</small>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <button class="btn-acao btn-aprovar-booking" data-id="${idDoc}" style="background:var(--verde); color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">Aprovar</button>
+          <button class="btn-acao btn-recusar-booking" data-id="${idDoc}" style="background:var(--vermelho); color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">Recusar</button>
+        </div>
       `;
-      tbody.appendChild(tr);
+      listaSolicitacoes.appendChild(div);
     });
 
-    tbody.querySelectorAll(".btn-aprovar").forEach(btn => {
-      btn.addEventListener("click", () => atualizarStatusBooking(btn.dataset.id, "Aprovado", "Aprovou"));
+    document.querySelectorAll(".btn-aprovar-booking").forEach(b => {
+      b.addEventListener("click", () => responderAgendamento(b.dataset.id, "Aprovado"));
     });
-    tbody.querySelectorAll(".btn-desativar").forEach(btn => {
-      btn.addEventListener("click", () => atualizarStatusBooking(btn.dataset.id, "Recusado", "Recusou"));
+    document.querySelectorAll(".btn-recusar-booking").forEach(b => {
+      b.addEventListener("click", () => responderAgendamento(b.dataset.id, "Recusado"));
     });
+
   } catch (err) {
-    console.error("Erro ao carregar solicitações pendentes:", err);
-    tbody.innerHTML = '<tr><td colspan="7" class="estado-vazio">Erro ao carregar solicitações.</td></tr>';
+    console.error("Erro ao carregar solicitações:", err);
+    listaSolicitacoes.innerHTML = '<div class="estado-vazio">Erro ao carregar solicitações.</div>';
   }
 }
 
-async function atualizarStatusBooking(bookingId, novoStatus, acaoLog) {
-  const botaoClicado =
-    document.querySelector(`.btn-aprovar[data-id="${bookingId}"]`) ||
-    document.querySelector(`.btn-desativar[data-id="${bookingId}"]`);
-  const linha = botaoClicado?.closest("tr");
-  linha?.querySelectorAll("button").forEach(b => (b.disabled = true));
+async function responderAgendamento(idBooking, novoStatus) {
+  if (!confirm(`Confirma definir esta solicitação como "${novoStatus}"?`)) return;
 
   try {
-    await updateDoc(doc(db, "bookings", bookingId), {
+    await updateDoc(doc(db, "bookings", idBooking), {
       status: novoStatus,
+      atualizadoPor: usuarioAtual.uid,
       atualizadoEm: serverTimestamp()
     });
 
-    try {
-      await addDoc(collection(db, "auditLogs"), {
-        bookingId,
-        usuarioId: usuarioAtual.uid,
-        acao: acaoLog,
-        dataHora: serverTimestamp()
-      });
-    } catch (logErr) {
-      console.warn("Falha ao registrar log de auditoria:", logErr);
-    }
+    // Registra Log de Auditoria
+    await addDoc(collection(db, "auditLogs"), {
+      bookingId: idBooking,
+      acao: novoStatus === "Aprovado" ? "APROVAR_AGENDAMENTO" : "RECUSAR_AGENDAMENTO",
+      executadoPor: usuarioAtual.uid,
+      dataHora: serverTimestamp()
+    });
 
-    carregarSolicitacoesPendentes();
+    alert(`Agendamento ${novoStatus.toLowerCase()} com sucesso!`);
+    carregarSolicitacoes();
   } catch (err) {
-    console.error(`Erro ao processar ação "${acaoLog}" no agendamento:`, err);
-    alert(`Não foi possível ${novoStatus === "Aprovado" ? "aprovar" : "recusar"} o agendamento.`);
-    linha?.querySelectorAll("button").forEach(b => (b.disabled = false));
+    console.error("Erro ao atualizar agendamento:", err);
+    alert("Erro ao processar ação.");
   }
 }
 
 /* ===================================================================
-   2. AGENDAMENTOS DE HOJE (atualização em tempo real)
+   2. ABA: AGENDAMENTOS DE HOJE (TEMPO REAL)
    =================================================================== */
-function observarAgendamentosHoje() {
-  const tbody = document.getElementById("tabela-hoje");
-  tbody.innerHTML = '<tr><td colspan="6" class="estado-vazio">Carregando agenda do dia...</td></tr>';
-
-  if (unsubscribeHoje) {
-    unsubscribeHoje();
-    unsubscribeHoje = null;
-  }
+function carregarAgendamentosHoje() {
+  if (!listaHoje) return;
+  listaHoje.innerHTML = '<div class="estado-vazio">Carregando agendamentos de hoje...</div>';
 
   const hojeStr = dataDeHojeStr();
   const q = query(collection(db, "bookings"), where("dataAgendada", "==", hojeStr));
 
-  unsubscribeHoje = onSnapshot(
-    q,
-    async (snap) => {
-      const tipos = await carregarNomesTiposProcesso();
+  if (unsubscribeHoje) unsubscribeHoje();
 
-      if (snap.empty) {
-        tbody.innerHTML = '<tr><td colspan="6" class="estado-vazio">Nenhum agendamento para hoje.</td></tr>';
-        return;
-      }
-
-      const agendamentos = [];
-      snap.forEach(d => agendamentos.push({ id: d.id, ...d.data() }));
-      agendamentos.sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
-
-      tbody.innerHTML = "";
-      agendamentos.forEach(b => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${escapeHtml(b.horaInicio || "-")}</td>
-          <td>${escapeHtml(b.empresa || "-")}</td>
-          <td>${escapeHtml(tipos[b.tipoProcessoId] || "-")}</td>
-          <td>${escapeHtml(b.placaCavalo || "-")}${b.placaCarreta ? " / " + escapeHtml(b.placaCarreta) : ""}</td>
-          <td>${escapeHtml(b.motorista || "-")}</td>
-          <td><span class="badge ${classeStatus(b.status)}">${escapeHtml(b.status || "-")}</span></td>
-        `;
-        tbody.appendChild(tr);
-      });
-    },
-    (err) => {
-      console.error("Erro ao observar agenda de hoje:", err);
-      tbody.innerHTML = '<tr><td colspan="6" class="estado-vazio">Erro ao carregar agenda do dia.</td></tr>';
-    }
-  );
-}
-
-/* ===================================================================
-   3. TODOS OS AGENDAMENTOS (consulta histórica por data)
-   =================================================================== */
-document.getElementById("filtro-data").addEventListener("change", (e) => {
-  if (e.target.value) carregarTodosAgendamentos(e.target.value);
-});
-
-async function carregarTodosAgendamentos(dataStr) {
-  const tbody = document.getElementById("tabela-todos");
-  tbody.innerHTML = '<tr><td colspan="6" class="estado-vazio">Carregando...</td></tr>';
-
-  try {
-    const [snap, tipos] = await Promise.all([
-      getDocs(query(collection(db, "bookings"), where("dataAgendada", "==", dataStr))),
-      carregarNomesTiposProcesso()
-    ]);
-
+  unsubscribeHoje = onSnapshot(q, async (snap) => {
     if (snap.empty) {
-      tbody.innerHTML = '<tr><td colspan="6" class="estado-vazio">Nenhum agendamento encontrado para esta data.</td></tr>';
+      listaHoje.innerHTML = `<div class="estado-vazio">Nenhum agendamento para hoje (${formatarData(hojeStr)}).</div>`;
       return;
     }
 
-    const agendamentos = [];
-    snap.forEach(d => agendamentos.push({ id: d.id, ...d.data() }));
-    agendamentos.sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
+    const tipos = await obterTiposProcessoMap();
+    listaHoje.innerHTML = "";
 
-    tbody.innerHTML = "";
-    agendamentos.forEach(b => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${formatarData(b.dataAgendada)} ${escapeHtml(b.horaInicio || "-")}</td>
-        <td>${escapeHtml(b.empresa || "-")}</td>
-        <td>${escapeHtml(tipos[b.tipoProcessoId] || "-")}</td>
-        <td>${escapeHtml(b.placaCavalo || "-")}${b.placaCarreta ? " / " + escapeHtml(b.placaCarreta) : ""}</td>
-        <td>${escapeHtml(b.motorista || "-")}</td>
-        <td><span class="badge ${classeStatus(b.status)}">${escapeHtml(b.status || "-")}</span></td>
+    snap.docs.forEach(docSnap => {
+      const a = docSnap.data();
+      const div = document.createElement("div");
+      div.className = "item-agendamento";
+      
+      div.innerHTML = `
+        <div class="linha-topo">
+          <span class="data-hora">⏰ ${escapeHtml(a.horaInicio || "-")}</span>
+          <span class="badge ${classeStatus(a.status)}">${escapeHtml(a.status || "Pendente")}</span>
+        </div>
+        <div class="detalhes">
+          Empresa: <strong>${escapeHtml(a.empresa || "-")}</strong> | Processo: <strong>${escapeHtml(tipos[a.tipoProcessoId] || "-")}</strong><br>
+          Placas: ${escapeHtml(a.placaCavalo || "-")}${a.placaCarreta ? " / " + escapeHtml(a.placaCarreta) : ""}<br>
+          Motorista: ${escapeHtml(a.motorista || "-")}
+        </div>
       `;
-      tbody.appendChild(tr);
+      listaHoje.appendChild(div);
+    });
+  }, (err) => {
+    console.error("Erro em tempo real:", err);
+    listaHoje.innerHTML = '<div class="estado-vazio">Erro ao carregar atualizações.</div>';
+  });
+}
+
+/* ===================================================================
+   3. ABA: TODOS OS AGENDAMENTOS (POR DATA)
+   =================================================================== */
+async function carregarTodosAgendamentos(dataStr) {
+  if (!listaTodos) return;
+  listaTodos.innerHTML = '<div class="estado-vazio">Carregando agendamentos...</div>';
+
+  try {
+    const tipos = await obterTiposProcessoMap();
+    const q = query(collection(db, "bookings"), where("dataAgendada", "==", dataStr));
+    const snap = await getDocs(q);
+
+    if (snap.empty) {
+      listaTodos.innerHTML = `<div class="estado-vazio">Nenhum agendamento encontrado para ${formatarData(dataStr)}.</div>`;
+      return;
+    }
+
+    listaTodos.innerHTML = "";
+    snap.docs.forEach(docSnap => {
+      const a = docSnap.data();
+      const div = document.createElement("div");
+      div.className = "item-agendamento";
+      
+      div.innerHTML = `
+        <div class="linha-topo">
+          <span class="data-hora">📅 ${formatarData(a.dataAgendada)} às ${escapeHtml(a.horaInicio || "-")}</span>
+          <span class="badge ${classeStatus(a.status)}">${escapeHtml(a.status || "Pendente")}</span>
+        </div>
+        <div class="detalhes">
+          Empresa: <strong>${escapeHtml(a.empresa || "-")}</strong> | Processo: <strong>${escapeHtml(tipos[a.tipoProcessoId] || "-")}</strong><br>
+          Placas: ${escapeHtml(a.placaCavalo || "-")}${a.placaCarreta ? " / " + escapeHtml(a.placaCarreta) : ""}<br>
+          Motorista: ${escapeHtml(a.motorista || "-")}
+        </div>
+      `;
+      listaTodos.appendChild(div);
     });
   } catch (err) {
-    console.error("Erro ao consultar agendamentos:", err);
-    tbody.innerHTML = '<tr><td colspan="6" class="estado-vazio">Erro ao consultar agendamentos.</td></tr>';
+    console.error(err);
+    listaTodos.innerHTML = '<div class="estado-vazio">Erro ao carregar lista.</div>';
   }
 }
 
 /* ===================================================================
-   4. APROVAÇÃO DE USUÁRIOS INTERNOS (colaboradores)
+   4. ABA: GESTÃO DE VAGAS E HORÁRIOS (TIMESLOTS)
+   =================================================================== */
+formSlot?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  slotError.textContent = "";
+
+  const dataStr = slotDataInput.value;
+  const horaInicio = slotHoraInicio.value;
+  const horaFim = slotHoraFim.value;
+  const capacidade = Number(slotCapacidade.value);
+
+  if (horaInicio >= horaFim) {
+    slotError.textContent = "O horário de início deve ser menor que o horário de término.";
+    return;
+  }
+
+  const btn = formSlot.querySelector("button[type=submit]");
+  btn.disabled = true;
+  btn.textContent = "Criando...";
+
+  try {
+    // ID único e padronizado por data e hora para evitar duplicidades
+    const slotId = `${dataStr}_${horaInicio.replace(":", "-")}`;
+    const docRef = doc(db, "timeSlots", slotId);
+
+    await setDoc(docRef, {
+      data: dataStr,
+      horaInicio: horaInicio,
+      horaFim: horaFim,
+      capacidadeMax: capacidade,
+      ocupados: 0,
+      ativo: true,
+      criadoEm: serverTimestamp()
+    }, { merge: true });
+
+    alert("Horário/Vaga cadastrado com sucesso!");
+    formSlot.reset();
+    slotDataInput.value = dataStr;
+    slotCapacidade.value = 2;
+    carregarSlotsGerenciamento(dataStr);
+  } catch (err) {
+    console.error("Erro ao criar horário:", err);
+    slotError.textContent = "Erro ao salvar o horário. Verifique as permissões.";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Criar Vaga / Horário";
+  }
+});
+
+async function carregarSlotsGerenciamento(dataStr) {
+  if (!listaSlots) return;
+  listaSlots.innerHTML = '<div class="estado-vazio">Carregando horários...</div>';
+
+  try {
+    const qSlots = query(collection(db, "timeSlots"), where("data", "==", dataStr));
+    const snap = await getDocs(qSlots);
+
+    if (snap.empty) {
+      listaSlots.innerHTML = `<div class="estado-vazio">Nenhum horário cadastrado para ${formatarData(dataStr)}.</div>`;
+      return;
+    }
+
+    listaSlots.innerHTML = "";
+    const slots = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    slots.sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
+
+    slots.forEach(slot => {
+      const div = document.createElement("div");
+      div.className = "item-agendamento";
+      
+      div.innerHTML = `
+        <div class="linha-topo">
+          <span class="data-hora">⏰ ${slot.horaInicio} às ${slot.horaFim}</span>
+          <span class="badge ${slot.ocupados >= slot.capacidadeMax ? 'recusado' : 'aprovado'}">
+            Ocupação: ${slot.ocupados || 0} / ${slot.capacidadeMax}
+          </span>
+        </div>
+        <div class="detalhes" style="margin-top:6px; display:flex; justify-content:space-between; align-items:center;">
+          <div>Data: <strong>${formatarData(slot.data)}</strong></div>
+          <button class="btn-excluir-slot" data-id="${slot.id}" style="background:var(--vermelho); color:white; border:none; padding:4px 10px; border-radius:4px; font-size:0.8rem; cursor:pointer;">
+            Remover Vaga
+          </button>
+        </div>
+      `;
+
+      listaSlots.appendChild(div);
+    });
+
+    document.querySelectorAll(".btn-excluir-slot").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        const idSlot = e.target.dataset.id;
+        if (confirm("Tem certeza que deseja remover esta vaga de horário?")) {
+          try {
+            await deleteDoc(doc(db, "timeSlots", idSlot));
+            carregarSlotsGerenciamento(dataStr);
+          } catch (err) {
+            console.error(err);
+            alert("Erro ao remover o horário.");
+          }
+        }
+      });
+    });
+
+  } catch (err) {
+    console.error("Erro ao carregar slots:", err);
+    listaSlots.innerHTML = '<div class="estado-vazio">Erro ao carregar os horários.</div>';
+  }
+}
+
+/* ===================================================================
+   5. ABA: APROVAÇÃO DE USUÁRIOS INTERNOS
    =================================================================== */
 async function carregarUsuariosPendentes() {
-  const container = document.getElementById("lista-pendentes-usuarios");
-  container.innerHTML = '<div class="estado-vazio">Carregando solicitações...</div>';
+  if (!listaPendentesUsuarios) return;
+  listaPendentesUsuarios.innerHTML = '<div class="estado-vazio">Carregando solicitações...</div>';
 
   try {
     const q = query(collection(db, "users"), where("status", "==", "pendente_aprovacao"));
     const snap = await getDocs(q);
 
     if (snap.empty) {
-      container.innerHTML = '<div class="estado-vazio">Nenhuma solicitação de colaborador pendente no momento.</div>';
+      listaPendentesUsuarios.innerHTML = '<div class="estado-vazio">Nenhum colaborador aguardando aprovação.</div>';
       return;
     }
 
-    const pendentes = [];
-    snap.forEach(d => pendentes.push({ id: d.id, ...d.data() }));
-    pendentes.sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
+    listaPendentesUsuarios.innerHTML = "";
+    snap.docs.forEach(docSnap => {
+      const u = docSnap.data();
+      const idUser = docSnap.id;
 
-    container.innerHTML = "";
-    pendentes.forEach(u => {
-      const item = document.createElement("div");
-      item.className = "item-agendamento";
-      item.innerHTML = `
+      const div = document.createElement("div");
+      div.className = "item-agendamento";
+      div.innerHTML = `
         <div class="linha-topo">
-          <span class="data-hora">${escapeHtml(u.nome || "Sem Nome")}</span>
+          <span class="data-hora">👤 ${escapeHtml(u.nome || u.email)}</span>
           <span class="badge pendente">Pendente</span>
         </div>
-        <div class="detalhes">
+        <div class="detalhes" style="margin-bottom:10px;">
           E-mail: <strong>${escapeHtml(u.email || "-")}</strong><br>
-          Vínculo: Colaborador Interno
+          Empresa/Vínculo: ${escapeHtml(u.empresa || "-")}
         </div>
-        <div style="margin-top:12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <select id="select-perfil-${u.id}" style="padding:6px; border-radius:4px; font-size:0.85rem;">
-            <option value="2">Atribuir como Logística (Tipo 2)</option>
-            <option value="3">Atribuir como Administrador (Tipo 3)</option>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <select id="sel-tipo-${idUser}" style="padding:4px 8px; border-radius:4px; border:1px solid var(--cinza-borda);">
+            <option value="2">Perfil Logística (Tipo 2)</option>
+            <option value="3">Perfil Admin (Tipo 3)</option>
           </select>
-          <button class="btn-acao btn-aprovar" data-id="${u.id}">Aprovar</button>
-          <button class="btn-acao btn-desativar" data-id="${u.id}">Recusar</button>
+          <button class="btn-aprovar-user" data-id="${idUser}" style="background:var(--verde); color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">Aprovar</button>
+          <button class="btn-recusar-user" data-id="${idUser}" style="background:var(--vermelho); color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">Recusar</button>
         </div>
       `;
-      container.appendChild(item);
+      listaPendentesUsuarios.appendChild(div);
     });
 
-    container.querySelectorAll(".btn-aprovar").forEach(btn => {
-      btn.addEventListener("click", async (e) => {
-        const idUser = e.target.dataset.id;
-        const tipoEscolhido = Number(document.getElementById(`select-perfil-${idUser}`).value);
-
-        const wrapper = e.target.closest(".item-agendamento");
-        wrapper?.querySelectorAll("button, select").forEach(el => (el.disabled = true));
-        e.target.textContent = "Aprovando...";
-
-        try {
-          await updateDoc(doc(db, "users", idUser), {
-            status: "aprovado",
-            tipo: tipoEscolhido,
-            atualizadoEm: serverTimestamp()
-          });
-          carregarUsuariosPendentes();
-        } catch (err) {
-          console.error(err);
-          alert("Erro ao aprovar usuário.");
-          wrapper?.querySelectorAll("button, select").forEach(el => (el.disabled = false));
-          e.target.textContent = "Aprovar";
-        }
+    document.querySelectorAll(".btn-aprovar-user").forEach(b => {
+      b.addEventListener("click", () => {
+        const id = b.dataset.id;
+        const tipoEscolhido = Number(document.getElementById(`sel-tipo-${id}`).value);
+        aprovarUsuarioInternal(id, tipoEscolhido, "aprovado");
       });
     });
 
-    container.querySelectorAll(".btn-desativar").forEach(btn => {
-      btn.addEventListener("click", async (e) => {
-        const idUser = e.target.dataset.id;
-        if (!confirm("Tem certeza que deseja recusar este cadastro? O colaborador não poderá acessar o sistema.")) return;
-
-        const wrapper = e.target.closest(".item-agendamento");
-        wrapper?.querySelectorAll("button, select").forEach(el => (el.disabled = true));
-        e.target.textContent = "Recusando...";
-
-        try {
-          await updateDoc(doc(db, "users", idUser), {
-            status: "recusado",
-            atualizadoEm: serverTimestamp()
-          });
-          carregarUsuariosPendentes();
-        } catch (err) {
-          console.error(err);
-          alert("Erro ao recusar cadastro.");
-          wrapper?.querySelectorAll("button, select").forEach(el => (el.disabled = false));
-          e.target.textContent = "Recusar";
-        }
+    document.querySelectorAll(".btn-recusar-user").forEach(b => {
+      b.addEventListener("click", () => {
+        aprovarUsuarioInternal(b.dataset.id, 1, "recusado");
       });
     });
+
+  } catch (err) {
+    console.error("Erro ao carregar usuários pendentes:", err);
+    listaPendentesUsuarios.innerHTML = '<div class="estado-vazio">Erro ao carregar lista de usuários.</div>';
+  }
+}
+
+async function aprovarUsuarioInternal(idUser, novoTipo, novoStatus) {
+  try {
+    await updateDoc(doc(db, "users", idUser), {
+      tipo: novoTipo,
+      status: novoStatus,
+      atualizadoEm: serverTimestamp()
+    });
+
+    alert(`Utilizador ${novoStatus === 'aprovado' ? 'aprovado' : 'recusado'} com sucesso!`);
+    carregarUsuariosPendentes();
   } catch (err) {
     console.error(err);
-    container.innerHTML = '<div class="estado-vazio">Erro ao carregar solicitações de colaboradores.</div>';
+    alert("Erro ao alterar utilizador.");
   }
 }
 
 /* ===================================================================
-   5. TIPOS DE PROCESSO (cadastrar / ativar / desativar)
+   6. ABA: TIPOS DE PROCESSO
    =================================================================== */
-document.getElementById("form-processo")?.addEventListener("submit", async (e) => {
+formProcesso?.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const errorBox = document.getElementById("processo-error");
-  errorBox.textContent = "";
+  processoError.textContent = "";
 
-  const nome = document.getElementById("nomeProcesso").value.trim();
+  const nome = nomeProcessoInput.value.trim();
   if (!nome) return;
 
-  const btn = e.target.querySelector("button[type=submit]");
+  const btn = formProcesso.querySelector("button[type=submit]");
   btn.disabled = true;
-  btn.textContent = "Salvando...";
 
   try {
     await addDoc(collection(db, "processTypes"), {
-      nome,
+      nome: nome,
       ativo: true,
       criadoEm: serverTimestamp()
     });
 
-    e.target.reset();
-    tiposProcessoCache = null; // força atualização do cache usado nas outras tabelas
-    await carregarTiposProcesso();
+    nomeProcessoInput.value = "";
+    tiposProcessoCache = null;
+    carregarTiposProcesso();
   } catch (err) {
     console.error(err);
-    errorBox.textContent = "Erro ao cadastrar o tipo de processo.";
+    processoError.textContent = "Erro ao cadastrar tipo de processo.";
   } finally {
     btn.disabled = false;
-    btn.textContent = "Cadastrar Processo";
   }
 });
 
 async function carregarTiposProcesso() {
-  const container = document.getElementById("lista-processos");
-  container.innerHTML = '<div class="estado-vazio">Carregando processos...</div>';
+  if (!listaProcessos) return;
+  listaProcessos.innerHTML = '<div class="estado-vazio">Carregando processos...</div>';
 
   try {
     const snap = await getDocs(collection(db, "processTypes"));
-
     if (snap.empty) {
-      container.innerHTML = '<div class="estado-vazio">Nenhum tipo de processo cadastrado.</div>';
+      listaProcessos.innerHTML = '<div class="estado-vazio">Nenhum processo cadastrado.</div>';
       return;
     }
 
-    const processos = [];
-    snap.forEach(d => processos.push({ id: d.id, ...d.data() }));
-    processos.sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
+    listaProcessos.innerHTML = "";
+    snap.docs.forEach(docSnap => {
+      const p = docSnap.data();
+      const div = document.createElement("div");
+      div.className = "item-agendamento";
+      div.style.display = "flex";
+      div.style.justifyContent = "space-between";
+      div.style.alignItems = "center";
 
-    container.innerHTML = "";
-    processos.forEach(p => {
-      const item = document.createElement("div");
-      item.className = "item-agendamento";
-      item.style.display = "flex";
-      item.style.justifyContent = "space-between";
-      item.style.alignItems = "center";
-
-      item.innerHTML = `
+      div.innerHTML = `
         <div>
           <strong>${escapeHtml(p.nome)}</strong>
-          <small style="display:block; color:var(--texto-suave);">
-            Status: ${p.ativo ? "Ativo" : "Inativo"}
-          </small>
+          <span class="badge ${p.ativo ? 'aprovado' : 'recusado'}" style="margin-left:8px;">${p.ativo ? 'Ativo' : 'Inativo'}</span>
         </div>
-        <button class="btn-acao ${p.ativo ? "btn-desativar" : "btn-aprovar"}" data-id="${p.id}" data-ativo="${p.ativo}">
-          ${p.ativo ? "Desativar" : "Ativar"}
+        <button class="btn-toggle-processo" data-id="${docSnap.id}" data-ativo="${p.ativo}" style="background:var(--azul); color:white; border:none; padding:4px 10px; border-radius:4px; font-size:0.8rem; cursor:pointer;">
+          ${p.ativo ? 'Desativar' : 'Ativar'}
         </button>
       `;
-      container.appendChild(item);
+      listaProcessos.appendChild(div);
     });
 
-    container.querySelectorAll(".btn-acao").forEach(btn => {
+    document.querySelectorAll(".btn-toggle-processo").forEach(btn => {
       btn.addEventListener("click", async (e) => {
         const id = e.target.dataset.id;
         const statusAtual = e.target.dataset.ativo === "true";
@@ -442,7 +534,7 @@ async function carregarTiposProcesso() {
 
         try {
           await updateDoc(doc(db, "processTypes", id), { ativo: !statusAtual });
-          tiposProcessoCache = null; // força atualização do cache usado nas outras tabelas
+          tiposProcessoCache = null;
           carregarTiposProcesso();
         } catch (err) {
           console.error(err);
@@ -453,13 +545,28 @@ async function carregarTiposProcesso() {
     });
   } catch (err) {
     console.error(err);
-    container.innerHTML = '<div class="estado-vazio">Erro ao carregar tipos de processo.</div>';
+    listaProcessos.innerHTML = '<div class="estado-vazio">Erro ao carregar tipos de processo.</div>';
   }
 }
 
 /* ===================================================================
-   UTILITÁRIOS
+   UTILITÁRIOS INTERNOS
    =================================================================== */
+async function obterTiposProcessoMap() {
+  if (tiposProcessoCache) return tiposProcessoCache;
+  const map = {};
+  try {
+    const snap = await getDocs(collection(db, "processTypes"));
+    snap.docs.forEach(d => {
+      map[d.id] = d.data().nome;
+    });
+    tiposProcessoCache = map;
+  } catch (err) {
+    console.error("Erro ao carregar mapa de processos:", err);
+  }
+  return map;
+}
+
 function dataDeHojeStr() {
   const agora = new Date();
   const ano = agora.getFullYear();
@@ -475,19 +582,21 @@ function formatarData(dataStr) {
 }
 
 function classeStatus(status) {
-  return (
-    {
-      Pendente: "pendente",
-      Aprovado: "aprovado",
-      Recusado: "recusado",
-      Expirado: "recusado",
-      Cancelado: "recusado"
-    }[status] || "pendente"
-  );
+  return {
+    Pendente: "pendente",
+    Aprovado: "aprovado",
+    Recusado: "recusado",
+    Expirado: "recusado",
+    Cancelado: "recusado"
+  }[status] || "pendente";
 }
 
 function escapeHtml(texto) {
-  const div = document.createElement("div");
-  div.textContent = texto ?? "";
-  return div.innerHTML;
+  if (!texto) return "";
+  return String(texto)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
