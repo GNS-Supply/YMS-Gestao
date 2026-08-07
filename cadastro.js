@@ -1,4 +1,4 @@
-import { auth, db } from "./Firebase-config.js";
+import { auth, db } from "./firebase-config.js";
 import { ROTAS_POR_TIPO } from "./Auth.js";
 import {
   createUserWithEmailAndPassword,
@@ -91,7 +91,7 @@ form.addEventListener("submit", async (e) => {
 
     if (dadosUser.status === "pendente_aprovacao") {
       await signOut(auth);
-      alert("Cadastro enviado! Você poderá entrar assim que um administrador aprovar seu acesso.");
+      alert(" enviado! Você poderá entrar assim que um administrador aprovar seu acesso.");
       window.location.href = "index.html";
       return;
     }
