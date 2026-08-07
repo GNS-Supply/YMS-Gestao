@@ -12,11 +12,11 @@ import {
 const form = document.getElementById("login-form");
 const errorBox = document.getElementById("login-error");
 
-// Mapa de redirecionamento por tipo de perfil
-const ROTAS_POR_TIPO = {
-  1: "/transportadora/dashboard.html",
-  2: "/logistica/dashboard.html",
-  3: "/admin/dashboard.html"
+// Mapa de redirecionamento por tipo de perfil (arquivos todos na raiz)
+export const ROTAS_POR_TIPO = {
+  1: "transportadora-dashboard.html",
+  2: "logistica-dashboard.html", // ainda não criado
+  3: "admin-dashboard.html"      // ainda não criado
 };
 
 form?.addEventListener("submit", async (e) => {
@@ -37,11 +37,17 @@ form?.addEventListener("submit", async (e) => {
       throw new Error("Usuário autenticado, mas sem perfil cadastrado. Contate o administrador.");
     }
 
-    const tipo = userSnap.data().tipo;
-    const rota = ROTAS_POR_TIPO[tipo];
+    const dadosUser = userSnap.data();
 
+    if (dadosUser.status === "pendente_aprovacao") {
+      await signOut(auth);
+      throw new Error("Seu cadastro ainda está aguardando aprovação de um administrador.");
+    }
+
+    const rota = ROTAS_POR_TIPO[dadosUser.tipo];
     if (!rota) {
-      throw new Error("Perfil de usuário inválido.");
+      await signOut(auth);
+      throw new Error("Perfil de usuário inválido ou sem acesso definido.");
     }
 
     window.location.href = rota;
@@ -69,12 +75,13 @@ function traduzErro(code) {
 export function protegerPagina(tiposPermitidos, callback) {
   onAuthStateChanged(auth, async (user) => {
     if (!user) {
-      window.location.href = "/index.html";
+      window.location.href = "index.html";
       return;
     }
     const snap = await getDoc(doc(db, "users", user.uid));
-    if (!snap.exists() || !tiposPermitidos.includes(snap.data().tipo)) {
-      window.location.href = "/index.html";
+    if (!snap.exists() || snap.data().status === "pendente_aprovacao" || !tiposPermitidos.includes(snap.data().tipo)) {
+      await signOut(auth);
+      window.location.href = "index.html";
       return;
     }
     callback(user, snap.data());
@@ -83,5 +90,5 @@ export function protegerPagina(tiposPermitidos, callback) {
 
 export async function logout() {
   await signOut(auth);
-  window.location.href = "/index.html";
+  window.location.href = "index.html";
 }
