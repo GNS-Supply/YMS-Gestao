@@ -1,286 +1,41 @@
-:root {
-  --azul-escuro: #0f2942;
-  --azul: #1a5f9e;
-  --laranja: #f28c28;
-  --verde: #2e9e5b;
-  --vermelho: #d64545;
-  --cinza-bg: #f4f6f8;
-  --cinza-borda: #d9dee3;
-  --texto: #1f2937;
-  --texto-suave: #6b7280;
-  --branco: #ffffff;
-  --sombra: 0 2px 8px rgba(15, 41, 66, 0.08);
-  --raio: 10px;
+/* ---------- Tabelas e Ações da Administração ---------- */
+.tabela-wrapper {
+  overflow-x: auto;
+  margin-top: 10px;
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  background: var(--cinza-bg);
-  color: var(--texto);
-  min-height: 100vh;
-}
-
-/* ---------- Tela de Login / Cadastro / Recuperação ---------- */
-.login-wrap {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(160deg, var(--azul-escuro), var(--azul));
-  padding: 20px;
-}
-
-.login-card {
-  background: var(--branco);
-  border-radius: var(--raio);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
-  padding: 40px 36px;
+.tabela-padrao {
   width: 100%;
-  max-width: 380px;
-}
-
-.login-card-larga { max-width: 460px; }
-
-.login-card .logo {
-  text-align: center;
-  margin-bottom: 8px;
-  font-size: 1.6rem;
-  font-weight: 700;
-  color: var(--azul-escuro);
-}
-
-.login-card .subtitulo {
-  text-align: center;
-  color: var(--texto-suave);
+  border-collapse: collapse;
   font-size: 0.9rem;
-  margin-bottom: 28px;
+  text-align: left;
 }
 
-.campo { margin-bottom: 18px; }
-
-.campo label {
-  display: block;
-  font-size: 0.85rem;
-  font-weight: 600;
-  margin-bottom: 6px;
-  color: var(--texto);
-}
-
-.campo input, .campo select, .campo textarea {
-  width: 100%;
-  padding: 11px 12px;
-  border: 1px solid var(--cinza-borda);
-  border-radius: 6px;
-  font-size: 0.95rem;
-  font-family: inherit;
-  transition: border-color .15s;
-}
-
-.campo input:focus, .campo select:focus, .campo textarea:focus {
-  outline: none;
-  border-color: var(--azul);
-}
-
-button.btn-primario {
-  width: 100%;
-  background: var(--azul);
-  color: var(--branco);
-  border: none;
+.tabela-padrao th, .tabela-padrao td {
   padding: 12px;
-  border-radius: 6px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background .15s;
-}
-
-button.btn-primario:hover { background: var(--azul-escuro); }
-button.btn-primario:disabled { opacity: 0.6; cursor: not-allowed; }
-
-.erro {
-  color: var(--vermelho);
-  font-size: 0.85rem;
-  margin-top: 12px;
-  min-height: 18px;
-  text-align: center;
-}
-
-.sucesso {
-  color: var(--verde);
-  font-size: 0.85rem;
-  margin-top: 12px;
-  text-align: center;
-}
-
-.login-links {
-  text-align: center;
-  margin-top: 22px;
-  font-size: 0.85rem;
-}
-
-.login-links a {
-  color: var(--azul);
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.login-links a:hover { text-decoration: underline; }
-
-.login-links .separador {
-  color: var(--texto-suave);
-  margin: 0 8px;
-}
-
-/* ---------- Campos de rádio (Cadastro) ---------- */
-.campo-radio {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.radio-opcao {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.9rem;
-  font-weight: 400;
-  border: 1px solid var(--cinza-borda);
-  border-radius: 6px;
-  padding: 10px 12px;
-  cursor: pointer;
-}
-
-.radio-opcao input { width: auto; }
-
-/* ---------- Layout geral dos dashboards ---------- */
-.topbar {
-  background: var(--azul-escuro);
-  color: var(--branco);
-  padding: 14px 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.topbar .marca { font-weight: 700; font-size: 1.1rem; }
-
-.topbar button {
-  background: transparent;
-  border: 1px solid rgba(255,255,255,0.4);
-  color: var(--branco);
-  padding: 7px 14px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.container { padding: 24px; max-width: 1200px; margin: 0 auto; }
-
-.card {
-  background: var(--branco);
-  border-radius: var(--raio);
-  box-shadow: var(--sombra);
-  padding: 20px;
-  margin-bottom: 20px;
-}
-
-.badge {
-  display: inline-block;
-  padding: 3px 10px;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-
-.badge.pendente { background: #fff3e0; color: var(--laranja); }
-.badge.aprovado { background: #e6f7ed; color: var(--verde); }
-.badge.recusado, .badge.expirado { background: #fdeaea; color: var(--vermelho); }
-
-/* ---------- Abas ---------- */
-.tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 20px;
   border-bottom: 1px solid var(--cinza-borda);
 }
 
-.tab-btn {
-  background: none;
-  border: none;
-  padding: 10px 18px;
-  font-size: 0.95rem;
+.tabela-padrao th {
+  background: var(--cinza-bg);
   font-weight: 600;
-  color: var(--texto-suave);
-  cursor: pointer;
-  border-bottom: 3px solid transparent;
-}
-
-.tab-btn.ativo { color: var(--azul); border-bottom-color: var(--azul); }
-
-.tab-conteudo { display: none; }
-.tab-conteudo.ativo { display: block; }
-
-/* ---------- Seleção de horário (agendamento) ---------- */
-.slots-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 8px;
-}
-
-.slot-opcao {
-  border: 1px solid var(--cinza-borda);
-  border-radius: 6px;
-  padding: 9px 14px;
-  font-size: 0.9rem;
-  cursor: pointer;
-  background: var(--branco);
-  transition: all .15s;
-}
-
-.slot-opcao:hover { border-color: var(--azul); }
-
-.slot-opcao.selecionado {
-  background: var(--azul);
-  border-color: var(--azul);
-  color: var(--branco);
-  font-weight: 600;
-}
-
-.slot-opcao small { display: block; font-weight: 400; opacity: .8; font-size: 0.75rem; }
-
-.slots-msg { font-size: 0.85rem; color: var(--texto-suave); margin-top: 6px; }
-
-/* ---------- Aviso de suporte ---------- */
-.aviso-suporte {
-  background: #eef5ff;
-  border: 1px solid #cfe2ff;
   color: var(--azul-escuro);
-  font-size: 0.85rem;
-  padding: 12px 14px;
-  border-radius: 6px;
-  margin-bottom: 20px;
 }
 
-/* ---------- Lista de agendamentos ---------- */
-.lista-agendamentos { display: flex; flex-direction: column; gap: 12px; }
-
-.item-agendamento {
-  border: 1px solid var(--cinza-borda);
-  border-radius: 8px;
-  padding: 14px 16px;
+.btn-acao {
+  background: var(--azul);
+  color: var(--branco);
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .15s;
 }
 
-.item-agendamento .linha-topo {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-}
+.btn-acao:hover { opacity: 0.9; }
+.btn-acao:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.item-agendamento .data-hora { font-weight: 700; }
-
-.item-agendamento .detalhes { font-size: 0.85rem; color: var(--texto-suave); line-height: 1.5; }
-
-.estado-vazio { text-align: center; color: var(--texto-suave); padding: 30px 0; font-size: 0.9rem; }
+.btn-aprovar { background: var(--verde); }
+.btn-desativar { background: var(--vermelho); }
