@@ -47,6 +47,7 @@ function ativarAba(tab) {
     const dataFiltro = document.getElementById("filtro-data").value;
     if (dataFiltro) carregarTodosAgendamentos(dataFiltro);
   }
+  if (tab === "usuarios") carregarUsuariosPendentes();
   if (tab === "processos") carregarTiposProcesso();
 }
 
@@ -263,7 +264,106 @@ async function carregarTodosAgendamentos(dataStr) {
 }
 
 /* ===================================================================
-   4. TIPOS DE PROCESSO (cadastrar / ativar / desativar)
+   4. APROVAÇÃO DE USUÁRIOS INTERNOS (colaboradores)
+   =================================================================== */
+async function carregarUsuariosPendentes() {
+  const container = document.getElementById("lista-pendentes-usuarios");
+  container.innerHTML = '<div class="estado-vazio">Carregando solicitações...</div>';
+
+  try {
+    const q = query(collection(db, "users"), where("status", "==", "pendente_aprovacao"));
+    const snap = await getDocs(q);
+
+    if (snap.empty) {
+      container.innerHTML = '<div class="estado-vazio">Nenhuma solicitação de colaborador pendente no momento.</div>';
+      return;
+    }
+
+    const pendentes = [];
+    snap.forEach(d => pendentes.push({ id: d.id, ...d.data() }));
+    pendentes.sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
+
+    container.innerHTML = "";
+    pendentes.forEach(u => {
+      const item = document.createElement("div");
+      item.className = "item-agendamento";
+      item.innerHTML = `
+        <div class="linha-topo">
+          <span class="data-hora">${escapeHtml(u.nome || "Sem Nome")}</span>
+          <span class="badge pendente">Pendente</span>
+        </div>
+        <div class="detalhes">
+          E-mail: <strong>${escapeHtml(u.email || "-")}</strong><br>
+          Vínculo: Colaborador Interno
+        </div>
+        <div style="margin-top:12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <select id="select-perfil-${u.id}" style="padding:6px; border-radius:4px; font-size:0.85rem;">
+            <option value="2">Atribuir como Logística (Tipo 2)</option>
+            <option value="3">Atribuir como Administrador (Tipo 3)</option>
+          </select>
+          <button class="btn-acao btn-aprovar" data-id="${u.id}">Aprovar</button>
+          <button class="btn-acao btn-desativar" data-id="${u.id}">Recusar</button>
+        </div>
+      `;
+      container.appendChild(item);
+    });
+
+    container.querySelectorAll(".btn-aprovar").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        const idUser = e.target.dataset.id;
+        const tipoEscolhido = Number(document.getElementById(`select-perfil-${idUser}`).value);
+
+        const wrapper = e.target.closest(".item-agendamento");
+        wrapper?.querySelectorAll("button, select").forEach(el => (el.disabled = true));
+        e.target.textContent = "Aprovando...";
+
+        try {
+          await updateDoc(doc(db, "users", idUser), {
+            status: "aprovado",
+            tipo: tipoEscolhido,
+            atualizadoEm: serverTimestamp()
+          });
+          carregarUsuariosPendentes();
+        } catch (err) {
+          console.error(err);
+          alert("Erro ao aprovar usuário.");
+          wrapper?.querySelectorAll("button, select").forEach(el => (el.disabled = false));
+          e.target.textContent = "Aprovar";
+        }
+      });
+    });
+
+    container.querySelectorAll(".btn-desativar").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        const idUser = e.target.dataset.id;
+        if (!confirm("Tem certeza que deseja recusar este cadastro? O colaborador não poderá acessar o sistema.")) return;
+
+        const wrapper = e.target.closest(".item-agendamento");
+        wrapper?.querySelectorAll("button, select").forEach(el => (el.disabled = true));
+        e.target.textContent = "Recusando...";
+
+        try {
+          await updateDoc(doc(db, "users", idUser), {
+            status: "recusado",
+            atualizadoEm: serverTimestamp()
+          });
+          carregarUsuariosPendentes();
+        } catch (err) {
+          console.error(err);
+          alert("Erro ao recusar cadastro.");
+          wrapper?.querySelectorAll("button, select").forEach(el => (el.disabled = false));
+          e.target.textContent = "Recusar";
+        }
+      });
+    });
+  } catch (err) {
+    console.error(err);
+    container.innerHTML = '<div class="estado-vazio">Erro ao carregar solicitações de colaboradores.</div>';
+  }
+}
+
+/* ===================================================================
+   5. TIPOS DE PROCESSO (cadastrar / ativar / desativar)
    =================================================================== */
 document.getElementById("form-processo")?.addEventListener("submit", async (e) => {
   e.preventDefault();

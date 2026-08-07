@@ -25,6 +25,7 @@
       <button class="tab-btn ativo" data-tab="solicitacoes">Solicitações Pendentes</button>
       <button class="tab-btn" data-tab="hoje">Agendamentos de Hoje</button>
       <button class="tab-btn" data-tab="todos">Todos os Agendamentos</button>
+      <button class="tab-btn" data-tab="usuarios">Aprovação de Usuários</button>
       <button class="tab-btn" data-tab="processos">Tipos de Processo</button>
     </div>
 
@@ -105,6 +106,18 @@
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-conteudo" id="tab-usuarios">
+      <div class="card">
+        <h3>Colaboradores Aguardando Aprovação</h3>
+        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
+          Defina o perfil de acesso (Logística ou Administrador) para liberar o primeiro acesso do colaborador interno, ou recuse o cadastro.
+        </p>
+        <div id="lista-pendentes-usuarios" class="lista-agendamentos">
+          <div class="estado-vazio">Carregando solicitações...</div>
         </div>
       </div>
     </div>

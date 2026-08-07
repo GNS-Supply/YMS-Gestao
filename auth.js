@@ -15,8 +15,8 @@ const errorBox = document.getElementById("login-error");
 // Mapa de redirecionamento por tipo de perfil (arquivos todos na raiz)
 export const ROTAS_POR_TIPO = {
   1: "transportadora-dashboard.html",
-  2: "logistica-dashboard.html", // ainda não criado
-  3: "admin-dashboard.html"      // ainda não criado
+  2: "logistica-dashboard.html",
+  3: "admin-dashboard.html"
 };
 
 form?.addEventListener("submit", async (e) => {
@@ -42,6 +42,11 @@ form?.addEventListener("submit", async (e) => {
     if (dadosUser.status === "pendente_aprovacao") {
       await signOut(auth);
       throw new Error("Seu cadastro ainda está aguardando aprovação de um administrador.");
+    }
+
+    if (dadosUser.status === "recusado") {
+      await signOut(auth);
+      throw new Error("Seu cadastro foi recusado. Entre em contato com a equipe de logística ou administração.");
     }
 
     const rota = ROTAS_POR_TIPO[dadosUser.tipo];
@@ -79,7 +84,7 @@ export function protegerPagina(tiposPermitidos, callback) {
       return;
     }
     const snap = await getDoc(doc(db, "users", user.uid));
-    if (!snap.exists() || snap.data().status === "pendente_aprovacao" || !tiposPermitidos.includes(snap.data().tipo)) {
+    if (!snap.exists() || snap.data().status !== "aprovado" || !tiposPermitidos.includes(snap.data().tipo)) {
       await signOut(auth);
       window.location.href = "index.html";
       return;
