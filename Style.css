@@ -1,0 +1,148 @@
+:root {
+  --azul-escuro: #0f2942;
+  --azul: #1a5f9e;
+  --laranja: #f28c28;
+  --verde: #2e9e5b;
+  --vermelho: #d64545;
+  --cinza-bg: #f4f6f8;
+  --cinza-borda: #d9dee3;
+  --texto: #1f2937;
+  --texto-suave: #6b7280;
+  --branco: #ffffff;
+  --sombra: 0 2px 8px rgba(15, 41, 66, 0.08);
+  --raio: 10px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--cinza-bg);
+  color: var(--texto);
+  min-height: 100vh;
+}
+
+/* ---------- Tela de Login ---------- */
+.login-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(160deg, var(--azul-escuro), var(--azul));
+  padding: 20px;
+}
+
+.login-card {
+  background: var(--branco);
+  border-radius: var(--raio);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+  padding: 40px 36px;
+  width: 100%;
+  max-width: 380px;
+}
+
+.login-card .logo {
+  text-align: center;
+  margin-bottom: 8px;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--azul-escuro);
+}
+
+.login-card .subtitulo {
+  text-align: center;
+  color: var(--texto-suave);
+  font-size: 0.9rem;
+  margin-bottom: 28px;
+}
+
+.campo { margin-bottom: 18px; }
+
+.campo label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--texto);
+}
+
+.campo input, .campo select, .campo textarea {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--cinza-borda);
+  border-radius: 6px;
+  font-size: 0.95rem;
+  transition: border-color .15s;
+}
+
+.campo input:focus, .campo select:focus, .campo textarea:focus {
+  outline: none;
+  border-color: var(--azul);
+}
+
+button.btn-primario {
+  width: 100%;
+  background: var(--azul);
+  color: var(--branco);
+  border: none;
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+}
+
+button.btn-primario:hover { background: var(--azul-escuro); }
+button.btn-primario:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.erro {
+  color: var(--vermelho);
+  font-size: 0.85rem;
+  margin-top: 12px;
+  min-height: 18px;
+  text-align: center;
+}
+
+/* ---------- Layout geral dos dashboards ---------- */
+.topbar {
+  background: var(--azul-escuro);
+  color: var(--branco);
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.topbar .marca { font-weight: 700; font-size: 1.1rem; }
+
+.topbar button {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.4);
+  color: var(--branco);
+  padding: 7px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.container { padding: 24px; max-width: 1200px; margin: 0 auto; }
+
+.card {
+  background: var(--branco);
+  border-radius: var(--raio);
+  box-shadow: var(--sombra);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.badge.pendente { background: #fff3e0; color: var(--laranja); }
+.badge.aprovado { background: #e6f7ed; color: var(--verde); }
+.badge.recusado, .badge.expirado { background: #fdeaea; color: var(--vermelho); }
