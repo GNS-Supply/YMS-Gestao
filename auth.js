@@ -49,6 +49,11 @@ form?.addEventListener("submit", async (e) => {
       throw new Error("Seu cadastro foi recusado. Entre em contato com a equipe de logística ou administração.");
     }
 
+    if (dadosUser.status === "suspenso") {
+      await signOut(auth);
+      throw new Error("Sua conta foi suspensa. Entre em contato com o administrador do sistema.");
+    }
+
     const rota = ROTAS_POR_TIPO[dadosUser.tipo];
     if (!rota) {
       await signOut(auth);

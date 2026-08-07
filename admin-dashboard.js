@@ -1,142 +1,108 @@
 import { auth, db } from "./firebase-config.js";
 import { protegerPagina, logout } from "./auth.js";
 import {
-  collection, doc, getDocs, updateDoc, addDoc,
-  query, where, orderBy, serverTimestamp
+  collection,
+  doc,
+  getDocs,
+  updateDoc,
+  query,
+  where,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 let usuarioAtual = null;
 let perfilAtual = null;
 
-// Eventos Globais
 document.getElementById("btn-logout").addEventListener("click", logout);
 
-// Navegação por Abas
-document.querySelectorAll(".tab-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("ativo"));
-    document.querySelectorAll(".tab-conteudo").forEach(c => c.classList.remove("ativo"));
-    btn.classList.add("ativo");
-    document.getElementById(`tab-${btn.dataset.tab}`).classList.add("ativo");
-
-    // Recarrega dados conforme a aba aberta
-    if (btn.dataset.tab === "usuarios") carregarUsuariosPendentes();
-    if (btn.dataset.tab === "gestao-usuarios") carregarTodosUsuarios();
-    if (btn.dataset.tab === "processos") carregarTiposProcesso();
-  });
-});
-
-// Proteção de Página (Apenas Perfil Tipo 3 - Admin)
+// ---------------- Proteção de Página (estrita — apenas Tipo 3, Admin Master) ----------------
 protegerPagina([3], (user, perfil) => {
   usuarioAtual = user;
   perfilAtual = perfil;
   document.getElementById("user-empresa").textContent = `${perfil.nome || user.email} (Admin)`;
-  
-  carregarUsuariosPendentes();
+
+  carregarTodosUsuarios();
+  carregarResumoPendentes();
 });
 
 /* ==========================================================================
-   1. APROVAÇÃO DE USUÁRIOS PENDENTES
+   AVISO DE COLABORADORES PENDENTES (atalho para o Painel de Logística)
    ========================================================================== */
-async function carregarUsuariosPendentes() {
-  const container = document.getElementById("lista-pendentes");
-  container.innerHTML = '<div class="estado-vazio">Carregando solicitações...</div>';
+async function carregarResumoPendentes() {
+  const aviso = document.getElementById("aviso-pendentes");
+  if (!aviso) return;
 
   try {
-    const q = query(collection(db, "users"), where("status", "==", "pendente_aprovacao"));
-    const snap = await getDocs(q);
+    const snap = await getDocs(query(collection(db, "users"), where("status", "==", "pendente_aprovacao")));
 
     if (snap.empty) {
-      container.innerHTML = '<div class="estado-vazio">Nenhuma solicitação pendente no momento.</div>';
+      aviso.style.display = "none";
       return;
     }
 
-    container.innerHTML = "";
-    snap.forEach(d => {
-      const u = d.data();
-      const item = document.createElement("div");
-      item.className = "item-agendamento";
-      item.innerHTML = `
-        <div class="linha-topo">
-          <span class="data-hora">${escapeHtml(u.nome || "Sem Nome")}</span>
-          <span class="badge pendente">Pendente</span>
-        </div>
-        <div class="detalhes">
-          E-mail: <strong>${escapeHtml(u.email)}</strong><br>
-          Vínculo: ${u.vinculo === "interno" ? "Colaborador Interno" : "Empresa Parceira"}
-        </div>
-        <div style="margin-top:12px; display:flex; gap:10px; align-items:center;">
-          <select id="select-perfil-${d.id}" style="padding:6px; border-radius:4px; font-size:0.85rem;">
-            <option value="2">Atribuir como Logística (Tipo 2)</option>
-            <option value="3">Atribuir como Administrador (Tipo 3)</option>
-            <option value="1">Atribuir como Transportadora (Tipo 1)</option>
-          </select>
-          <button class="btn-acao btn-aprovar" data-id="${d.id}">Aprovar</button>
-        </div>
-      `;
-      container.appendChild(item);
-    });
-
-    // Eventos dos botões de aprovação
-    container.querySelectorAll(".btn-aprovar").forEach(btn => {
-      btn.addEventListener("click", async (e) => {
-        const idUser = e.target.dataset.id;
-        const tipoEscolhido = Number(document.getElementById(`select-perfil-${idUser}`).value);
-        
-        e.target.disabled = true;
-        e.target.textContent = "Aprovando...";
-
-        try {
-          await updateDoc(doc(db, "users", idUser), {
-            status: "aprovado",
-            tipo: tipoEscolhido,
-            atualizadoEm: serverTimestamp()
-          });
-          alert("Usuário aprovado com sucesso!");
-          carregarUsuariosPendentes();
-        } catch (err) {
-          console.error(err);
-          alert("Erro ao aprovar usuário.");
-          e.target.disabled = false;
-          e.target.textContent = "Aprovar";
-        }
-      });
-    });
-
+    aviso.style.display = "block";
+    aviso.innerHTML = `Há <strong>${snap.size}</strong> colaborador(es) aguardando aprovação de acesso.
+      Isso pode ser feito na aba <em>"Aprovação de Usuários"</em> do
+      <a href="logistica-dashboard.html" style="color:var(--azul-escuro); font-weight:600;">Painel de Logística</a>,
+      ou diretamente aqui na tabela abaixo.`;
   } catch (err) {
-    console.error(err);
-    container.innerHTML = '<div class="estado-vazio">Erro ao carregar solicitações.</div>';
+    console.error("Erro ao verificar colaboradores pendentes:", err);
   }
 }
 
 /* ==========================================================================
-   2. GESTÃO DE TODOS OS USUÁRIOS
+   GESTÃO COMPLETA DE USUÁRIOS
    ========================================================================== */
 async function carregarTodosUsuarios() {
   const tbody = document.getElementById("tb-todos-usuarios");
-  tbody.innerHTML = '<tr><td colspan="5" class="estado-vazio">Carregando usuários...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6" class="estado-vazio">Carregando usuários...</td></tr>';
 
   try {
     const snap = await getDocs(collection(db, "users"));
-    tbody.innerHTML = "";
 
-    snap.forEach(d => {
-      const u = d.data();
+    if (snap.empty) {
+      tbody.innerHTML = '<tr><td colspan="6" class="estado-vazio">Nenhum usuário cadastrado.</td></tr>';
+      return;
+    }
+
+    const usuarios = [];
+    snap.forEach(d => usuarios.push({ id: d.id, ...d.data() }));
+    usuarios.sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
+
+    tbody.innerHTML = "";
+    usuarios.forEach(u => {
+      const ehEuMesmo = u.id === usuarioAtual.uid;
       const tr = document.createElement("tr");
 
       tr.innerHTML = `
-        <td>${escapeHtml(u.nome || "-")}</td>
-        <td>${escapeHtml(u.email || "-")}</td>
-        <td>${u.vinculo === "interno" ? "Interno" : `Externo (${escapeHtml(u.empresa || "-")})`}</td>
         <td>
-          <select class="select-alterar-tipo" data-id="${d.id}" ${d.id === usuarioAtual.uid ? "disabled" : ""}>
+          ${escapeHtml(u.nome || "-")}
+          ${ehEuMesmo ? '<br><small style="color:var(--texto-suave);">(sua conta)</small>' : ""}
+        </td>
+        <td>${escapeHtml(u.email || "-")}</td>
+        <td>
+          <span style="font-size:0.78rem; color:var(--texto-suave);">${u.vinculo === "interno" ? "Colaborador Interno" : "Empresa Parceira"}</span>
+          <input type="text" class="input-empresa" data-id="${u.id}" value="${escapeHtml(u.empresa || "")}"
+                 placeholder="Nome da empresa"
+                 style="margin-top:4px; padding:6px 8px; border:1px solid var(--cinza-borda); border-radius:4px; font-size:0.82rem; width:100%;">
+        </td>
+        <td>
+          <select class="select-alterar-tipo" data-id="${u.id}" ${ehEuMesmo ? "disabled" : ""} style="padding:6px; border-radius:4px; font-size:0.85rem;">
             <option value="1" ${u.tipo === 1 ? "selected" : ""}>Transportadora (1)</option>
             <option value="2" ${u.tipo === 2 ? "selected" : ""}>Logística (2)</option>
             <option value="3" ${u.tipo === 3 ? "selected" : ""}>Administrador (3)</option>
           </select>
         </td>
         <td>
-          <button class="btn-acao btn-salvar-tipo" data-id="${d.id}" ${d.id === usuarioAtual.uid ? "disabled" : ""}>
+          <select class="select-alterar-status" data-id="${u.id}" ${ehEuMesmo ? "disabled" : ""} style="padding:6px; border-radius:4px; font-size:0.85rem;">
+            <option value="aprovado" ${u.status === "aprovado" ? "selected" : ""}>Ativo</option>
+            <option value="suspenso" ${u.status === "suspenso" ? "selected" : ""}>Suspenso</option>
+            <option value="pendente_aprovacao" ${u.status === "pendente_aprovacao" ? "selected" : ""}>Pendente</option>
+            <option value="recusado" ${u.status === "recusado" ? "selected" : ""}>Recusado</option>
+          </select>
+        </td>
+        <td>
+          <button class="btn-acao btn-salvar-usuario" data-id="${u.id}" ${ehEuMesmo ? "disabled" : ""}>
             Salvar
           </button>
         </td>
@@ -144,125 +110,44 @@ async function carregarTodosUsuarios() {
       tbody.appendChild(tr);
     });
 
-    tbody.querySelectorAll(".btn-salvar-tipo").forEach(btn => {
-      btn.addEventListener("click", async (e) => {
-        const idUser = e.target.dataset.id;
-        const select = tbody.querySelector(`.select-alterar-tipo[data-id="${idUser}"]`);
-        const novoTipo = Number(select.value);
-
-        e.target.disabled = true;
-        e.target.textContent = "Salvar...";
-
-        try {
-          await updateDoc(doc(db, "users", idUser), {
-            tipo: novoTipo,
-            atualizadoEm: serverTimestamp()
-          });
-          alert("Perfil do usuário atualizado!");
-        } catch (err) {
-          console.error(err);
-          alert("Erro ao atualizar o perfil do usuário.");
-        } finally {
-          e.target.disabled = false;
-          e.target.textContent = "Salvar";
-        }
-      });
+    tbody.querySelectorAll(".btn-salvar-usuario").forEach(btn => {
+      btn.addEventListener("click", () => salvarUsuario(btn.dataset.id, tbody, btn));
     });
-
   } catch (err) {
     console.error(err);
-    tbody.innerHTML = '<tr><td colspan="5" class="estado-vazio">Erro ao carregar lista de usuários.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="estado-vazio">Erro ao carregar lista de usuários.</td></tr>';
   }
 }
 
-/* ==========================================================================
-   3. CADASTRO E GERENCIAMENTO DE TIPOS DE PROCESSO
-   ========================================================================== */
-document.getElementById("form-processo").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const errorBox = document.getElementById("processo-error");
-  errorBox.textContent = "";
+async function salvarUsuario(idUser, tbody, btn) {
+  const selectTipo = tbody.querySelector(`.select-alterar-tipo[data-id="${idUser}"]`);
+  const selectStatus = tbody.querySelector(`.select-alterar-status[data-id="${idUser}"]`);
+  const inputEmpresa = tbody.querySelector(`.input-empresa[data-id="${idUser}"]`);
 
-  const nome = document.getElementById("nomeProcesso").value.trim();
-  if (!nome) return;
+  const novoTipo = Number(selectTipo.value);
+  const novoStatus = selectStatus.value;
+  const novaEmpresa = inputEmpresa.value.trim();
 
-  const btn = e.target.querySelector("button[type=submit]");
-  btn.disabled = true;
+  const linha = btn.closest("tr");
+  linha.querySelectorAll("button, select, input").forEach(el => (el.disabled = true));
   btn.textContent = "Salvando...";
 
   try {
-    await addDoc(collection(db, "processTypes"), {
-      nome,
-      ativo: true,
-      criadoEm: serverTimestamp()
+    await updateDoc(doc(db, "users", idUser), {
+      tipo: novoTipo,
+      status: novoStatus,
+      empresa: novaEmpresa,
+      atualizadoEm: serverTimestamp()
     });
 
-    e.target.reset();
-    carregarTiposProcesso();
+    alert("Usuário atualizado com sucesso!");
+    carregarResumoPendentes();
   } catch (err) {
     console.error(err);
-    errorBox.textContent = "Erro ao cadastrar o tipo de processo.";
+    alert("Erro ao atualizar o usuário.");
   } finally {
-    btn.disabled = false;
-    btn.textContent = "Cadastrar Processo";
-  }
-});
-
-async function carregarTiposProcesso() {
-  const container = document.getElementById("lista-processos");
-  container.innerHTML = '<div class="estado-vazio">Carregando processos...</div>';
-
-  try {
-    const snap = await getDocs(collection(db, "processTypes"));
-
-    if (snap.empty) {
-      container.innerHTML = '<div class="estado-vazio">Nenhum tipo de processo cadastrado.</div>';
-      return;
-    }
-
-    container.innerHTML = "";
-    snap.forEach(d => {
-      const p = d.data();
-      const item = document.createElement("div");
-      item.className = "item-agendamento";
-      item.style.display = "flex";
-      item.style.justifyContent = "space-between";
-      item.style.alignItems = "center";
-
-      item.innerHTML = `
-        <div>
-          <strong>${escapeHtml(p.nome)}</strong>
-          <small style="display:block; color:var(--texto-suave);">
-            Status: ${p.ativo ? "Ativo" : "Inativo"}
-          </small>
-        </div>
-        <button class="btn-acao ${p.ativo ? 'btn-desativar' : 'btn-aprovar'}" data-id="${d.id}" data-ativo="${p.ativo}">
-          ${p.ativo ? "Desativar" : "Ativar"}
-        </button>
-      `;
-      container.appendChild(item);
-    });
-
-    container.querySelectorAll(".btn-acao").forEach(btn => {
-      btn.addEventListener("click", async (e) => {
-        const id = e.target.dataset.id;
-        const statusAtual = e.target.dataset.ativo === "true";
-
-        try {
-          await updateDoc(doc(db, "processTypes", id), {
-            ativo: !statusAtual
-          });
-          carregarTiposProcesso();
-        } catch (err) {
-          console.error(err);
-          alert("Erro ao alterar o status do processo.");
-        }
-      });
-    });
-
-  } catch (err) {
-    console.error(err);
-    container.innerHTML = '<div class="estado-vazio">Erro ao carregar tipos de processo.</div>';
+    linha.querySelectorAll("button, select, input").forEach(el => (el.disabled = false));
+    btn.textContent = "Salvar";
   }
 }
 
@@ -271,6 +156,6 @@ async function carregarTiposProcesso() {
    ========================================================================== */
 function escapeHtml(texto) {
   const div = document.createElement("div");
-  div.textContent = texto;
+  div.textContent = texto ?? "";
   return div.innerHTML;
 }
