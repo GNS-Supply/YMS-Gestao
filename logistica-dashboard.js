@@ -6,14 +6,12 @@ import {
   getDocs,
   getDoc,
   addDoc,
-  setDoc,
-  deleteDoc,
   updateDoc,
   query,
   where,
   serverTimestamp,
-  writeBatch,
-  onSnapshot
+  onSnapshot,
+  runTransaction
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 let usuarioAtual = null;
@@ -24,64 +22,6 @@ let tiposProcessoCache = null;
 let unsubscribeHoje = null;
 
 document.getElementById("btn-logout")?.addEventListener("click", logout);
-
-/* ===================================================================
-   ELEMENTOS DO DOM
-   =================================================================== */
-// Agendamentos
-const listaSolicitacoes = document.getElementById("lista-solicitacoes");
-const listaHoje = document.getElementById("lista-hoje");
-const listaTodos = document.getElementById("lista-todos");
-const filtroDataGeral = document.getElementById("filtroDataGeral");
-
-// Regras e Vagas em Massa
-const formRegraSlot = document.getElementById("form-regra-slot");
-const regraHoraInicio = document.getElementById("regraHoraInicio");
-const regraHoraFim = document.getElementById("regraHoraFim");
-const regraCapacidade = document.getElementById("regraCapacidade");
-const regraError = document.getElementById("regra-error");
-const listaRegras = document.getElementById("lista-regras");
-
-const formGerarMassa = document.getElementById("form-gerar-massa");
-const gerarDataInicio = document.getElementById("gerarDataInicio");
-const gerarDataFim = document.getElementById("gerarDataFim");
-const gerarError = document.getElementById("gerar-error");
-
-const filtroDataSlot = document.getElementById("filtroDataSlot");
-const listaSlots = document.getElementById("lista-slots");
-
-// Usuários Pendentes
-const listaPendentesUsuarios = document.getElementById("lista-pendentes-usuarios");
-
-// Tipos de Processo
-const formProcesso = document.getElementById("form-processo");
-const nomeProcessoInput = document.getElementById("nomeProcesso");
-const processoError = document.getElementById("processo-error");
-const listaProcessos = document.getElementById("lista-processos");
-
-/* ===================================================================
-   PROTEÇÃO DE PÁGINA (Permite tipos 2 - Logística e 3 - Admin)
-   =================================================================== */
-protegerPagina([2, 3], (user, perfil) => {
-  usuarioAtual = user;
-  perfilAtual = perfil;
-
-  document.getElementById("user-nome").textContent = perfil.nome || user.email;
-  document.getElementById("user-tipo").textContent = perfil.tipo === 3 ? "Administrador" : "Logística";
-
-  // Datas padrão nos campos
-  const hojeStr = dataDeHojeStr();
-  if (filtroDataGeral) filtroDataGeral.value = hojeStr;
-  if (filtroDataSlot) filtroDataSlot.value = hojeStr;
-  if (gerarDataInicio) gerarDataInicio.value = hojeStr;
-  if (gerarDataFim) {
-    const dFim = new Date();
-    dFim.setDate(dFim.getDate() + 30);
-    gerarDataFim.value = formatarDataISO(dFim);
-  }
-
-  carregarSolicitacoes();
-});
 
 /* ===================================================================
    NAVEGAÇÃO POR ABAS
@@ -96,31 +36,42 @@ function ativarAba(tab) {
   document.querySelector(`.tab-btn[data-tab="${tab}"]`)?.classList.add("ativo");
   document.getElementById(`tab-${tab}`)?.classList.add("ativo");
 
+  // Mantém o listener em tempo real apenas na aba "hoje"
   if (tab !== "hoje" && unsubscribeHoje) {
     unsubscribeHoje();
     unsubscribeHoje = null;
   }
 
-  if (tab === "solicitacoes") carregarSolicitacoes();
+  if (tab === "solicitacoes") carregarSolicitacoesPendentes();
   if (tab === "hoje") carregarAgendamentosHoje();
-  if (tab === "todos") carregarTodosAgendamentos(filtroDataGeral?.value || dataDeHojeStr());
-  if (tab === "slots") {
-    carregarRegrasRecorrentes();
-    carregarSlotsGerenciamento(filtroDataSlot?.value || dataDeHojeStr());
-  }
+  if (tab === "todos") carregarTodosAgendamentos();
   if (tab === "usuarios") carregarUsuariosPendentes();
   if (tab === "processos") carregarTiposProcesso();
 }
 
-filtroDataGeral?.addEventListener("change", (e) => carregarTodosAgendamentos(e.target.value));
-filtroDataSlot?.addEventListener("change", (e) => carregarSlotsGerenciamento(e.target.value));
+/* ===================================================================
+   PROTEÇÃO DE TELA (Apenas Logística - 2 e Admin - 3)
+   =================================================================== */
+protegerPagina([2, 3], (user, perfil) => {
+  usuarioAtual = user;
+  perfilAtual = perfil;
+
+  const nomeEl = document.getElementById("user-nome");
+  const tipoEl = document.getElementById("user-tipo");
+  if (nomeEl) nomeEl.textContent = perfil.nome || user.email;
+  if (tipoEl) tipoEl.textContent = perfil.tipo === 3 ? "Administrador" : "Logística";
+
+  // Carrega a aba inicial por padrão
+  ativarAba("solicitacoes");
+});
 
 /* ===================================================================
-   1. ABA: SOLICITAÇÕES PENDENTES DE AGENDAMENTO
+   1. ABA: SOLICITAÇÕES PENDENTES
    =================================================================== */
-async function carregarSolicitacoes() {
-  if (!listaSolicitacoes) return;
-  listaSolicitacoes.innerHTML = '<div class="estado-vazio">Carregando solicitações...</div>';
+async function carregarSolicitacoesPendentes() {
+  const container = document.getElementById("lista-solicitacoes");
+  if (!container) return;
+  container.innerHTML = '<div class="estado-vazio">Carregando solicitações...</div>';
 
   try {
     const tipos = await obterTiposProcessoMap();
@@ -128,635 +79,393 @@ async function carregarSolicitacoes() {
     const snap = await getDocs(q);
 
     if (snap.empty) {
-      listaSolicitacoes.innerHTML = '<div class="estado-vazio">Nenhuma solicitação pendente no momento.</div>';
+      container.innerHTML = '<div class="estado-vazio">Nenhuma solicitação pendente no momento.</div>';
       return;
     }
 
-    listaSolicitacoes.innerHTML = "";
-    snap.docs.forEach(docSnap => {
-      const a = docSnap.data();
-      const idDoc = docSnap.id;
+    const lista = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    lista.sort((a, b) => (a.dataAgendada || "").localeCompare(b.dataAgendada || ""));
 
-      const div = document.createElement("div");
-      div.className = "item-agendamento";
-      div.innerHTML = `
+    container.innerHTML = "";
+    lista.forEach(a => {
+      const card = document.createElement("div");
+      card.className = "item-agendamento";
+      card.innerHTML = `
         <div class="linha-topo">
           <span class="data-hora">📅 ${formatarData(a.dataAgendada)} às ${escapeHtml(a.horaInicio || "-")}</span>
           <span class="badge pendente">Pendente</span>
         </div>
-        <div class="detalhes" style="margin-bottom:10px;">
+        <div class="detalhes">
           Empresa: <strong>${escapeHtml(a.empresa || "-")}</strong><br>
           Processo: <strong>${escapeHtml(tipos[a.tipoProcessoId] || "-")}</strong><br>
           Placas: ${escapeHtml(a.placaCavalo || "-")}${a.placaCarreta ? " / " + escapeHtml(a.placaCarreta) : ""}<br>
-          Motorista: ${escapeHtml(a.motorista || "-")}<br>
-          ${a.observacoes ? `Obs.: ${escapeHtml(a.observacoes)}<br>` : ""}
-          <small style="color:var(--texto-suave)">Solicitado por UID: ${a.usuarioId}</small>
+          Motorista: ${escapeHtml(a.motorista || "-")}
+          ${a.observacoes ? `<br>Obs.: ${escapeHtml(a.observacoes)}` : ""}
         </div>
-        <div style="display:flex; gap:10px;">
-          <button class="btn-acao btn-aprovar-booking" data-id="${idDoc}" style="background:var(--verde); color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">Aprovar</button>
-          <button class="btn-acao btn-recusar-booking" data-id="${idDoc}" style="background:var(--vermelho); color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">Recusar</button>
+        <div style="margin-top:12px; display:flex; gap:8px;">
+          <button class="btn-acao btn-aprovar" data-id="${a.id}" data-data="${a.dataAgendada}" data-hora="${a.horaInicio}">Aprovar</button>
+          <button class="btn-acao btn-recusar" data-id="${a.id}" data-data="${a.dataAgendada}" data-hora="${a.horaInicio}">Recusar</button>
         </div>
       `;
-      listaSolicitacoes.appendChild(div);
+      container.appendChild(card);
     });
 
-    document.querySelectorAll(".btn-aprovar-booking").forEach(b => {
-      b.addEventListener("click", () => responderAgendamento(b.dataset.id, "Aprovado"));
+    // Eventos dos botões
+    container.querySelectorAll(".btn-aprovar").forEach(btn => {
+      btn.addEventListener("click", () => alterarStatusAgendamento(btn.dataset.id, "Aprovado", btn.dataset.data, btn.dataset.hora));
     });
-    document.querySelectorAll(".btn-recusar-booking").forEach(b => {
-      b.addEventListener("click", () => responderAgendamento(b.dataset.id, "Recusado"));
+    container.querySelectorAll(".btn-recusar").forEach(btn => {
+      btn.addEventListener("click", () => alterarStatusAgendamento(btn.dataset.id, "Recusado", btn.dataset.data, btn.dataset.hora));
     });
 
   } catch (err) {
     console.error("Erro ao carregar solicitações:", err);
-    listaSolicitacoes.innerHTML = '<div class="estado-vazio">Erro ao carregar solicitações.</div>';
+    container.innerHTML = '<div class="estado-vazio">Erro ao carregar solicitações pendentes.</div>';
   }
 }
 
-async function responderAgendamento(idBooking, novoStatus) {
-  if (!confirm(`Confirma definir esta solicitação como "${novoStatus}"?`)) return;
+/* ===================================================================
+   ALTERAR STATUS COM TRANSAÇÃO E LIBERAÇÃO DE VAGA
+   =================================================================== */
+async function alterarStatusAgendamento(bookingId, novoStatus, dataAgendada, horaInicio) {
+  const bookingRef = doc(db, "bookings", bookingId);
 
   try {
-    await updateDoc(doc(db, "bookings", idBooking), {
-      status: novoStatus,
-      atualizadoPor: usuarioAtual.uid,
-      atualizadoEm: serverTimestamp()
-    });
+    // Se o novo status for Recusado ou Cancelado, decrementa o contador 'ocupados'
+    if (novoStatus === "Recusado" || novoStatus === "Cancelado") {
+      const slotId = `${dataAgendada}_${(horaInicio || "").replace(":", "-")}`;
+      const slotRef = doc(db, "timeSlots", slotId);
 
-    await addDoc(collection(db, "auditLogs"), {
-      bookingId: idBooking,
-      acao: novoStatus === "Aprovado" ? "APROVAR_AGENDAMENTO" : "RECUSAR_AGENDAMENTO",
-      executadoPor: usuarioAtual.uid,
-      dataHora: serverTimestamp()
-    });
+      await runTransaction(db, async (transaction) => {
+        const bookingSnap = await transaction.get(bookingRef);
+        const slotSnap = await transaction.get(slotRef);
+
+        if (!bookingSnap.exists()) {
+          throw new Error("Agendamento não encontrado.");
+        }
+
+        const statusAtual = bookingSnap.data().status;
+
+        // Só libera a vaga se o agendamento não estava previamente cancelado/recusado
+        if (statusAtual !== "Recusado" && statusAtual !== "Cancelado" && slotSnap.exists()) {
+          const ocupadosAtuais = slotSnap.data().ocupados || 0;
+          const novosOcupados = Math.max(0, ocupadosAtuais - 1);
+
+          transaction.update(slotRef, { ocupados: novosOcupados });
+        }
+
+        transaction.update(bookingRef, {
+          status: novoStatus,
+          atualizadoEm: serverTimestamp(),
+          atualizadoPor: usuarioAtual.uid
+        });
+      });
+    } else {
+      // Para Aprovação ou Reversão
+      await updateDoc(bookingRef, {
+        status: novoStatus,
+        atualizadoEm: serverTimestamp(),
+        atualizadoPor: usuarioAtual.uid
+      });
+    }
 
     alert(`Agendamento ${novoStatus.toLowerCase()} com sucesso!`);
-    carregarSolicitacoes();
+    carregarSolicitacoesPendentes();
   } catch (err) {
-    console.error("Erro ao atualizar agendamento:", err);
-    alert("Erro ao processar ação.");
+    console.error("Erro ao alterar status:", err);
+    alert("Erro ao alterar o status do agendamento: " + (err.message || "Tente novamente."));
   }
 }
 
 /* ===================================================================
    2. ABA: AGENDAMENTOS DE HOJE (TEMPO REAL)
    =================================================================== */
-function carregarAgendamentosHoje() {
-  if (!listaHoje) return;
-  listaHoje.innerHTML = '<div class="estado-vazio">Carregando agendamentos de hoje...</div>';
+async function carregarAgendamentosHoje() {
+  const container = document.getElementById("lista-hoje");
+  if (!container) return;
+  container.innerHTML = '<div class="estado-vazio">Carregando agendamentos de hoje...</div>';
 
-  const hojeStr = dataDeHojeStr();
-  const q = query(collection(db, "bookings"), where("dataAgendada", "==", hojeStr));
+  const hoje = dataDeHojeStr();
+  const tipos = await obterTiposProcessoMap();
+
+  const q = query(
+    collection(db, "bookings"),
+    where("dataAgendada", "==", hoje)
+  );
 
   if (unsubscribeHoje) unsubscribeHoje();
 
-  unsubscribeHoje = onSnapshot(q, async (snap) => {
+  unsubscribeHoje = onSnapshot(q, (snap) => {
     if (snap.empty) {
-      listaHoje.innerHTML = `<div class="estado-vazio">Nenhum agendamento para hoje (${formatarData(hojeStr)}).</div>`;
+      container.innerHTML = '<div class="estado-vazio">Nenhum agendamento para a data de hoje.</div>';
       return;
     }
 
-    const tipos = await obterTiposProcessoMap();
-    listaHoje.innerHTML = "";
+    const lista = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    lista.sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
 
-    snap.docs.forEach(docSnap => {
-      const a = docSnap.data();
-      const div = document.createElement("div");
-      div.className = "item-agendamento";
-      
-      div.innerHTML = `
+    container.innerHTML = "";
+    lista.forEach(a => {
+      const card = document.createElement("div");
+      card.className = "item-agendamento";
+      card.innerHTML = `
         <div class="linha-topo">
-          <span class="data-hora">⏰ ${escapeHtml(a.horaInicio || "-")}</span>
-          <span class="badge ${classeStatus(a.status)}">${escapeHtml(a.status || "Pendente")}</span>
+          <span class="data-hora">🕒 ${escapeHtml(a.horaInicio || "-")}</span>
+          <span class="badge ${classeStatus(a.status)}">${escapeHtml(a.status)}</span>
         </div>
         <div class="detalhes">
-          Empresa: <strong>${escapeHtml(a.empresa || "-")}</strong> | Processo: <strong>${escapeHtml(tipos[a.tipoProcessoId] || "-")}</strong><br>
+          Empresa: <strong>${escapeHtml(a.empresa || "-")}</strong><br>
+          Processo: <strong>${escapeHtml(tipos[a.tipoProcessoId] || "-")}</strong><br>
           Placas: ${escapeHtml(a.placaCavalo || "-")}${a.placaCarreta ? " / " + escapeHtml(a.placaCarreta) : ""}<br>
           Motorista: ${escapeHtml(a.motorista || "-")}
         </div>
       `;
-      listaHoje.appendChild(div);
+      container.appendChild(card);
     });
   }, (err) => {
-    console.error("Erro em tempo real:", err);
-    listaHoje.innerHTML = '<div class="estado-vazio">Erro ao carregar atualizações.</div>';
+    console.error("Erro no Listener de hoje:", err);
+    container.innerHTML = '<div class="estado-vazio">Erro ao sincronizar agendamentos de hoje.</div>';
   });
 }
 
 /* ===================================================================
-   3. ABA: TODOS OS AGENDAMENTOS (POR DATA)
+   3. ABA: TODOS OS AGENDAMENTOS
    =================================================================== */
-async function carregarTodosAgendamentos(dataStr) {
-  if (!listaTodos) return;
-  listaTodos.innerHTML = '<div class="estado-vazio">Carregando agendamentos...</div>';
+async function carregarTodosAgendamentos() {
+  const tbody = document.getElementById("tb-todos-agendamentos");
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="7" class="estado-vazio">Carregando histórico...</td></tr>';
 
   try {
     const tipos = await obterTiposProcessoMap();
-    const q = query(collection(db, "bookings"), where("dataAgendada", "==", dataStr));
-    const snap = await getDocs(q);
+    const snap = await getDocs(collection(db, "bookings"));
 
     if (snap.empty) {
-      listaTodos.innerHTML = `<div class="estado-vazio">Nenhum agendamento encontrado para ${formatarData(dataStr)}.</div>`;
+      tbody.innerHTML = '<tr><td colspan="7" class="estado-vazio">Nenhum agendamento registrado no sistema.</td></tr>';
       return;
     }
 
-    listaTodos.innerHTML = "";
-    snap.docs.forEach(docSnap => {
-      const a = docSnap.data();
-      const div = document.createElement("div");
-      div.className = "item-agendamento";
-      
-      div.innerHTML = `
-        <div class="linha-topo">
-          <span class="data-hora">📅 ${formatarData(a.dataAgendada)} às ${escapeHtml(a.horaInicio || "-")}</span>
-          <span class="badge ${classeStatus(a.status)}">${escapeHtml(a.status || "Pendente")}</span>
-        </div>
-        <div class="detalhes">
-          Empresa: <strong>${escapeHtml(a.empresa || "-")}</strong> | Processo: <strong>${escapeHtml(tipos[a.tipoProcessoId] || "-")}</strong><br>
-          Placas: ${escapeHtml(a.placaCavalo || "-")}${a.placaCarreta ? " / " + escapeHtml(a.placaCarreta) : ""}<br>
-          Motorista: ${escapeHtml(a.motorista || "-")}
-        </div>
+    const lista = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    lista.sort((a, b) => (b.dataAgendada || "").localeCompare(a.dataAgendada || ""));
+
+    tbody.innerHTML = "";
+    lista.forEach(a => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${formatarData(a.dataAgendada)}</td>
+        <td>${escapeHtml(a.horaInicio || "-")}</td>
+        <td>${escapeHtml(a.empresa || "-")}</td>
+        <td>${escapeHtml(tipos[a.tipoProcessoId] || "-")}</td>
+        <td>${escapeHtml(a.placaCavalo || "-")}${a.placaCarreta ? " / " + escapeHtml(a.placaCarreta) : ""}</td>
+        <td>${escapeHtml(a.motorista || "-")}</td>
+        <td><span class="badge ${classeStatus(a.status)}">${escapeHtml(a.status)}</span></td>
       `;
-      listaTodos.appendChild(div);
+      tbody.appendChild(tr);
     });
+
   } catch (err) {
-    console.error(err);
-    listaTodos.innerHTML = '<div class="estado-vazio">Erro ao carregar lista.</div>';
+    console.error("Erro ao carregar todos os agendamentos:", err);
+    tbody.innerHTML = '<tr><td colspan="7" class="estado-vazio">Erro ao carregar histórico.</td></tr>';
   }
 }
 
 /* ===================================================================
-   4. ABA: GESTÃO EM MASSA DE VAGAS E HORÁRIOS (REGRAS RECORRENTES)
-   =================================================================== */
-
-// CADASTRAR REGRA RECORRENTE
-formRegraSlot?.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  regraError.textContent = "";
-
-  const diasCheck = Array.from(document.querySelectorAll("input[name='diasSemana']:checked")).map(cb => Number(cb.value));
-  const hInicio = regraHoraInicio.value;
-  const hFim = regraHoraFim.value;
-  const capacidade = Number(regraCapacidade.value);
-
-  if (diasCheck.length === 0) {
-    regraError.textContent = "Selecione pelo menos um dia da semana.";
-    return;
-  }
-
-  const btn = formRegraSlot.querySelector("button[type=submit]");
-  btn.disabled = true;
-
-  try {
-    await addDoc(collection(db, "timeSlotRules"), {
-      diasSemana: diasCheck,
-      horaInicio: hInicio,
-      horaFim: hFim,
-      capacidadeMax: capacidade,
-      ativo: true,
-      criadoEm: serverTimestamp()
-    });
-
-    alert("Regra recorrente salva com sucesso!");
-    carregarRegrasRecorrentes();
-  } catch (err) {
-    console.error("Erro ao salvar regra:", err);
-    regraError.textContent = "Erro ao salvar regra recorrente.";
-  } finally {
-    btn.disabled = false;
-  }
-});
-
-// LISTAR REGRAS RECORRENTES
-async function carregarRegrasRecorrentes() {
-  if (!listaRegras) return;
-  listaRegras.innerHTML = '<div class="estado-vazio">Carregando regras...</div>';
-
-  try {
-    const snap = await getDocs(collection(db, "timeSlotRules"));
-    if (snap.empty) {
-      listaRegras.innerHTML = '<div class="estado-vazio">Nenhuma regra recorrente cadastrada.</div>';
-      return;
-    }
-
-    const nomesDias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-    listaRegras.innerHTML = "";
-
-    snap.docs.forEach(docSnap => {
-      const r = docSnap.data();
-      const diasTxt = r.diasSemana.map(d => nomesDias[d]).join(", ");
-
-      const div = document.createElement("div");
-      div.className = "item-agendamento";
-      div.style.display = "flex";
-      div.style.justifyContent = "space-between";
-      div.style.alignItems = "center";
-
-      div.innerHTML = `
-        <div>
-          <strong>${r.horaInicio} às ${r.horaFim}</strong> (${r.capacidadeMax} veíq/h)<br>
-          <small style="color:var(--texto-suave)">Dias: ${diasTxt}</small>
-        </div>
-        <button class="btn-excluir-regra" data-id="${docSnap.id}" style="background:var(--vermelho); color:white; border:none; padding:4px 10px; border-radius:4px; font-size:0.8rem; cursor:pointer;">
-          Excluir Regra
-        </button>
-      `;
-
-      listaRegras.appendChild(div);
-    });
-
-    document.querySelectorAll(".btn-excluir-regra").forEach(btn => {
-      btn.addEventListener("click", async (e) => {
-        if (confirm("Deseja remover esta regra recorrente? (Não afetará as vagas já geradas)")) {
-          await deleteDoc(doc(db, "timeSlotRules", e.target.dataset.id));
-          carregarRegrasRecorrentes();
-        }
-      });
-    });
-
-  } catch (err) {
-    console.error(err);
-    listaRegras.innerHTML = '<div class="estado-vazio">Erro ao carregar regras.</div>';
-  }
-}
-
-// GERAR VAGAS EM MASSA
-formGerarMassa?.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  gerarError.textContent = "";
-
-  const dtInicio = new Date(gerarDataInicio.value + "T00:00:00");
-  const dtFim = new Date(gerarDataFim.value + "T00:00:00");
-
-  if (dtInicio > dtFim) {
-    gerarError.textContent = "A data inicial não pode ser maior que a data final.";
-    return;
-  }
-
-  const btn = formGerarMassa.querySelector("button[type=submit]");
-  btn.disabled = true;
-  btn.textContent = "Gerando vagas...";
-
-  try {
-    const snapRegras = await getDocs(query(collection(db, "timeSlotRules"), where("ativo", "==", true)));
-    if (snapRegras.empty) {
-      gerarError.textContent = "Cadastre pelo menos uma regra recorrente antes de gerar em massa.";
-      btn.disabled = false;
-      btn.textContent = "Gerar Vagas em Lote";
-      return;
-    }
-
-    const regras = snapRegras.docs.map(d => d.data());
-    let totalCriados = 0;
-    let curr = new Date(dtInicio);
-
-    // Iteração dia a dia no intervalo fornecido
-    while (curr <= dtFim) {
-      const diaDaSemana = curr.getDay(); // 0-6
-      const dataStr = formatarDataISO(curr);
-
-      // Busca regras aplicáveis a esse dia da semana
-      const regrasDia = regras.filter(r => r.diasSemana.includes(diaDaSemana));
-
-      if (regrasDia.length > 0) {
-        const batch = writeBatch(db);
-
-        regrasDia.forEach(r => {
-          const janelas = gerarJanelasHoraria(r.horaInicio, r.horaFim);
-
-          janelas.forEach(j => {
-            const slotId = `${dataStr}_${j.horaInicio.replace(":", "-")}`;
-            const refDoc = doc(db, "timeSlots", slotId);
-
-            // Cria/Sobrescreve a vaga mantendo o que já estava configurado
-            batch.set(refDoc, {
-              data: dataStr,
-              horaInicio: j.horaInicio,
-              horaFim: j.horaFim,
-              capacidadeMax: r.capacidadeMax,
-              ocupados: 0,
-              ativo: true,
-              criadoEm: serverTimestamp()
-            }, { merge: true });
-
-            totalCriados++;
-          });
-        });
-
-        await batch.commit();
-      }
-
-      curr.setDate(curr.getDate() + 1);
-    }
-
-    alert(`Sucesso! ${totalCriados} horários/vagas foram gerados ou atualizados em massa.`);
-    carregarSlotsGerenciamento(filtroDataSlot?.value || dataDeHojeStr());
-
-  } catch (err) {
-    console.error("Erro ao gerar vagas em massa:", err);
-    gerarError.textContent = "Erro ao processar a geração em lote.";
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "Gerar Vagas em Lote";
-  }
-});
-
-// AUXILIAR: Quebra janelas de 1 em 1 hora
-function gerarJanelasHoraria(hInicio, hFim) {
-  const janelas = [];
-  let [hIni, mIni] = hInicio.split(":").map(Number);
-  let [hEnd, mEnd] = hFim.split(":").map(Number);
-
-  if (hEnd === 0 && mEnd === 0) hEnd = 24; // Trata meia-noite (00:00) como hora 24
-
-  let atual = hIni;
-  while (atual < hEnd) {
-    let proximo = atual + 1;
-    let strInicio = `${String(atual).padStart(2, "0")}:00`;
-    let strFim = `${String(proximo === 24 ? 0 : proximo).padStart(2, "0")}:00`;
-
-    janelas.push({ horaInicio: strInicio, horaFim: strFim });
-    atual++;
-  }
-
-  return janelas;
-}
-
-// EDITAR/LISTAR SLOTS DA DATA SELECIONADA (EDIÇÃO PONTUAL)
-async function carregarSlotsGerenciamento(dataStr) {
-  if (!listaSlots) return;
-  listaSlots.innerHTML = '<div class="estado-vazio">Carregando horários da data...</div>';
-
-  try {
-    const qSlots = query(collection(db, "timeSlots"), where("data", "==", dataStr));
-    const snap = await getDocs(qSlots);
-
-    if (snap.empty) {
-      listaSlots.innerHTML = `<div class="estado-vazio">Nenhum horário gerado para ${formatarData(dataStr)}.</div>`;
-      return;
-    }
-
-    listaSlots.innerHTML = "";
-    const slots = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    slots.sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
-
-    slots.forEach(slot => {
-      const div = document.createElement("div");
-      div.className = "item-agendamento";
-      
-      div.innerHTML = `
-        <div class="linha-topo">
-          <span class="data-hora">⏰ ${slot.horaInicio} às ${slot.horaFim}</span>
-          <span class="badge ${slot.ocupados >= slot.capacidadeMax ? 'recusado' : 'aprovado'}">
-            Ocupação: ${slot.ocupados || 0} / ${slot.capacidadeMax}
-          </span>
-        </div>
-        <div class="detalhes" style="margin-top:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-          <div>
-            Alterar Vagas: 
-            <input type="number" class="input-cap-slot" data-id="${slot.id}" value="${slot.capacidadeMax}" min="0" style="width:60px; padding:2px 6px;">
-            <button class="btn-salvar-cap-slot" data-id="${slot.id}" style="background:var(--azul); color:white; border:none; padding:4px 8px; border-radius:4px; font-size:0.8rem; cursor:pointer;">Salvar</button>
-          </div>
-          <button class="btn-excluir-slot" data-id="${slot.id}" style="background:var(--vermelho); color:white; border:none; padding:4px 10px; border-radius:4px; font-size:0.8rem; cursor:pointer;">
-            Remover Vaga Desta Data
-          </button>
-        </div>
-      `;
-
-      listaSlots.appendChild(div);
-    });
-
-    // Salvar capacidade alterada pontualmente
-    document.querySelectorAll(".btn-salvar-cap-slot").forEach(btn => {
-      btn.addEventListener("click", async (e) => {
-        const idSlot = e.target.dataset.id;
-        const novaCap = Number(document.querySelector(`.input-cap-slot[data-id="${idSlot}"]`).value);
-
-        try {
-          await updateDoc(doc(db, "timeSlots", idSlot), { capacidadeMax: novaCap });
-          alert("Capacidade da vaga atualizada para esta data!");
-          carregarSlotsGerenciamento(dataStr);
-        } catch (err) {
-          console.error(err);
-          alert("Erro ao alterar vaga.");
-        }
-      });
-    });
-
-    // Remover vaga pontualmente daquela data
-    document.querySelectorAll(".btn-excluir-slot").forEach(btn => {
-      btn.addEventListener("click", async (e) => {
-        const idSlot = e.target.dataset.id;
-        if (confirm("Remover esta vaga para esta data específica?")) {
-          try {
-            await deleteDoc(doc(db, "timeSlots", idSlot));
-            carregarSlotsGerenciamento(dataStr);
-          } catch (err) {
-            console.error(err);
-            alert("Erro ao remover o horário.");
-          }
-        }
-      });
-    });
-
-  } catch (err) {
-    console.error("Erro ao carregar slots:", err);
-    listaSlots.innerHTML = '<div class="estado-vazio">Erro ao carregar os horários.</div>';
-  }
-}
-
-/* ===================================================================
-   5. ABA: APROVAÇÃO DE USUÁRIOS INTERNOS
+   4. ABA: APROVAÇÃO DE USUÁRIOS COLABORADORES
    =================================================================== */
 async function carregarUsuariosPendentes() {
-  if (!listaPendentesUsuarios) return;
-  listaPendentesUsuarios.innerHTML = '<div class="estado-vazio">Carregando solicitações...</div>';
+  const container = document.getElementById("lista-pendentes-usuarios");
+  if (!container) return;
+  container.innerHTML = '<div class="estado-vazio">Buscando cadastros pendentes...</div>';
 
   try {
     const q = query(collection(db, "users"), where("status", "==", "pendente_aprovacao"));
     const snap = await getDocs(q);
 
     if (snap.empty) {
-      listaPendentesUsuarios.innerHTML = '<div class="estado-vazio">Nenhum colaborador aguardando aprovação.</div>';
+      container.innerHTML = '<div class="estado-vazio">Nenhum colaborador aguardando aprovação.</div>';
       return;
     }
 
-    listaPendentesUsuarios.innerHTML = "";
+    container.innerHTML = "";
     snap.docs.forEach(docSnap => {
       const u = docSnap.data();
-      const idUser = docSnap.id;
+      const id = docSnap.id;
 
-      const div = document.createElement("div");
-      div.className = "item-agendamento";
-      div.innerHTML = `
+      const card = document.createElement("div");
+      card.className = "item-agendamento";
+      card.innerHTML = `
         <div class="linha-topo">
-          <span class="data-hora">👤 ${escapeHtml(u.nome || u.email)}</span>
+          <span class="data-hora">👤 ${escapeHtml(u.nome || "-")} (${escapeHtml(u.email || "-")})</span>
           <span class="badge pendente">Pendente</span>
         </div>
-        <div class="detalhes" style="margin-bottom:10px;">
-          E-mail: <strong>${escapeHtml(u.email || "-")}</strong><br>
-          Empresa/Vínculo: ${escapeHtml(u.empresa || "-")}
+        <div class="detalhes" style="margin-top:8px;">
+          Empresa / Setor: ${escapeHtml(u.empresa || "Interno")}
         </div>
-        <div style="display:flex; gap:10px; align-items:center;">
-          <select id="sel-tipo-${idUser}" style="padding:4px 8px; border-radius:4px; border:1px solid var(--cinza-borda);">
-            <option value="2">Perfil Logística (Tipo 2)</option>
-            <option value="3">Perfil Admin (Tipo 3)</option>
+        <div style="margin-top:12px; display:flex; gap:8px; align-items:center;">
+          <select id="sel-tipo-${id}" class="campo-select" style="max-width:180px;">
+            <option value="2">Logística</option>
+            <option value="3">Administrador</option>
           </select>
-          <button class="btn-aprovar-user" data-id="${idUser}" style="background:var(--verde); color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">Aprovar</button>
-          <button class="btn-recusar-user" data-id="${idUser}" style="background:var(--vermelho); color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">Recusar</button>
+          <button class="btn-acao btn-aprovar btn-aprovar-user" data-id="${id}">Aprovar</button>
+          <button class="btn-acao btn-recusar btn-recusar-user" data-id="${id}">Recusar</button>
         </div>
       `;
-      listaPendentesUsuarios.appendChild(div);
+      container.appendChild(card);
     });
 
-    document.querySelectorAll(".btn-aprovar-user").forEach(b => {
-      b.addEventListener("click", () => {
-        const id = b.dataset.id;
-        const tipoEscolhido = Number(document.getElementById(`sel-tipo-${id}`).value);
-        aprovarUsuarioInternal(id, tipoEscolhido, "aprovado");
+    container.querySelectorAll(".btn-aprovar-user").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.id;
+        const tipoSelect = document.getElementById(`sel-tipo-${id}`);
+        aprovarUsuario(id, Number(tipoSelect.value));
       });
     });
 
-    document.querySelectorAll(".btn-recusar-user").forEach(b => {
-      b.addEventListener("click", () => {
-        aprovarUsuarioInternal(b.dataset.id, 1, "recusado");
-      });
+    container.querySelectorAll(".btn-recusar-user").forEach(btn => {
+      btn.addEventListener("click", () => recusarUsuario(btn.dataset.id));
     });
 
   } catch (err) {
     console.error("Erro ao carregar usuários pendentes:", err);
-    listaPendentesUsuarios.innerHTML = '<div class="estado-vazio">Erro ao carregar lista de usuários.</div>';
+    container.innerHTML = '<div class="estado-vazio">Erro ao carregar lista de usuários.</div>';
   }
 }
 
-async function aprovarUsuarioInternal(idUser, novoTipo, novoStatus) {
+async function aprovarUsuario(userId, tipo) {
   try {
-    await updateDoc(doc(db, "users", idUser), {
-      tipo: novoTipo,
-      status: novoStatus,
-      atualizadoEm: serverTimestamp()
+    await updateDoc(doc(db, "users", userId), {
+      tipo,
+      status: "aprovado",
+      aprovadoEm: serverTimestamp(),
+      aprovadoPor: usuarioAtual.uid
     });
-
-    alert(`Utilizador ${novoStatus === 'aprovado' ? 'aprovado' : 'recusado'} com sucesso!`);
+    alert("Usuário aprovado com sucesso!");
     carregarUsuariosPendentes();
   } catch (err) {
     console.error(err);
-    alert("Erro ao alterar utilizador.");
+    alert("Erro ao aprovar usuário.");
+  }
+}
+
+async function recusarUsuario(userId) {
+  if (!confirm("Tem certeza que deseja recusar este usuário?")) return;
+  try {
+    await updateDoc(doc(db, "users", userId), {
+      status: "recusado",
+      atualizadoEm: serverTimestamp(),
+      atualizadoPor: usuarioAtual.uid
+    });
+    alert("Cadastro recusado.");
+    carregarUsuariosPendentes();
+  } catch (err) {
+    console.error(err);
+    alert("Erro ao recusar usuário.");
   }
 }
 
 /* ===================================================================
-   6. ABA: TIPOS DE PROCESSO
+   5. ABA: TIPOS DE PROCESSO
    =================================================================== */
+const formProcesso = document.getElementById("form-processo");
 formProcesso?.addEventListener("submit", async (e) => {
   e.preventDefault();
-  processoError.textContent = "";
+  const inputNome = document.getElementById("nomeProcesso");
+  const erroBox = document.getElementById("processo-error");
+  const nome = inputNome.value.trim();
 
-  const nome = nomeProcessoInput.value.trim();
   if (!nome) return;
-
-  const btn = formProcesso.querySelector("button[type=submit]");
-  btn.disabled = true;
+  erroBox.textContent = "";
 
   try {
     await addDoc(collection(db, "processTypes"), {
-      nome: nome,
+      nome,
       ativo: true,
       criadoEm: serverTimestamp()
     });
-
-    nomeProcessoInput.value = "";
+    inputNome.value = "";
     tiposProcessoCache = null;
     carregarTiposProcesso();
   } catch (err) {
     console.error(err);
-    processoError.textContent = "Erro ao cadastrar tipo de processo.";
-  } finally {
-    btn.disabled = false;
+    erroBox.textContent = "Erro ao cadastrar tipo de processo.";
   }
 });
 
 async function carregarTiposProcesso() {
-  if (!listaProcessos) return;
-  listaProcessos.innerHTML = '<div class="estado-vazio">Carregando processos...</div>';
+  const container = document.getElementById("lista-processos");
+  if (!container) return;
+  container.innerHTML = '<div class="estado-vazio">Carregando tipos de processo...</div>';
 
   try {
     const snap = await getDocs(collection(db, "processTypes"));
     if (snap.empty) {
-      listaProcessos.innerHTML = '<div class="estado-vazio">Nenhum processo cadastrado.</div>';
+      container.innerHTML = '<div class="estado-vazio">Nenhum tipo de processo cadastrado.</div>';
       return;
     }
 
-    listaProcessos.innerHTML = "";
+    container.innerHTML = "";
     snap.docs.forEach(docSnap => {
       const p = docSnap.data();
-      const div = document.createElement("div");
-      div.className = "item-agendamento";
-      div.style.display = "flex";
-      div.style.justifyContent = "space-between";
-      div.style.alignItems = "center";
+      const id = docSnap.id;
 
-      div.innerHTML = `
-        <div>
-          <strong>${escapeHtml(p.nome)}</strong>
-          <span class="badge ${p.ativo ? 'aprovado' : 'recusado'}" style="margin-left:8px;">${p.ativo ? 'Ativo' : 'Inativo'}</span>
+      const card = document.createElement("div");
+      card.className = "item-agendamento";
+      card.innerHTML = `
+        <div class="linha-topo">
+          <span class="data-hora">${escapeHtml(p.nome)}</span>
+          <button class="btn-acao ${p.ativo ? "btn-recusar" : "btn-aprovar"} btn-toggle-processo" data-id="${id}" data-ativo="${p.ativo}">
+            ${p.ativo ? "Desativar" : "Ativar"}
+          </button>
         </div>
-        <button class="btn-toggle-processo" data-id="${docSnap.id}" data-ativo="${p.ativo}" style="background:var(--azul); color:white; border:none; padding:4px 10px; border-radius:4px; font-size:0.8rem; cursor:pointer;">
-          ${p.ativo ? 'Desativar' : 'Ativar'}
-        </button>
       `;
-      listaProcessos.appendChild(div);
+      container.appendChild(card);
     });
 
-    document.querySelectorAll(".btn-toggle-processo").forEach(btn => {
-      btn.addEventListener("click", async (e) => {
-        const id = e.target.dataset.id;
-        const statusAtual = e.target.dataset.ativo === "true";
-        e.target.disabled = true;
+    container.querySelectorAll(".btn-toggle-processo").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.id;
+        const ativo = btn.dataset.ativo === "true";
+        btn.disabled = true;
 
         try {
-          await updateDoc(doc(db, "processTypes", id), { ativo: !statusAtual });
+          await updateDoc(doc(db, "processTypes", id), { ativo: !ativo });
           tiposProcessoCache = null;
           carregarTiposProcesso();
         } catch (err) {
           console.error(err);
-          alert("Erro ao alterar o status do processo.");
-          e.target.disabled = false;
+          alert("Erro ao alterar status do processo.");
+          btn.disabled = false;
         }
       });
     });
+
   } catch (err) {
     console.error(err);
-    listaProcessos.innerHTML = '<div class="estado-vazio">Erro ao carregar tipos de processo.</div>';
+    container.innerHTML = '<div class="estado-vazio">Erro ao carregar tipos de processo.</div>';
   }
 }
 
 /* ===================================================================
-   UTILITÁRIOS INTERNOS
+   UTILITÁRIOS
    =================================================================== */
 async function obterTiposProcessoMap() {
   if (tiposProcessoCache) return tiposProcessoCache;
-  const map = {};
+  const mapa = {};
   try {
     const snap = await getDocs(collection(db, "processTypes"));
-    snap.docs.forEach(d => {
-      map[d.id] = d.data().nome;
-    });
-    tiposProcessoCache = map;
+    snap.docs.forEach(d => { mapa[d.id] = d.data().nome; });
+    tiposProcessoCache = mapa;
   } catch (err) {
-    console.error("Erro ao carregar mapa de processos:", err);
+    console.error(err);
   }
-  return map;
+  return mapa;
 }
 
 function dataDeHojeStr() {
-  return formatarDataISO(new Date());
-}
-
-function formatarDataISO(d) {
-  const ano = d.getFullYear();
-  const mes = String(d.getMonth() + 1).padStart(2, "0");
-  const dia = String(d.getDate()).padStart(2, "0");
+  const agora = new Date();
+  const ano = agora.getFullYear();
+  const mes = String(agora.getMonth() + 1).padStart(2, "0");
+  const dia = String(agora.getDate()).padStart(2, "0");
   return `${ano}-${mes}-${dia}`;
 }
 
