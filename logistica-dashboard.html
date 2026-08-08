@@ -186,7 +186,911 @@
 
   </div>
 
-  <script type="module" src="firebase-config.js"></script>
-  <script type="module" src="logistica-dashboard.js"></script>
+  <script type="module">
+    import { auth, db } from "./firebase-config.js";
+    import {
+      onAuthStateChanged,
+      signOut
+    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import {
+      collection,
+      doc,
+      getDocs,
+      getDoc,
+      addDoc,
+      updateDoc,
+      deleteDoc,
+      query,
+      where,
+      serverTimestamp,
+      onSnapshot,
+      runTransaction,
+      writeBatch
+    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+    /* ===================================================================
+       AUTENTICAÇÃO / PROTEÇÃO DE PÁGINA (duplicado de auth.js — Logística e Admin)
+       =================================================================== */
+    function protegerPagina(tiposPermitidos, callback) {
+      onAuthStateChanged(auth, async (user) => {
+        if (!user) {
+          window.location.href = "index.html";
+          return;
+        }
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if (!snap.exists() || snap.data().status === "pendente_aprovacao" || !tiposPermitidos.includes(snap.data().tipo)) {
+          await signOut(auth);
+          window.location.href = "index.html";
+          return;
+        }
+        callback(user, snap.data());
+      });
+    }
+
+    async function logout() {
+      await signOut(auth);
+      window.location.href = "index.html";
+    }
+
+    let usuarioAtual = null;
+    let perfilAtual = null;
+    let tiposProcessoCache = null;
+
+    // Listener em tempo real da aba "Agendamentos de Hoje"
+    let unsubscribeHoje = null;
+
+    document.getElementById("btn-logout")?.addEventListener("click", logout);
+
+    /* ===================================================================
+       NAVEGAÇÃO POR ABAS
+       =================================================================== */
+    document.querySelectorAll(".tab-btn").forEach(btn => {
+      btn.addEventListener("click", () => ativarAba(btn.dataset.tab));
+    });
+
+    function ativarAba(tab) {
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("ativo"));
+      document.querySelectorAll(".tab-conteudo").forEach(c => c.classList.remove("ativo"));
+      document.querySelector(`.tab-btn[data-tab="${tab}"]`)?.classList.add("ativo");
+      document.getElementById(`tab-${tab}`)?.classList.add("ativo");
+
+      // Mantém o listener em tempo real apenas na aba "hoje"
+      if (tab !== "hoje" && unsubscribeHoje) {
+        unsubscribeHoje();
+        unsubscribeHoje = null;
+      }
+
+      if (tab === "solicitacoes") carregarSolicitacoesPendentes();
+      if (tab === "hoje") carregarAgendamentosHoje();
+      if (tab === "todos") carregarTodosAgendamentos();
+      if (tab === "slots") carregarRegrasRecorrentes();
+      if (tab === "usuarios") carregarUsuariosPendentes();
+      if (tab === "processos") carregarTiposProcesso();
+    }
+
+    /* ===================================================================
+       PROTEÇÃO DE TELA (Apenas Logística - 2 e Admin - 3)
+       =================================================================== */
+    protegerPagina([2, 3], (user, perfil) => {
+      usuarioAtual = user;
+      perfilAtual = perfil;
+
+      const nomeEl = document.getElementById("user-nome");
+      const tipoEl = document.getElementById("user-tipo");
+      if (nomeEl) nomeEl.textContent = perfil.nome || user.email;
+      if (tipoEl) tipoEl.textContent = perfil.tipo === 3 ? "Administrador" : "Logística";
+
+      // Carrega a aba inicial por padrão
+      ativarAba("solicitacoes");
+    });
+
+    /* ===================================================================
+       1. ABA: SOLICITAÇÕES PENDENTES
+       =================================================================== */
+    async function carregarSolicitacoesPendentes() {
+      const container = document.getElementById("lista-solicitacoes");
+      if (!container) return;
+      container.innerHTML = '<div class="estado-vazio">Carregando solicitações...</div>';
+
+      try {
+        const tipos = await obterTiposProcessoMap();
+        const q = query(collection(db, "bookings"), where("status", "==", "Pendente"));
+        const snap = await getDocs(q);
+
+        if (snap.empty) {
+          container.innerHTML = '<div class="estado-vazio">Nenhuma solicitação pendente no momento.</div>';
+          return;
+        }
+
+        const lista = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        lista.sort((a, b) => (a.dataAgendada || "").localeCompare(b.dataAgendada || ""));
+
+        container.innerHTML = "";
+        lista.forEach(a => {
+          const card = document.createElement("div");
+          card.className = "item-agendamento";
+          card.innerHTML = `
+            <div class="linha-topo">
+              <span class="data-hora">📅 ${formatarData(a.dataAgendada)} às ${escapeHtml(a.horaInicio || "-")}</span>
+              <span class="badge pendente">Pendente</span>
+            </div>
+            <div class="detalhes">
+              Empresa: <strong>${escapeHtml(a.empresa || "-")}</strong><br>
+              Processo: <strong>${escapeHtml(tipos[a.tipoProcessoId] || "-")}</strong><br>
+              Placas: ${escapeHtml(a.placaCavalo || "-")}${a.placaCarreta ? " / " + escapeHtml(a.placaCarreta) : ""}<br>
+              Motorista: ${escapeHtml(a.motorista || "-")}
+              ${a.observacoes ? `<br>Obs.: ${escapeHtml(a.observacoes)}` : ""}
+            </div>
+            <div style="margin-top:12px; display:flex; gap:8px;">
+              <button class="btn-acao btn-aprovar" data-id="${a.id}" data-data="${a.dataAgendada}" data-hora="${a.horaInicio}">Aprovar</button>
+              <button class="btn-acao btn-recusar" data-id="${a.id}" data-data="${a.dataAgendada}" data-hora="${a.horaInicio}">Recusar</button>
+            </div>
+          `;
+          container.appendChild(card);
+        });
+
+        // Eventos dos botões
+        container.querySelectorAll(".btn-aprovar").forEach(btn => {
+          btn.addEventListener("click", () => alterarStatusAgendamento(btn.dataset.id, "Aprovado", btn.dataset.data, btn.dataset.hora));
+        });
+        container.querySelectorAll(".btn-recusar").forEach(btn => {
+          btn.addEventListener("click", () => alterarStatusAgendamento(btn.dataset.id, "Recusado", btn.dataset.data, btn.dataset.hora));
+        });
+
+      } catch (err) {
+        console.error("Erro ao carregar solicitações:", err);
+        container.innerHTML = '<div class="estado-vazio">Erro ao carregar solicitações pendentes.</div>';
+      }
+    }
+
+    /* ===================================================================
+       ALTERAR STATUS COM TRANSAÇÃO E LIBERAÇÃO DE VAGA
+       =================================================================== */
+    async function alterarStatusAgendamento(bookingId, novoStatus, dataAgendada, horaInicio) {
+      const bookingRef = doc(db, "bookings", bookingId);
+
+      try {
+        // Se o novo status for Recusado ou Cancelado, decrementa o contador 'ocupados'
+        if (novoStatus === "Recusado" || novoStatus === "Cancelado") {
+          const slotId = `${dataAgendada}_${(horaInicio || "").replace(":", "-")}`;
+          const slotRef = doc(db, "timeSlots", slotId);
+
+          await runTransaction(db, async (transaction) => {
+            const bookingSnap = await transaction.get(bookingRef);
+            const slotSnap = await transaction.get(slotRef);
+
+            if (!bookingSnap.exists()) {
+              throw new Error("Agendamento não encontrado.");
+            }
+
+            const statusAtual = bookingSnap.data().status;
+
+            // Só libera a vaga se o agendamento não estava previamente cancelado/recusado
+            if (statusAtual !== "Recusado" && statusAtual !== "Cancelado" && slotSnap.exists()) {
+              const ocupadosAtuais = slotSnap.data().ocupados || 0;
+              const novosOcupados = Math.max(0, ocupadosAtuais - 1);
+
+              transaction.update(slotRef, { ocupados: novosOcupados });
+            }
+
+            transaction.update(bookingRef, {
+              status: novoStatus,
+              atualizadoEm: serverTimestamp(),
+              atualizadoPor: usuarioAtual.uid
+            });
+          });
+        } else {
+          // Para Aprovação ou Reversão
+          await updateDoc(bookingRef, {
+            status: novoStatus,
+            atualizadoEm: serverTimestamp(),
+            atualizadoPor: usuarioAtual.uid
+          });
+        }
+
+        alert(`Agendamento ${novoStatus.toLowerCase()} com sucesso!`);
+        carregarSolicitacoesPendentes();
+      } catch (err) {
+        console.error("Erro ao alterar status:", err);
+        alert("Erro ao alterar o status do agendamento: " + (err.message || "Tente novamente."));
+      }
+    }
+
+    /* ===================================================================
+       2. ABA: AGENDAMENTOS DE HOJE (TEMPO REAL)
+       =================================================================== */
+    async function carregarAgendamentosHoje() {
+      const container = document.getElementById("lista-hoje");
+      if (!container) return;
+      container.innerHTML = '<div class="estado-vazio">Carregando agendamentos de hoje...</div>';
+
+      const hoje = dataDeHojeStr();
+      const tipos = await obterTiposProcessoMap();
+
+      const q = query(
+        collection(db, "bookings"),
+        where("dataAgendada", "==", hoje)
+      );
+
+      if (unsubscribeHoje) unsubscribeHoje();
+
+      unsubscribeHoje = onSnapshot(q, (snap) => {
+        if (snap.empty) {
+          container.innerHTML = '<div class="estado-vazio">Nenhum agendamento para a data de hoje.</div>';
+          return;
+        }
+
+        const lista = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        lista.sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
+
+        container.innerHTML = "";
+        lista.forEach(a => {
+          const card = document.createElement("div");
+          card.className = "item-agendamento";
+          card.innerHTML = `
+            <div class="linha-topo">
+              <span class="data-hora">🕒 ${escapeHtml(a.horaInicio || "-")}</span>
+              <span class="badge ${classeStatus(a.status)}">${escapeHtml(a.status)}</span>
+            </div>
+            <div class="detalhes">
+              Empresa: <strong>${escapeHtml(a.empresa || "-")}</strong><br>
+              Processo: <strong>${escapeHtml(tipos[a.tipoProcessoId] || "-")}</strong><br>
+              Placas: ${escapeHtml(a.placaCavalo || "-")}${a.placaCarreta ? " / " + escapeHtml(a.placaCarreta) : ""}<br>
+              Motorista: ${escapeHtml(a.motorista || "-")}
+            </div>
+          `;
+          container.appendChild(card);
+        });
+      }, (err) => {
+        console.error("Erro no Listener de hoje:", err);
+        container.innerHTML = '<div class="estado-vazio">Erro ao sincronizar agendamentos de hoje.</div>';
+      });
+    }
+
+    /* ===================================================================
+       3. ABA: TODOS OS AGENDAMENTOS (com filtro por data)
+       =================================================================== */
+    const inputFiltroDataGeral = document.getElementById("filtroDataGeral");
+    inputFiltroDataGeral?.addEventListener("change", () => carregarTodosAgendamentos());
+
+    async function carregarTodosAgendamentos() {
+      const container = document.getElementById("lista-todos");
+      if (!container) return;
+
+      const dataFiltro = inputFiltroDataGeral?.value || "";
+
+      if (!dataFiltro) {
+        container.innerHTML = '<div class="estado-vazio">Selecione uma data para filtrar.</div>';
+        return;
+      }
+
+      container.innerHTML = '<div class="estado-vazio">Carregando histórico...</div>';
+
+      try {
+        const tipos = await obterTiposProcessoMap();
+        const q = query(collection(db, "bookings"), where("dataAgendada", "==", dataFiltro));
+        const snap = await getDocs(q);
+
+        if (snap.empty) {
+          container.innerHTML = '<div class="estado-vazio">Nenhum agendamento encontrado para esta data.</div>';
+          return;
+        }
+
+        const lista = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        lista.sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
+
+        container.innerHTML = "";
+        lista.forEach(a => {
+          const card = document.createElement("div");
+          card.className = "item-agendamento";
+          card.innerHTML = `
+            <div class="linha-topo">
+              <span class="data-hora">📅 ${formatarData(a.dataAgendada)} às ${escapeHtml(a.horaInicio || "-")}</span>
+              <span class="badge ${classeStatus(a.status)}">${escapeHtml(a.status)}</span>
+            </div>
+            <div class="detalhes">
+              Empresa: <strong>${escapeHtml(a.empresa || "-")}</strong><br>
+              Processo: <strong>${escapeHtml(tipos[a.tipoProcessoId] || "-")}</strong><br>
+              Placas: ${escapeHtml(a.placaCavalo || "-")}${a.placaCarreta ? " / " + escapeHtml(a.placaCarreta) : ""}<br>
+              Motorista: ${escapeHtml(a.motorista || "-")}
+              ${a.observacoes ? `<br>Obs.: ${escapeHtml(a.observacoes)}` : ""}
+            </div>
+          `;
+          container.appendChild(card);
+        });
+
+      } catch (err) {
+        console.error("Erro ao carregar todos os agendamentos:", err);
+        container.innerHTML = '<div class="estado-vazio">Erro ao carregar histórico.</div>';
+      }
+    }
+
+    /* ===================================================================
+       GESTÃO DE HORÁRIOS E VAGAS
+       =================================================================== */
+
+    // --- 3.1 Criar Regra Recorrente / Padrão Semanal ---
+    const formRegraSlot = document.getElementById("form-regra-slot");
+    formRegraSlot?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const erroBox = document.getElementById("regra-error");
+      erroBox.textContent = "";
+
+      const dias = Array.from(document.querySelectorAll('input[name="diasSemana"]:checked')).map(el => Number(el.value));
+      const horaInicio = document.getElementById("regraHoraInicio").value;
+      const horaFim = document.getElementById("regraHoraFim").value;
+      const capacidade = Number(document.getElementById("regraCapacidade").value);
+
+      if (dias.length === 0) {
+        erroBox.textContent = "Selecione ao menos um dia da semana.";
+        return;
+      }
+      if (!horaInicio || !horaFim) {
+        erroBox.textContent = "Informe o horário de início e fim.";
+        return;
+      }
+      if (!capacidade || capacidade < 1) {
+        erroBox.textContent = "Informe uma quantidade válida de veículos por hora.";
+        return;
+      }
+
+      const btn = formRegraSlot.querySelector("button[type=submit]");
+      btn.disabled = true;
+      btn.textContent = "Salvando...";
+
+      try {
+        await addDoc(collection(db, "timeSlotRules"), {
+          diasSemana: dias,
+          horaInicio,
+          horaFim,
+          capacidadePorHora: capacidade,
+          ativo: true,
+          criadoEm: serverTimestamp()
+        });
+
+        formRegraSlot.reset();
+        document.querySelectorAll('input[name="diasSemana"]').forEach(el => {
+          el.checked = ["1", "2", "3", "4", "5"].includes(el.value);
+        });
+        document.getElementById("regraHoraInicio").value = "06:00";
+        document.getElementById("regraHoraFim").value = "00:00";
+        document.getElementById("regraCapacidade").value = "2";
+
+        carregarRegrasRecorrentes();
+      } catch (err) {
+        console.error(err);
+        erroBox.textContent = "Erro ao salvar a regra recorrente.";
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Salvar Regra Recorrente";
+      }
+    });
+
+    const NOMES_DIAS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+    async function carregarRegrasRecorrentes() {
+      const container = document.getElementById("lista-regras");
+      if (!container) return;
+      container.innerHTML = '<div class="estado-vazio">Carregando regras...</div>';
+
+      try {
+        const snap = await getDocs(collection(db, "timeSlotRules"));
+
+        if (snap.empty) {
+          container.innerHTML = '<div class="estado-vazio">Nenhuma regra recorrente cadastrada.</div>';
+          return;
+        }
+
+        const regras = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        regras.sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
+
+        container.innerHTML = "";
+        regras.forEach(r => {
+          const diasTexto = (r.diasSemana || []).slice().sort().map(d => NOMES_DIAS[d]).join(", ");
+          const card = document.createElement("div");
+          card.className = "item-agendamento";
+          card.innerHTML = `
+            <div class="linha-topo">
+              <span class="data-hora">${escapeHtml(diasTexto)} · ${escapeHtml(r.horaInicio)} às ${escapeHtml(r.horaFim)}</span>
+              <span class="badge ${r.ativo ? "aprovado" : "recusado"}">${r.ativo ? "Ativa" : "Inativa"}</span>
+            </div>
+            <div class="detalhes">Capacidade: <strong>${r.capacidadePorHora} veículo(s)/hora</strong></div>
+            <div style="margin-top:12px; display:flex; gap:8px;">
+              <button class="btn-acao ${r.ativo ? "btn-recusar" : "btn-aprovar"} btn-toggle-regra" data-id="${r.id}" data-ativo="${r.ativo}">
+                ${r.ativo ? "Desativar" : "Ativar"}
+              </button>
+              <button class="btn-acao btn-desativar btn-excluir-regra" data-id="${r.id}">Excluir</button>
+            </div>
+          `;
+          container.appendChild(card);
+        });
+
+        container.querySelectorAll(".btn-toggle-regra").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            const ativo = btn.dataset.ativo === "true";
+            btn.disabled = true;
+            try {
+              await updateDoc(doc(db, "timeSlotRules", btn.dataset.id), { ativo: !ativo });
+              carregarRegrasRecorrentes();
+            } catch (err) {
+              console.error(err);
+              alert("Erro ao alterar status da regra.");
+              btn.disabled = false;
+            }
+          });
+        });
+
+        container.querySelectorAll(".btn-excluir-regra").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            if (!confirm("Excluir esta regra recorrente? Vagas já geradas no calendário não serão removidas automaticamente.")) return;
+            btn.disabled = true;
+            try {
+              await deleteDoc(doc(db, "timeSlotRules", btn.dataset.id));
+              carregarRegrasRecorrentes();
+            } catch (err) {
+              console.error(err);
+              alert("Erro ao excluir a regra.");
+              btn.disabled = false;
+            }
+          });
+        });
+
+      } catch (err) {
+        console.error(err);
+        container.innerHTML = '<div class="estado-vazio">Erro ao carregar regras recorrentes.</div>';
+      }
+    }
+
+    // --- 3.2 Gerar Janelas em Massa no Calendário ---
+    const formGerarMassa = document.getElementById("form-gerar-massa");
+    formGerarMassa?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const erroBox = document.getElementById("gerar-error");
+      erroBox.textContent = "";
+
+      const dataInicio = document.getElementById("gerarDataInicio").value;
+      const dataFim = document.getElementById("gerarDataFim").value;
+
+      if (!dataInicio || !dataFim) {
+        erroBox.textContent = "Informe a data inicial e final.";
+        return;
+      }
+      if (dataFim < dataInicio) {
+        erroBox.textContent = "A data final não pode ser anterior à data inicial.";
+        return;
+      }
+
+      const btn = formGerarMassa.querySelector("button[type=submit]");
+      btn.disabled = true;
+      btn.textContent = "Gerando...";
+
+      try {
+        const snapRegras = await getDocs(query(collection(db, "timeSlotRules"), where("ativo", "==", true)));
+        const regras = snapRegras.docs.map(d => d.data());
+
+        if (regras.length === 0) {
+          erroBox.textContent = "Cadastre ao menos uma regra recorrente ativa antes de gerar as vagas.";
+          return;
+        }
+
+        const [anoI, mesI, diaI] = dataInicio.split("-").map(Number);
+        const [anoF, mesF, diaF] = dataFim.split("-").map(Number);
+        const cursor = new Date(anoI, mesI - 1, diaI);
+        const limite = new Date(anoF, mesF - 1, diaF);
+
+        let batch = writeBatch(db);
+        let operacoesNoBatch = 0;
+        let totalGerado = 0;
+
+        while (cursor <= limite) {
+          const diaSemana = cursor.getDay();
+          const dataStr = paraDataStr(cursor);
+
+          for (const regra of regras) {
+            if (!(regra.diasSemana || []).includes(diaSemana)) continue;
+
+            const inicioMin = horaParaMinutos(regra.horaInicio);
+            let fimMin = horaParaMinutos(regra.horaFim);
+            if (fimMin <= inicioMin) fimMin += 24 * 60; // regra atravessa a meia-noite
+
+            for (let m = inicioMin; m < fimMin; m += 60) {
+              const horaInicioSlot = minutosParaHora(m % (24 * 60));
+              const horaFimSlot = minutosParaHora((m + 60) % (24 * 60));
+              const slotId = `${dataStr}_${horaInicioSlot.replace(":", "-")}`;
+              const slotRef = doc(db, "timeSlots", slotId);
+
+              // merge:true preserva 'ocupados' se a vaga já existir
+              batch.set(slotRef, {
+                data: dataStr,
+                horaInicio: horaInicioSlot,
+                horaFim: horaFimSlot,
+                capacidadeMax: regra.capacidadePorHora,
+                ativo: true,
+                criadoEm: serverTimestamp()
+              }, { merge: true });
+
+              operacoesNoBatch++;
+              totalGerado++;
+
+              // Firestore permite no máximo 500 operações por batch
+              if (operacoesNoBatch >= 450) {
+                await batch.commit();
+                batch = writeBatch(db);
+                operacoesNoBatch = 0;
+              }
+            }
+          }
+
+          cursor.setDate(cursor.getDate() + 1);
+        }
+
+        if (operacoesNoBatch > 0) {
+          await batch.commit();
+        }
+
+        alert(`${totalGerado} janela(s) de horário gerada(s)/atualizada(s) com sucesso!`);
+        formGerarMassa.reset();
+      } catch (err) {
+        console.error(err);
+        erroBox.textContent = "Erro ao gerar as vagas em lote.";
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Gerar Vagas em Lote";
+      }
+    });
+
+    // --- 3.3 Edição Manual / Ajuste Pontual por Data ---
+    const inputFiltroDataSlot = document.getElementById("filtroDataSlot");
+    inputFiltroDataSlot?.addEventListener("change", () => carregarSlotsDoDia());
+
+    async function carregarSlotsDoDia() {
+      const container = document.getElementById("lista-slots");
+      if (!container) return;
+
+      const dataSelecionada = inputFiltroDataSlot?.value || "";
+      if (!dataSelecionada) {
+        container.innerHTML = '<div class="estado-vazio">Selecione uma data para alterar.</div>';
+        return;
+      }
+
+      container.innerHTML = '<div class="estado-vazio">Carregando horários...</div>';
+
+      try {
+        const q = query(collection(db, "timeSlots"), where("data", "==", dataSelecionada));
+        const snap = await getDocs(q);
+
+        if (snap.empty) {
+          container.innerHTML = '<div class="estado-vazio">Nenhum horário cadastrado para esta data.</div>';
+          return;
+        }
+
+        const slots = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        slots.sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
+
+        container.innerHTML = "";
+        slots.forEach(s => {
+          const card = document.createElement("div");
+          card.className = "item-agendamento";
+          card.innerHTML = `
+            <div class="linha-topo">
+              <span class="data-hora">🕒 ${escapeHtml(s.horaInicio)} às ${escapeHtml(s.horaFim)}</span>
+              <span class="badge ${s.ativo ? "aprovado" : "recusado"}">${s.ativo ? "Ativo" : "Inativo"}</span>
+            </div>
+            <div class="detalhes">Ocupação atual: ${s.ocupados || 0} / ${s.capacidadeMax}</div>
+            <div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <input type="number" min="0" class="input-capacidade-slot" data-id="${s.id}" value="${s.capacidadeMax}"
+                     style="width:80px; padding:6px 8px; border:1px solid var(--cinza-borda); border-radius:4px;">
+              <button class="btn-acao btn-salvar-slot" data-id="${s.id}">Salvar Capacidade</button>
+              <button class="btn-acao ${s.ativo ? "btn-recusar" : "btn-aprovar"} btn-toggle-slot" data-id="${s.id}" data-ativo="${s.ativo}">
+                ${s.ativo ? "Desativar" : "Ativar"}
+              </button>
+              <button class="btn-acao btn-desativar btn-excluir-slot" data-id="${s.id}">Excluir</button>
+            </div>
+          `;
+          container.appendChild(card);
+        });
+
+        container.querySelectorAll(".btn-salvar-slot").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            const input = container.querySelector(`.input-capacidade-slot[data-id="${btn.dataset.id}"]`);
+            const novaCapacidade = Number(input.value);
+            if (!novaCapacidade || novaCapacidade < 0) {
+              alert("Informe uma capacidade válida.");
+              return;
+            }
+            btn.disabled = true;
+            try {
+              await updateDoc(doc(db, "timeSlots", btn.dataset.id), { capacidadeMax: novaCapacidade });
+              alert("Capacidade atualizada!");
+            } catch (err) {
+              console.error(err);
+              alert("Erro ao atualizar a capacidade.");
+            } finally {
+              btn.disabled = false;
+            }
+          });
+        });
+
+        container.querySelectorAll(".btn-toggle-slot").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            const ativo = btn.dataset.ativo === "true";
+            btn.disabled = true;
+            try {
+              await updateDoc(doc(db, "timeSlots", btn.dataset.id), { ativo: !ativo });
+              carregarSlotsDoDia();
+            } catch (err) {
+              console.error(err);
+              alert("Erro ao alterar status do horário.");
+              btn.disabled = false;
+            }
+          });
+        });
+
+        container.querySelectorAll(".btn-excluir-slot").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            if (!confirm("Excluir este horário? Ele deixará de aparecer para novas solicitações.")) return;
+            btn.disabled = true;
+            try {
+              await deleteDoc(doc(db, "timeSlots", btn.dataset.id));
+              carregarSlotsDoDia();
+            } catch (err) {
+              console.error(err);
+              alert("Erro ao excluir o horário.");
+              btn.disabled = false;
+            }
+          });
+        });
+
+      } catch (err) {
+        console.error(err);
+        container.innerHTML = '<div class="estado-vazio">Erro ao carregar horários.</div>';
+      }
+    }
+
+    // --- Utilitários de data/hora para geração de vagas ---
+    function paraDataStr(d) {
+      const ano = d.getFullYear();
+      const mes = String(d.getMonth() + 1).padStart(2, "0");
+      const dia = String(d.getDate()).padStart(2, "0");
+      return `${ano}-${mes}-${dia}`;
+    }
+
+    function horaParaMinutos(hhmm) {
+      const [h, m] = hhmm.split(":").map(Number);
+      return h * 60 + m;
+    }
+
+    function minutosParaHora(min) {
+      const h = String(Math.floor(min / 60)).padStart(2, "0");
+      const m = String(min % 60).padStart(2, "0");
+      return `${h}:${m}`;
+    }
+
+    /* ===================================================================
+       4. ABA: APROVAÇÃO DE USUÁRIOS COLABORADORES
+       =================================================================== */
+    async function carregarUsuariosPendentes() {
+      const container = document.getElementById("lista-pendentes-usuarios");
+      if (!container) return;
+      container.innerHTML = '<div class="estado-vazio">Buscando cadastros pendentes...</div>';
+
+      try {
+        const q = query(collection(db, "users"), where("status", "==", "pendente_aprovacao"));
+        const snap = await getDocs(q);
+
+        if (snap.empty) {
+          container.innerHTML = '<div class="estado-vazio">Nenhum colaborador aguardando aprovação.</div>';
+          return;
+        }
+
+        container.innerHTML = "";
+        snap.docs.forEach(docSnap => {
+          const u = docSnap.data();
+          const id = docSnap.id;
+
+          const card = document.createElement("div");
+          card.className = "item-agendamento";
+          card.innerHTML = `
+            <div class="linha-topo">
+              <span class="data-hora">👤 ${escapeHtml(u.nome || "-")} (${escapeHtml(u.email || "-")})</span>
+              <span class="badge pendente">Pendente</span>
+            </div>
+            <div class="detalhes" style="margin-top:8px;">
+              Empresa / Setor: ${escapeHtml(u.empresa || "Interno")}
+            </div>
+            <div style="margin-top:12px; display:flex; gap:8px; align-items:center;">
+              <select id="sel-tipo-${id}" class="campo-select" style="max-width:180px;">
+                <option value="2">Logística</option>
+                <option value="3">Administrador</option>
+              </select>
+              <button class="btn-acao btn-aprovar btn-aprovar-user" data-id="${id}">Aprovar</button>
+              <button class="btn-acao btn-recusar btn-recusar-user" data-id="${id}">Recusar</button>
+            </div>
+          `;
+          container.appendChild(card);
+        });
+
+        container.querySelectorAll(".btn-aprovar-user").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const id = btn.dataset.id;
+            const tipoSelect = document.getElementById(`sel-tipo-${id}`);
+            aprovarUsuario(id, Number(tipoSelect.value));
+          });
+        });
+
+        container.querySelectorAll(".btn-recusar-user").forEach(btn => {
+          btn.addEventListener("click", () => recusarUsuario(btn.dataset.id));
+        });
+
+      } catch (err) {
+        console.error("Erro ao carregar usuários pendentes:", err);
+        container.innerHTML = '<div class="estado-vazio">Erro ao carregar lista de usuários.</div>';
+      }
+    }
+
+    async function aprovarUsuario(userId, tipo) {
+      try {
+        await updateDoc(doc(db, "users", userId), {
+          tipo,
+          status: "aprovado",
+          aprovadoEm: serverTimestamp(),
+          aprovadoPor: usuarioAtual.uid
+        });
+        alert("Usuário aprovado com sucesso!");
+        carregarUsuariosPendentes();
+      } catch (err) {
+        console.error(err);
+        alert("Erro ao aprovar usuário.");
+      }
+    }
+
+    async function recusarUsuario(userId) {
+      if (!confirm("Tem certeza que deseja recusar este usuário?")) return;
+      try {
+        await updateDoc(doc(db, "users", userId), {
+          status: "recusado",
+          atualizadoEm: serverTimestamp(),
+          atualizadoPor: usuarioAtual.uid
+        });
+        alert("Cadastro recusado.");
+        carregarUsuariosPendentes();
+      } catch (err) {
+        console.error(err);
+        alert("Erro ao recusar usuário.");
+      }
+    }
+
+    /* ===================================================================
+       5. ABA: TIPOS DE PROCESSO
+       =================================================================== */
+    const formProcesso = document.getElementById("form-processo");
+    formProcesso?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const inputNome = document.getElementById("nomeProcesso");
+      const erroBox = document.getElementById("processo-error");
+      const nome = inputNome.value.trim();
+
+      if (!nome) return;
+      erroBox.textContent = "";
+
+      try {
+        await addDoc(collection(db, "processTypes"), {
+          nome,
+          ativo: true,
+          criadoEm: serverTimestamp()
+        });
+        inputNome.value = "";
+        tiposProcessoCache = null;
+        carregarTiposProcesso();
+      } catch (err) {
+        console.error(err);
+        erroBox.textContent = "Erro ao cadastrar tipo de processo.";
+      }
+    });
+
+    async function carregarTiposProcesso() {
+      const container = document.getElementById("lista-processos");
+      if (!container) return;
+      container.innerHTML = '<div class="estado-vazio">Carregando tipos de processo...</div>';
+
+      try {
+        const snap = await getDocs(collection(db, "processTypes"));
+        if (snap.empty) {
+          container.innerHTML = '<div class="estado-vazio">Nenhum tipo de processo cadastrado.</div>';
+          return;
+        }
+
+        container.innerHTML = "";
+        snap.docs.forEach(docSnap => {
+          const p = docSnap.data();
+          const id = docSnap.id;
+
+          const card = document.createElement("div");
+          card.className = "item-agendamento";
+          card.innerHTML = `
+            <div class="linha-topo">
+              <span class="data-hora">${escapeHtml(p.nome)}</span>
+              <button class="btn-acao ${p.ativo ? "btn-recusar" : "btn-aprovar"} btn-toggle-processo" data-id="${id}" data-ativo="${p.ativo}">
+                ${p.ativo ? "Desativar" : "Ativar"}
+              </button>
+            </div>
+          `;
+          container.appendChild(card);
+        });
+
+        container.querySelectorAll(".btn-toggle-processo").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            const id = btn.dataset.id;
+            const ativo = btn.dataset.ativo === "true";
+            btn.disabled = true;
+
+            try {
+              await updateDoc(doc(db, "processTypes", id), { ativo: !ativo });
+              tiposProcessoCache = null;
+              carregarTiposProcesso();
+            } catch (err) {
+              console.error(err);
+              alert("Erro ao alterar status do processo.");
+              btn.disabled = false;
+            }
+          });
+        });
+
+      } catch (err) {
+        console.error(err);
+        container.innerHTML = '<div class="estado-vazio">Erro ao carregar tipos de processo.</div>';
+      }
+    }
+
+    /* ===================================================================
+       UTILITÁRIOS
+       =================================================================== */
+    async function obterTiposProcessoMap() {
+      if (tiposProcessoCache) return tiposProcessoCache;
+      const mapa = {};
+      try {
+        const snap = await getDocs(collection(db, "processTypes"));
+        snap.docs.forEach(d => { mapa[d.id] = d.data().nome; });
+        tiposProcessoCache = mapa;
+      } catch (err) {
+        console.error(err);
+      }
+      return mapa;
+    }
+
+    function dataDeHojeStr() {
+      const agora = new Date();
+      const ano = agora.getFullYear();
+      const mes = String(agora.getMonth() + 1).padStart(2, "0");
+      const dia = String(agora.getDate()).padStart(2, "0");
+      return `${ano}-${mes}-${dia}`;
+    }
+
+    function formatarData(dataStr) {
+      if (!dataStr) return "-";
+      const [ano, mes, dia] = dataStr.split("-");
+      return `${dia}/${mes}/${ano}`;
+    }
+
+    function classeStatus(status) {
+      return {
+        Pendente: "pendente",
+        Aprovado: "aprovado",
+        Recusado: "recusado",
+        Expirado: "recusado",
+        Cancelado: "recusado"
+      }[status] || "pendente";
+    }
+
+    function escapeHtml(texto) {
+      if (!texto) return "";
+      return String(texto)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+  </script>
 </body>
 </html>
