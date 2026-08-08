@@ -69,10 +69,18 @@
 
     <div class="tab-conteudo" id="tab-slots">
 
+      <div class="aviso-suporte">
+        Nenhuma vaga precisa ser "gerada" no calendário. Toda data futura já fica automaticamente
+        disponível seguindo a Regra Padrão de Atendimento abaixo, sujeita às Exceções configuradas.
+        Use o Ajuste Manual apenas para tratar um dia específico fora do padrão.
+      </div>
+
       <div class="card">
-        <h3>1. Criar Regra Recorrente / Padrão Semanal</h3>
+        <h3>1. Regra Padrão de Atendimento (Recorrente)</h3>
         <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
-          Defina regras gerais (ex: Seg a Sex, 06:00 às 00:00, 2 veículos/h) ou exceções por janela (ex: Horário de almoço das 11:00 às 14:00 com 1 veículo/h, ou Sábados das 06:00 às 14:00).
+          Define o horário de funcionamento do pátio por dia da semana e a capacidade padrão
+          (ex: Seg a Sex, 06:00 às 00:00, 2 veículos/h). Vale para qualquer data futura, sem limite,
+          automaticamente — não é necessário gerar nada no calendário.
         </p>
 
         <form id="form-regra-slot">
@@ -115,28 +123,59 @@
       </div>
 
       <div class="card">
-        <h3>2. Gerar Janelas em Massa no Calendário</h3>
+        <h3>2. Exceções à Regra Padrão</h3>
         <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
-          Aplique as regras recorrentes acima para um período do calendário (ex: próximos 30 ou 60 dias).
+          Use para bloquear um período recorrente (ex: Domingo sem atendimento) ou reduzir a
+          capacidade em um intervalo específico (ex: Seg a Sex das 11:00 às 14:00, limite de
+          1 veículo/hora para o almoço). Exceções têm prioridade sobre a Regra Padrão acima,
+          para qualquer data futura que caia naquele dia da semana/horário.
         </p>
-        <form id="form-gerar-massa" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">
-          <div class="campo" style="flex:1; min-width:150px;">
-            <label for="gerarDataInicio">Data Inicial</label>
-            <input type="date" id="gerarDataInicio" required>
+
+        <form id="form-excecao-slot">
+          <div style="margin-bottom:12px;">
+            <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:6px;">Dias da Semana Aplicáveis:</label>
+            <div style="display:flex; flex-wrap:wrap; gap:12px; font-size:0.85rem;">
+              <label><input type="checkbox" name="excDiasSemana" value="1"> Seg</label>
+              <label><input type="checkbox" name="excDiasSemana" value="2"> Ter</label>
+              <label><input type="checkbox" name="excDiasSemana" value="3"> Quar</label>
+              <label><input type="checkbox" name="excDiasSemana" value="4"> Qui</label>
+              <label><input type="checkbox" name="excDiasSemana" value="5"> Sex</label>
+              <label><input type="checkbox" name="excDiasSemana" value="6"> Sáb</label>
+              <label><input type="checkbox" name="excDiasSemana" value="0" checked> Dom</label>
+            </div>
           </div>
-          <div class="campo" style="flex:1; min-width:150px;">
-            <label for="gerarDataFim">Data Final</label>
-            <input type="date" id="gerarDataFim" required>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;">
+            <div class="campo">
+              <label for="excHoraInicio">Horário Início</label>
+              <input type="time" id="excHoraInicio" value="00:00" required>
+            </div>
+            <div class="campo">
+              <label for="excHoraFim">Horário Fim</label>
+              <input type="time" id="excHoraFim" value="23:59" required>
+            </div>
+            <div class="campo">
+              <label for="excCapacidade">Veículos por Hora (0 = sem atendimento)</label>
+              <input type="number" id="excCapacidade" min="0" value="0" required>
+            </div>
           </div>
-          <button type="submit" class="btn-primario" style="max-width:260px;">Gerar Vagas em Lote</button>
+
+          <button type="submit" class="btn-primario" style="margin-top:12px; max-width:280px;">Salvar Exceção</button>
+          <div class="erro" id="excecao-error"></div>
         </form>
-        <div class="erro" id="gerar-error"></div>
+
+        <h4 style="margin-top:24px; margin-bottom:8px;">Exceções Cadastradas</h4>
+        <div id="lista-excecoes" class="lista-agendamentos">
+          <div class="estado-vazio">Carregando exceções...</div>
+        </div>
       </div>
 
       <div class="card">
-        <h3>3. Edição Manual / Ajuste Pontual por Data</h3>
+        <h3>3. Ajuste Manual por Data (Exceção Pontual)</h3>
         <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:12px;">
-          Consulte e altere a capacidade ou remova horários para um dia específico.
+          Consulte os horários já calculados (regra + exceções) para um dia específico. Aqui você
+          pode fechar, reabrir, mudar a capacidade só daquele dia, ou adicionar um horário extra
+          que não segue o padrão — sem afetar nenhuma outra data.
         </p>
 
         <div style="margin-bottom: 16px; display:flex; gap:10px; align-items:center;">
@@ -146,6 +185,22 @@
 
         <div id="lista-slots" class="lista-agendamentos">
           <div class="estado-vazio">Selecione uma data para alterar.</div>
+        </div>
+
+        <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--cinza-borda);">
+          <h4 style="margin-bottom:10px; font-size:0.9rem;">Adicionar/Forçar Horário Específico Nesta Data</h4>
+          <form id="form-slot-manual" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
+            <div class="campo" style="margin-bottom:0;">
+              <label for="manualHoraInicio">Hora Início</label>
+              <input type="time" id="manualHoraInicio" required>
+            </div>
+            <div class="campo" style="margin-bottom:0;">
+              <label for="manualCapacidade">Capacidade</label>
+              <input type="number" id="manualCapacidade" min="1" value="1" required>
+            </div>
+            <button type="submit" class="btn-acao btn-aprovar">Adicionar</button>
+          </form>
+          <div class="erro" id="slot-manual-error"></div>
         </div>
       </div>
 
@@ -200,13 +255,19 @@
       addDoc,
       updateDoc,
       deleteDoc,
+      setDoc,
       query,
       where,
       serverTimestamp,
       onSnapshot,
-      runTransaction,
-      writeBatch
+      runTransaction
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+    import {
+      buscarSlotsVirtuaisDoDia,
+      idSlotHorario,
+      horaParaMinutos,
+      minutosParaHora
+    } from "./disponibilidade.js";
 
     /* ===================================================================
        AUTENTICAÇÃO / PROTEÇÃO DE PÁGINA (duplicado de auth.js — Logística e Admin)
@@ -263,7 +324,10 @@
       if (tab === "solicitacoes") carregarSolicitacoesPendentes();
       if (tab === "hoje") carregarAgendamentosHoje();
       if (tab === "todos") carregarTodosAgendamentos();
-      if (tab === "slots") carregarRegrasRecorrentes();
+      if (tab === "slots") {
+        carregarRegrasRecorrentes();
+        carregarExcecoes();
+      }
       if (tab === "usuarios") carregarUsuariosPendentes();
       if (tab === "processos") carregarTiposProcesso();
     }
@@ -641,105 +705,140 @@
       }
     }
 
-    // --- 3.2 Gerar Janelas em Massa no Calendário ---
-    const formGerarMassa = document.getElementById("form-gerar-massa");
-    formGerarMassa?.addEventListener("submit", async (e) => {
+    // --- 3.2 Exceções à Regra Padrão (recorrentes, por dia da semana) ---
+    const formExcecaoSlot = document.getElementById("form-excecao-slot");
+    formExcecaoSlot?.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const erroBox = document.getElementById("gerar-error");
+      const erroBox = document.getElementById("excecao-error");
       erroBox.textContent = "";
 
-      const dataInicio = document.getElementById("gerarDataInicio").value;
-      const dataFim = document.getElementById("gerarDataFim").value;
+      const dias = Array.from(document.querySelectorAll('input[name="excDiasSemana"]:checked')).map(el => Number(el.value));
+      const horaInicio = document.getElementById("excHoraInicio").value;
+      const horaFim = document.getElementById("excHoraFim").value;
+      const capacidade = Number(document.getElementById("excCapacidade").value);
 
-      if (!dataInicio || !dataFim) {
-        erroBox.textContent = "Informe a data inicial e final.";
+      if (dias.length === 0) {
+        erroBox.textContent = "Selecione ao menos um dia da semana.";
         return;
       }
-      if (dataFim < dataInicio) {
-        erroBox.textContent = "A data final não pode ser anterior à data inicial.";
+      if (!horaInicio || !horaFim) {
+        erroBox.textContent = "Informe o horário de início e fim.";
+        return;
+      }
+      if (capacidade < 0) {
+        erroBox.textContent = "Informe uma capacidade válida (0 ou mais).";
         return;
       }
 
-      const btn = formGerarMassa.querySelector("button[type=submit]");
+      const btn = formExcecaoSlot.querySelector("button[type=submit]");
       btn.disabled = true;
-      btn.textContent = "Gerando...";
+      btn.textContent = "Salvando...";
 
       try {
-        const snapRegras = await getDocs(query(collection(db, "timeSlotRules"), where("ativo", "==", true)));
-        const regras = snapRegras.docs.map(d => d.data());
+        await addDoc(collection(db, "timeSlotExceptions"), {
+          diasSemana: dias,
+          horaInicio,
+          horaFim,
+          capacidadePorHora: capacidade,
+          ativo: true,
+          criadoEm: serverTimestamp()
+        });
 
-        if (regras.length === 0) {
-          erroBox.textContent = "Cadastre ao menos uma regra recorrente ativa antes de gerar as vagas.";
-          return;
-        }
+        formExcecaoSlot.reset();
+        document.querySelectorAll('input[name="excDiasSemana"]').forEach(el => {
+          el.checked = el.value === "0";
+        });
+        document.getElementById("excHoraInicio").value = "00:00";
+        document.getElementById("excHoraFim").value = "23:59";
+        document.getElementById("excCapacidade").value = "0";
 
-        const [anoI, mesI, diaI] = dataInicio.split("-").map(Number);
-        const [anoF, mesF, diaF] = dataFim.split("-").map(Number);
-        const cursor = new Date(anoI, mesI - 1, diaI);
-        const limite = new Date(anoF, mesF - 1, diaF);
-
-        let batch = writeBatch(db);
-        let operacoesNoBatch = 0;
-        let totalGerado = 0;
-
-        while (cursor <= limite) {
-          const diaSemana = cursor.getDay();
-          const dataStr = paraDataStr(cursor);
-
-          for (const regra of regras) {
-            if (!(regra.diasSemana || []).includes(diaSemana)) continue;
-
-            const inicioMin = horaParaMinutos(regra.horaInicio);
-            let fimMin = horaParaMinutos(regra.horaFim);
-            if (fimMin <= inicioMin) fimMin += 24 * 60; // regra atravessa a meia-noite
-
-            for (let m = inicioMin; m < fimMin; m += 60) {
-              const horaInicioSlot = minutosParaHora(m % (24 * 60));
-              const horaFimSlot = minutosParaHora((m + 60) % (24 * 60));
-              const slotId = `${dataStr}_${horaInicioSlot.replace(":", "-")}`;
-              const slotRef = doc(db, "timeSlots", slotId);
-
-              // merge:true preserva 'ocupados' se a vaga já existir
-              batch.set(slotRef, {
-                data: dataStr,
-                horaInicio: horaInicioSlot,
-                horaFim: horaFimSlot,
-                capacidadeMax: regra.capacidadePorHora,
-                ativo: true,
-                criadoEm: serverTimestamp()
-              }, { merge: true });
-
-              operacoesNoBatch++;
-              totalGerado++;
-
-              // Firestore permite no máximo 500 operações por batch
-              if (operacoesNoBatch >= 450) {
-                await batch.commit();
-                batch = writeBatch(db);
-                operacoesNoBatch = 0;
-              }
-            }
-          }
-
-          cursor.setDate(cursor.getDate() + 1);
-        }
-
-        if (operacoesNoBatch > 0) {
-          await batch.commit();
-        }
-
-        alert(`${totalGerado} janela(s) de horário gerada(s)/atualizada(s) com sucesso!`);
-        formGerarMassa.reset();
+        carregarExcecoes();
       } catch (err) {
         console.error(err);
-        erroBox.textContent = "Erro ao gerar as vagas em lote.";
+        erroBox.textContent = "Erro ao salvar a exceção.";
       } finally {
         btn.disabled = false;
-        btn.textContent = "Gerar Vagas em Lote";
+        btn.textContent = "Salvar Exceção";
       }
     });
 
-    // --- 3.3 Edição Manual / Ajuste Pontual por Data ---
+    async function carregarExcecoes() {
+      const container = document.getElementById("lista-excecoes");
+      if (!container) return;
+      container.innerHTML = '<div class="estado-vazio">Carregando exceções...</div>';
+
+      try {
+        const snap = await getDocs(collection(db, "timeSlotExceptions"));
+
+        if (snap.empty) {
+          container.innerHTML = '<div class="estado-vazio">Nenhuma exceção cadastrada.</div>';
+          return;
+        }
+
+        const excecoes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        excecoes.sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
+
+        container.innerHTML = "";
+        excecoes.forEach(ex => {
+          const diasTexto = (ex.diasSemana || []).slice().sort().map(d => NOMES_DIAS[d]).join(", ");
+          const semAtendimento = Number(ex.capacidadePorHora) <= 0;
+          const card = document.createElement("div");
+          card.className = "item-agendamento";
+          card.innerHTML = `
+            <div class="linha-topo">
+              <span class="data-hora">${escapeHtml(diasTexto)} · ${escapeHtml(ex.horaInicio)} às ${escapeHtml(ex.horaFim)}</span>
+              <span class="badge ${ex.ativo ? "aprovado" : "recusado"}">${ex.ativo ? "Ativa" : "Inativa"}</span>
+            </div>
+            <div class="detalhes">${semAtendimento ? "Sem atendimento neste intervalo" : `Capacidade: <strong>${ex.capacidadePorHora} veículo(s)/hora</strong>`}</div>
+            <div style="margin-top:12px; display:flex; gap:8px;">
+              <button class="btn-acao ${ex.ativo ? "btn-recusar" : "btn-aprovar"} btn-toggle-excecao" data-id="${ex.id}" data-ativo="${ex.ativo}">
+                ${ex.ativo ? "Desativar" : "Ativar"}
+              </button>
+              <button class="btn-acao btn-desativar btn-excluir-excecao" data-id="${ex.id}">Excluir</button>
+            </div>
+          `;
+          container.appendChild(card);
+        });
+
+        container.querySelectorAll(".btn-toggle-excecao").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            const ativo = btn.dataset.ativo === "true";
+            btn.disabled = true;
+            try {
+              await updateDoc(doc(db, "timeSlotExceptions", btn.dataset.id), { ativo: !ativo });
+              carregarExcecoes();
+            } catch (err) {
+              console.error(err);
+              alert("Erro ao alterar status da exceção.");
+              btn.disabled = false;
+            }
+          });
+        });
+
+        container.querySelectorAll(".btn-excluir-excecao").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            if (!confirm("Excluir esta exceção? As datas futuras voltarão a seguir a Regra Padrão.")) return;
+            btn.disabled = true;
+            try {
+              await deleteDoc(doc(db, "timeSlotExceptions", btn.dataset.id));
+              carregarExcecoes();
+            } catch (err) {
+              console.error(err);
+              alert("Erro ao excluir a exceção.");
+              btn.disabled = false;
+            }
+          });
+        });
+
+      } catch (err) {
+        console.error(err);
+        container.innerHTML = '<div class="estado-vazio">Erro ao carregar exceções.</div>';
+      }
+    }
+
+    // --- 3.3 Ajuste Manual / Pontual por Data ---
+    // Calcula os horários já combinando Regra Padrão + Exceções + qualquer
+    // ajuste manual já existente para a data escolhida (ver disponibilidade.js).
     const inputFiltroDataSlot = document.getElementById("filtroDataSlot");
     inputFiltroDataSlot?.addEventListener("change", () => carregarSlotsDoDia());
 
@@ -756,115 +855,165 @@
       container.innerHTML = '<div class="estado-vazio">Carregando horários...</div>';
 
       try {
-        const q = query(collection(db, "timeSlots"), where("data", "==", dataSelecionada));
-        const snap = await getDocs(q);
-
-        if (snap.empty) {
-          container.innerHTML = '<div class="estado-vazio">Nenhum horário cadastrado para esta data.</div>';
-          return;
-        }
-
-        const slots = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        slots.sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
-
-        container.innerHTML = "";
-        slots.forEach(s => {
-          const card = document.createElement("div");
-          card.className = "item-agendamento";
-          card.innerHTML = `
-            <div class="linha-topo">
-              <span class="data-hora">🕒 ${escapeHtml(s.horaInicio)} às ${escapeHtml(s.horaFim)}</span>
-              <span class="badge ${s.ativo ? "aprovado" : "recusado"}">${s.ativo ? "Ativo" : "Inativo"}</span>
-            </div>
-            <div class="detalhes">Ocupação atual: ${s.ocupados || 0} / ${s.capacidadeMax}</div>
-            <div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-              <input type="number" min="0" class="input-capacidade-slot" data-id="${s.id}" value="${s.capacidadeMax}"
-                     style="width:80px; padding:6px 8px; border:1px solid var(--cinza-borda); border-radius:4px;">
-              <button class="btn-acao btn-salvar-slot" data-id="${s.id}">Salvar Capacidade</button>
-              <button class="btn-acao ${s.ativo ? "btn-recusar" : "btn-aprovar"} btn-toggle-slot" data-id="${s.id}" data-ativo="${s.ativo}">
-                ${s.ativo ? "Desativar" : "Ativar"}
-              </button>
-              <button class="btn-acao btn-desativar btn-excluir-slot" data-id="${s.id}">Excluir</button>
-            </div>
-          `;
-          container.appendChild(card);
-        });
-
-        container.querySelectorAll(".btn-salvar-slot").forEach(btn => {
-          btn.addEventListener("click", async () => {
-            const input = container.querySelector(`.input-capacidade-slot[data-id="${btn.dataset.id}"]`);
-            const novaCapacidade = Number(input.value);
-            if (!novaCapacidade || novaCapacidade < 0) {
-              alert("Informe uma capacidade válida.");
-              return;
-            }
-            btn.disabled = true;
-            try {
-              await updateDoc(doc(db, "timeSlots", btn.dataset.id), { capacidadeMax: novaCapacidade });
-              alert("Capacidade atualizada!");
-            } catch (err) {
-              console.error(err);
-              alert("Erro ao atualizar a capacidade.");
-            } finally {
-              btn.disabled = false;
-            }
-          });
-        });
-
-        container.querySelectorAll(".btn-toggle-slot").forEach(btn => {
-          btn.addEventListener("click", async () => {
-            const ativo = btn.dataset.ativo === "true";
-            btn.disabled = true;
-            try {
-              await updateDoc(doc(db, "timeSlots", btn.dataset.id), { ativo: !ativo });
-              carregarSlotsDoDia();
-            } catch (err) {
-              console.error(err);
-              alert("Erro ao alterar status do horário.");
-              btn.disabled = false;
-            }
-          });
-        });
-
-        container.querySelectorAll(".btn-excluir-slot").forEach(btn => {
-          btn.addEventListener("click", async () => {
-            if (!confirm("Excluir este horário? Ele deixará de aparecer para novas solicitações.")) return;
-            btn.disabled = true;
-            try {
-              await deleteDoc(doc(db, "timeSlots", btn.dataset.id));
-              carregarSlotsDoDia();
-            } catch (err) {
-              console.error(err);
-              alert("Erro ao excluir o horário.");
-              btn.disabled = false;
-            }
-          });
-        });
-
+        // incluirFechados=true: mantém visíveis os horários fechados manualmente
+        // nesta data, para que a Logística possa reabri-los se precisar.
+        const slots = await buscarSlotsVirtuaisDoDia(db, dataSelecionada, { incluirFechados: true });
+        renderizarSlotsDoDia(slots, dataSelecionada, container);
       } catch (err) {
         console.error(err);
         container.innerHTML = '<div class="estado-vazio">Erro ao carregar horários.</div>';
       }
     }
 
-    // --- Utilitários de data/hora para geração de vagas ---
-    function paraDataStr(d) {
-      const ano = d.getFullYear();
-      const mes = String(d.getMonth() + 1).padStart(2, "0");
-      const dia = String(d.getDate()).padStart(2, "0");
-      return `${ano}-${mes}-${dia}`;
+    const ORIGEM_LABEL = { regra: "Regra Padrão", excecao: "Exceção", manual: "Ajuste Manual" };
+
+    function renderizarSlotsDoDia(slots, dataSelecionada, container) {
+      if (slots.length === 0) {
+        container.innerHTML = '<div class="estado-vazio">Nenhum horário de atendimento configurado para esta data (confira a Regra Padrão e as Exceções).</div>';
+        return;
+      }
+
+      container.innerHTML = "";
+      slots.forEach(s => {
+        const card = document.createElement("div");
+        card.className = "item-agendamento";
+        card.innerHTML = `
+          <div class="linha-topo">
+            <span class="data-hora">🕒 ${escapeHtml(s.horaInicio)} às ${escapeHtml(s.horaFim)}</span>
+            <span class="badge ${s.fechado ? "recusado" : "aprovado"}">${s.fechado ? "Fechado (manual)" : ORIGEM_LABEL[s.origem] || ""}</span>
+          </div>
+          <div class="detalhes">Ocupação atual: ${s.ocupados} / ${s.capacidadeMax}</div>
+          <div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <input type="number" min="1" class="input-capacidade-slot" data-hora="${s.horaInicio}" value="${s.capacidadeMax}"
+                   style="width:80px; padding:6px 8px; border:1px solid var(--cinza-borda); border-radius:4px;">
+            <button class="btn-acao btn-salvar-slot" data-hora="${s.horaInicio}">Salvar Capacidade</button>
+            <button class="btn-acao ${s.fechado ? "btn-aprovar" : "btn-recusar"} btn-toggle-slot" data-hora="${s.horaInicio}" data-fechado="${s.fechado}" data-capacidade="${s.capacidadeMax}">
+              ${s.fechado ? "Reabrir Nesta Data" : "Fechar Nesta Data"}
+            </button>
+            ${s.temAjusteManual ? `<button class="btn-acao btn-desativar btn-restaurar-slot" data-hora="${s.horaInicio}" ${s.ocupados > 0 ? "disabled title=\"Não é possível restaurar: já há reservas neste horário\"" : ""}>Restaurar Padrão</button>` : ""}
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      container.querySelectorAll(".btn-salvar-slot").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const hora = btn.dataset.hora;
+          const input = container.querySelector(`.input-capacidade-slot[data-hora="${hora}"]`);
+          const novaCapacidade = Number(input.value);
+          if (!novaCapacidade || novaCapacidade < 1) {
+            alert("Informe uma capacidade válida.");
+            return;
+          }
+          const horaFim = minutosParaHora((horaParaMinutos(hora) + 60) % (24 * 60));
+          btn.disabled = true;
+          try {
+            await setDoc(doc(db, "timeSlots", idSlotHorario(dataSelecionada, hora)), {
+              data: dataSelecionada,
+              horaInicio: hora,
+              horaFim,
+              capacidadeMax: novaCapacidade,
+              ativo: true
+            }, { merge: true });
+            alert("Capacidade atualizada para este dia!");
+            carregarSlotsDoDia();
+          } catch (err) {
+            console.error(err);
+            alert("Erro ao atualizar a capacidade.");
+            btn.disabled = false;
+          }
+        });
+      });
+
+      container.querySelectorAll(".btn-toggle-slot").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const hora = btn.dataset.hora;
+          const fechado = btn.dataset.fechado === "true";
+          const capacidadeAtual = Number(btn.dataset.capacidade) || 1;
+          const horaFim = minutosParaHora((horaParaMinutos(hora) + 60) % (24 * 60));
+          btn.disabled = true;
+          try {
+            await setDoc(doc(db, "timeSlots", idSlotHorario(dataSelecionada, hora)), {
+              data: dataSelecionada,
+              horaInicio: hora,
+              horaFim,
+              capacidadeMax: capacidadeAtual,
+              ativo: fechado
+            }, { merge: true });
+            carregarSlotsDoDia();
+          } catch (err) {
+            console.error(err);
+            alert("Erro ao alterar o horário.");
+            btn.disabled = false;
+          }
+        });
+      });
+
+      container.querySelectorAll(".btn-restaurar-slot").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          if (!confirm("Restaurar este horário para o padrão (Regra/Exceção), removendo o ajuste manual desta data?")) return;
+          const hora = btn.dataset.hora;
+          btn.disabled = true;
+          try {
+            await deleteDoc(doc(db, "timeSlots", idSlotHorario(dataSelecionada, hora)));
+            carregarSlotsDoDia();
+          } catch (err) {
+            console.error(err);
+            alert("Erro ao restaurar o horário.");
+            btn.disabled = false;
+          }
+        });
+      });
     }
 
-    function horaParaMinutos(hhmm) {
-      const [h, m] = hhmm.split(":").map(Number);
-      return h * 60 + m;
-    }
+    // --- Adicionar/Forçar um horário específico fora do padrão, só para esta data ---
+    const formSlotManual = document.getElementById("form-slot-manual");
+    formSlotManual?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const erroBox = document.getElementById("slot-manual-error");
+      erroBox.textContent = "";
 
-    function minutosParaHora(min) {
-      const h = String(Math.floor(min / 60)).padStart(2, "0");
-      const m = String(min % 60).padStart(2, "0");
-      return `${h}:${m}`;
-    }
+      const dataSelecionada = inputFiltroDataSlot?.value || "";
+      if (!dataSelecionada) {
+        erroBox.textContent = "Selecione a data do ajuste acima primeiro.";
+        return;
+      }
+
+      const horaInicio = document.getElementById("manualHoraInicio").value;
+      const capacidade = Number(document.getElementById("manualCapacidade").value);
+
+      if (!horaInicio) {
+        erroBox.textContent = "Informe o horário.";
+        return;
+      }
+      if (!capacidade || capacidade < 1) {
+        erroBox.textContent = "Informe uma capacidade válida.";
+        return;
+      }
+
+      const horaFim = minutosParaHora((horaParaMinutos(horaInicio) + 60) % (24 * 60));
+      const btn = formSlotManual.querySelector("button[type=submit]");
+      btn.disabled = true;
+
+      try {
+        await setDoc(doc(db, "timeSlots", idSlotHorario(dataSelecionada, horaInicio)), {
+          data: dataSelecionada,
+          horaInicio,
+          horaFim,
+          capacidadeMax: capacidade,
+          ativo: true
+        }, { merge: true });
+
+        formSlotManual.reset();
+        document.getElementById("manualCapacidade").value = "1";
+        carregarSlotsDoDia();
+      } catch (err) {
+        console.error(err);
+        erroBox.textContent = "Erro ao adicionar o horário.";
+      } finally {
+        btn.disabled = false;
+      }
+    });
 
     /* ===================================================================
        4. ABA: APROVAÇÃO DE USUÁRIOS COLABORADORES

@@ -51,16 +51,60 @@ patio-agendamento/
 { "nome": "Carga Geral", "ativo": true }
 ```
 
-### `timeSlots/{id}`
+### Disponibilidade de horários (sem geração em massa no calendário)
+
+Nenhuma vaga futura precisa ser "gerada" previamente. A disponibilidade de
+qualquer data (mesmo daqui a 2 anos) é calculada dinamicamente no momento da
+consulta, combinando 3 coleções em ordem de prioridade (a de baixo sobrescreve
+a de cima), implementado em `web/js/disponibilidade.js`:
+
+**1) `timeSlotRules/{id}` — Regra Padrão de Atendimento (recorrente)**
 ```json
 {
-  "horaInicio": "08:00",
-  "horaFim": "09:00",
-  "limiteVeiculos": 5,
-  "diasSemana": [1,2,3,4,5],   // 0=domingo ... 6=sábado
+  "diasSemana": [1,2,3,4,5],     // 0=domingo ... 6=sábado
+  "horaInicio": "06:00",
+  "horaFim": "00:00",             // pode atravessar a meia-noite
+  "capacidadePorHora": 2,
   "ativo": true
 }
 ```
+Define o horário de funcionamento padrão do pátio e a capacidade por hora,
+para qualquer data futura que caia naqueles dias da semana.
+
+**2) `timeSlotExceptions/{id}` — Exceções recorrentes (têm prioridade sobre a regra padrão)**
+```json
+{
+  "diasSemana": [0],              // ex: domingo
+  "horaInicio": "00:00",
+  "horaFim": "23:59",
+  "capacidadePorHora": 0,         // 0 = sem atendimento nesse intervalo
+  "ativo": true
+}
+```
+Usadas para bloquear um período recorrente (ex: domingo sem atendimento) ou
+reduzir a capacidade em um intervalo específico (ex: seg a sex, 11:00-14:00,
+1 veículo/hora no horário de almoço). Se `capacidadePorHora` for maior que 0,
+o valor sobrescreve a capacidade da regra padrão apenas naquele dia/horário.
+
+**3) `timeSlots/{data}_{hora}` — Ajuste manual pontual por data (prioridade máxima)**
+```json
+{
+  "data": "2026-08-10",
+  "horaInicio": "08:00",
+  "horaFim": "09:00",
+  "capacidadeMax": 3,
+  "ativo": true,
+  "ocupados": 1
+}
+```
+Documento **opcional**, criado sob demanda:
+- É criado automaticamente ("lazy") pela transação de agendamento, na primeira
+  reserva feita para aquele horário/data — é onde a ocupação real (`ocupados`)
+  fica registrada, garantindo atomicidade contra concorrência.
+- Também pode ser criado/editado manualmente pela Logística/Admin na aba
+  "Vagas & Horários" para fechar, reabrir ou mudar a capacidade só daquele dia
+  específico (sem afetar a regra padrão nem outras datas), ou para liberar um
+  horário fora do padrão pontualmente.
 
 ### `bookings/{id}`
 ```json
@@ -93,12 +137,23 @@ patio-agendamento/
 ## Como evitar conflito de vagas (2 pessoas agendando ao mesmo tempo)
 
 A criação de um agendamento **não é um simples `add()`** — é uma
-**Firestore Transaction**: o cliente lê a contagem atual de `bookings`
-com `status in [Pendente, Aprovado]` para aquele `timeSlot` + `data`,
-e só confirma a escrita se ainda houver vaga. O Firestore garante
-atomicidade: se duas transportadoras tentarem a última vaga ao mesmo
-tempo, apenas uma transaction vence — a outra recebe erro e o
-front-end informa "vaga acabou de ser preenchida, escolha outro horário".
+**Firestore Transaction** sobre o documento `timeSlots/{data}_{hora}`:
+
+1. O cliente já sabe, a partir de `disponibilidade.js`, qual a capacidade
+   calculada (regra padrão ou exceção) para aquele horário/data.
+2. Dentro da transação: se o documento em `timeSlots` ainda não existir
+   (data futura nunca reservada antes), ele é **criado na hora** usando essa
+   capacidade calculada, com `ocupados = 1`. Se já existir, o cliente lê o
+   `ocupados` atual e só confirma a escrita se ainda houver vaga.
+3. O Firestore garante atomicidade: se duas transportadoras tentarem a
+   última vaga ao mesmo tempo, apenas uma transaction vence — a outra recebe
+   erro e o front-end informa "vaga acabou de ser preenchida, escolha outro
+   horário".
+
+Isso elimina a necessidade de gerar vagas em massa no calendário: o
+documento de controle de ocupação só passa a existir quando (a) alguém
+reserva aquele horário pela primeira vez, ou (b) a Logística/Admin cria um
+ajuste manual pontual para aquela data.
 
 ## Próximos passos de implementação
 

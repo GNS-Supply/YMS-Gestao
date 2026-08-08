@@ -106,6 +106,7 @@
       serverTimestamp,
       runTransaction
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+    import { buscarSlotsVirtuaisDoDia, idSlotHorario } from "./disponibilidade.js";
 
     /* ===================================================================
        AUTENTICAÇÃO / PROTEÇÃO DE PÁGINA (duplicado de auth.js — apenas Tipo 1)
@@ -209,7 +210,10 @@
     }
 
     /* ===================================================================
-       2. CONSULTA DE HORÁRIOS DISPONÍVEIS NA DATA (timeSlots)
+       2. CÁLCULO DOS HORÁRIOS DISPONÍVEIS NA DATA
+       Não depende mais de vagas "geradas" previamente: qualquer data
+       futura já é calculada a partir da Regra Padrão de Atendimento +
+       Exceções configuradas pela Logística/Admin (ver disponibilidade.js).
        =================================================================== */
     inputData?.addEventListener("change", async (e) => {
       const dataSelecionada = e.target.value;
@@ -224,27 +228,14 @@
       slotsMsg.textContent = "Buscando horários disponíveis...";
 
       try {
-        const qSlots = query(
-          collection(db, "timeSlots"),
-          where("data", "==", dataSelecionada),
-          where("ativo", "==", true)
-        );
+        // incluirFechados=false (padrão): horários fechados manualmente
+        // pela Logística para esta data não aparecem aqui.
+        slotsDoDia = await buscarSlotsVirtuaisDoDia(db, dataSelecionada);
 
-        const snap = await getDocs(qSlots);
-
-        if (snap.empty) {
-          slotsMsg.textContent = "Nenhum horário/vaga disponível para esta data.";
-          slotsDoDia = [];
+        if (slotsDoDia.length === 0) {
+          slotsMsg.textContent = "Nenhum horário de atendimento configurado para esta data.";
           return;
         }
-
-        slotsDoDia = snap.docs.map(docSnap => ({
-          id: docSnap.id,
-          ...docSnap.data()
-        }));
-
-        // Ordena horários cronologicamente
-        slotsDoDia.sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
 
         renderizarSlots();
       } catch (err) {
@@ -306,7 +297,15 @@
         return;
       }
 
-      const slotId = `${dataAgendada}_${horaInicio.replace(":", "-")}`;
+      // Horário calculado dinamicamente (regra/exceção) que o usuário selecionou.
+      // Serve como base de capacidade caso o documento em timeSlots ainda não exista.
+      const slotSelecionado = slotsDoDia.find(s => s.horaInicio === horaInicio);
+      if (!slotSelecionado) {
+        erroBox.textContent = "Este horário não está mais disponível. Selecione a data novamente.";
+        return;
+      }
+
+      const slotId = idSlotHorario(dataAgendada, horaInicio);
       const slotRef = doc(db, "timeSlots", slotId);
       const bookingRef = doc(collection(db, "bookings"));
 
@@ -315,25 +314,40 @@
       btnSub.textContent = "Reservando vaga...";
 
       try {
-        // Executa transação para evitar que 2 transportadoras peguem a última vaga simultaneamente
+        // Executa transação para evitar que 2 transportadoras peguem a última vaga simultaneamente.
+        // Se o documento da vaga ainda não existir (data futura calculada pela regra/exceção,
+        // nunca reservada antes), ele é criado agora ("lazy"), usando a capacidade já calculada.
         await runTransaction(db, async (transaction) => {
           const slotSnap = await transaction.get(slotRef);
 
+          let capacidadeMax;
+          let ocupadosAtuais;
+
           if (!slotSnap.exists()) {
-            throw new Error("O horário selecionado não está mais disponível.");
+            capacidadeMax = slotSelecionado.capacidadeMax;
+            ocupadosAtuais = 0;
+          } else {
+            const slotData = slotSnap.data();
+            if (slotData.ativo === false) {
+              throw new Error("O horário selecionado não está mais disponível.");
+            }
+            capacidadeMax = slotData.capacidadeMax;
+            ocupadosAtuais = slotData.ocupados || 0;
           }
 
-          const slotData = slotSnap.data();
-          const ocupadosAtuais = slotData.ocupados || 0;
-
-          if (ocupadosAtuais >= slotData.capacidadeMax) {
+          if (ocupadosAtuais >= capacidadeMax) {
             throw new Error("As vagas para este horário acabaram de esgotar. Escolha outro horário.");
           }
 
-          // Incrementa ocupação da vaga
-          transaction.update(slotRef, {
+          // Cria (se necessário) ou atualiza a vaga com a nova ocupação
+          transaction.set(slotRef, {
+            data: dataAgendada,
+            horaInicio,
+            horaFim: slotSelecionado.horaFim,
+            capacidadeMax,
+            ativo: true,
             ocupados: ocupadosAtuais + 1
-          });
+          }, { merge: true });
 
           // Salva a solicitação de agendamento
           transaction.set(bookingRef, {
