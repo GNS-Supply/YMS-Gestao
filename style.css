@@ -13,11 +13,7 @@
   --raio: 10px;
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -39,229 +35,193 @@ body {
 .login-card {
   background: var(--branco);
   border-radius: var(--raio);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+  padding: 40px 36px;
   width: 100%;
-  max-width: 400px;
-  padding: 32px 28px;
+  max-width: 380px;
 }
 
-.login-card-larga {
-  max-width: 520px;
-}
+.login-card-larga { max-width: 460px; }
 
-.logo {
-  font-size: 1.4rem;
+.login-card .logo {
+  text-align: center;
+  margin-bottom: 8px;
+  font-size: 1.6rem;
   font-weight: 700;
   color: var(--azul-escuro);
-  text-align: center;
-  margin-bottom: 6px;
 }
 
-.subtitulo {
-  font-size: 0.88rem;
+.login-card .subtitulo {
+  text-align: center;
   color: var(--texto-suave);
-  text-align: center;
-  margin-bottom: 24px;
+  font-size: 0.9rem;
+  margin-bottom: 28px;
 }
 
-.campo {
-  margin-bottom: 16px;
-}
+.campo { margin-bottom: 18px; }
 
 .campo label {
   display: block;
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--texto);
   margin-bottom: 6px;
+  color: var(--texto);
 }
 
-.campo input[type="text"],
-.campo input[type="email"],
-.campo input[type="password"],
-.campo input[type="date"],
-.campo select,
-.campo textarea {
+.campo input, .campo select, .campo textarea {
   width: 100%;
-  padding: 10px 12px;
+  padding: 11px 12px;
   border: 1px solid var(--cinza-borda);
   border-radius: 6px;
-  font-size: 0.92rem;
-  color: var(--texto);
-  background: var(--branco);
+  font-size: 0.95rem;
+  font-family: inherit;
   transition: border-color .15s;
 }
 
-.campo input:focus,
-.campo select:focus,
-.campo textarea:focus {
+.campo input:focus, .campo select:focus, .campo textarea:focus {
   outline: none;
   border-color: var(--azul);
 }
 
-.campo-radio {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.radio-opcao {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.88rem;
-  cursor: pointer;
-}
-
-.btn-primario {
+button.btn-primario {
   width: 100%;
-  padding: 12px;
   background: var(--azul);
   color: var(--branco);
   border: none;
+  padding: 12px;
   border-radius: 6px;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   transition: background .15s;
-  margin-top: 8px;
 }
 
-.btn-primario:hover {
-  background: var(--azul-escuro);
-}
-
-.btn-primario:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+button.btn-primario:hover { background: var(--azul-escuro); }
+button.btn-primario:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .erro {
   color: var(--vermelho);
   font-size: 0.85rem;
-  margin-top: 10px;
+  margin-top: 12px;
+  min-height: 18px;
   text-align: center;
 }
 
 .sucesso {
   color: var(--verde);
   font-size: 0.85rem;
-  margin-top: 10px;
+  margin-top: 12px;
   text-align: center;
 }
 
 .login-links {
-  margin-top: 20px;
   text-align: center;
+  margin-top: 22px;
   font-size: 0.85rem;
 }
 
 .login-links a {
   color: var(--azul);
   text-decoration: none;
-  font-weight: 500;
+  font-weight: 600;
 }
 
-.login-links a:hover {
-  text-decoration: underline;
-}
+.login-links a:hover { text-decoration: underline; }
 
-.separador {
-  margin: 0 8px;
+.login-links .separador {
   color: var(--texto-suave);
+  margin: 0 8px;
 }
 
-/* ---------- Topbar ---------- */
+/* ---------- Campos de rádio (Cadastro) ---------- */
+.campo-radio {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.radio-opcao {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 400;
+  border: 1px solid var(--cinza-borda);
+  border-radius: 6px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.radio-opcao input { width: auto; }
+
+/* ---------- Layout geral dos dashboards ---------- */
 .topbar {
   background: var(--azul-escuro);
   color: var(--branco);
   padding: 14px 24px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
 }
 
-.topbar .marca {
-  font-size: 1.1rem;
-  font-weight: 700;
-}
+.topbar .marca { font-weight: 700; font-size: 1.1rem; }
 
 .topbar button {
-  background: rgba(255, 255, 255, 0.15);
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.4);
   color: var(--branco);
-  border: none;
-  padding: 6px 14px;
-  border-radius: 4px;
-  font-size: 0.85rem;
+  padding: 7px 14px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: background .15s;
 }
 
-.topbar button:hover {
-  background: rgba(255, 255, 255, 0.25);
-}
-
-/* ---------- Estrutura Principal ---------- */
-.container {
-  max-width: 900px;
-  margin: 30px auto;
-  padding: 0 16px;
-}
+.container { padding: 24px; max-width: 1200px; margin: 0 auto; }
 
 .card {
   background: var(--branco);
   border-radius: var(--raio);
-  padding: 24px;
   box-shadow: var(--sombra);
+  padding: 20px;
   margin-bottom: 20px;
 }
 
-.card h3 {
-  font-size: 1.1rem;
-  color: var(--azul-escuro);
-  margin-bottom: 12px;
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
 }
+
+.badge.pendente { background: #fff3e0; color: var(--laranja); }
+.badge.aprovado { background: #e6f7ed; color: var(--verde); }
+.badge.recusado, .badge.expirado { background: #fdeaea; color: var(--vermelho); }
 
 /* ---------- Abas ---------- */
 .tabs {
   display: flex;
   gap: 8px;
   margin-bottom: 20px;
-  border-bottom: 2px solid var(--cinza-borda);
+  border-bottom: 1px solid var(--cinza-borda);
 }
 
 .tab-btn {
   background: none;
   border: none;
-  padding: 10px 16px;
+  padding: 10px 18px;
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--texto-suave);
   cursor: pointer;
   border-bottom: 3px solid transparent;
-  margin-bottom: -2px;
-  transition: all .15s;
 }
 
-.tab-btn:hover {
-  color: var(--azul);
-}
+.tab-btn.ativo { color: var(--azul); border-bottom-color: var(--azul); }
 
-.tab-btn.ativo {
-  color: var(--azul);
-  border-bottom-color: var(--azul);
-}
+.tab-conteudo { display: none; }
+.tab-conteudo.ativo { display: block; }
 
-.tab-conteudo {
-  display: none;
-}
-
-.tab-conteudo.ativo {
-  display: block;
-}
-
-/* ---------- Slots de Horários ---------- */
+/* ---------- Seleção de horário (agendamento) ---------- */
 .slots-grid {
   display: flex;
   flex-wrap: wrap;
@@ -279,9 +239,7 @@ body {
   transition: all .15s;
 }
 
-.slot-opcao:hover {
-  border-color: var(--azul);
-}
+.slot-opcao:hover { border-color: var(--azul); }
 
 .slot-opcao.selecionado {
   background: var(--azul);
@@ -290,20 +248,11 @@ body {
   font-weight: 600;
 }
 
-.slot-opcao small {
-  display: block;
-  font-weight: 400;
-  opacity: .8;
-  font-size: 0.75rem;
-}
+.slot-opcao small { display: block; font-weight: 400; opacity: .8; font-size: 0.75rem; }
 
-.slots-msg {
-  font-size: 0.85rem;
-  color: var(--texto-suave);
-  margin-top: 6px;
-}
+.slots-msg { font-size: 0.85rem; color: var(--texto-suave); margin-top: 6px; }
 
-/* ---------- Avisos de Alerta e Suporte ---------- */
+/* ---------- Aviso de suporte ---------- */
 .aviso-suporte {
   background: #eef5ff;
   border: 1px solid #cfe2ff;
@@ -314,108 +263,311 @@ body {
   margin-bottom: 20px;
 }
 
-/* ---------- Listas de Agendamentos e Cards de Itens ---------- */
-.lista-agendamentos {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
+/* ---------- Lista de agendamentos ---------- */
+.lista-agendamentos { display: flex; flex-direction: column; gap: 12px; }
 
 .item-agendamento {
   border: 1px solid var(--cinza-borda);
   border-radius: 8px;
-  padding: 16px;
-  background: var(--branco);
+  padding: 14px 16px;
 }
 
 .item-agendamento .linha-topo {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
-.item-agendamento .data-hora {
-  font-weight: 700;
-  color: var(--azul-escuro);
-  font-size: 0.95rem;
-}
+.item-agendamento .data-hora { font-weight: 700; }
 
-.badge {
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-}
+.item-agendamento .detalhes { font-size: 0.85rem; color: var(--texto-suave); line-height: 1.5; }
 
-.badge.pendente { background: #fff3cd; color: #856404; }
-.badge.aprovado { background: #d4edda; color: #155724; }
-.badge.recusado { background: #f8d7da; color: #721c24; }
+.estado-vazio { text-align: center; color: var(--texto-suave); padding: 30px 0; font-size: 0.9rem; }
 
-.item-agendamento .detalhes {
-  font-size: 0.88rem;
-  color: var(--texto-suave);
-  line-height: 1.4;
-}
+/* =====================================================================
+   COMPONENTES USADOS NO HTML/JS QUE AINDA NÃO TINHAM ESTILO PRÓPRIO
+   ===================================================================== */
 
-.estado-vazio {
-  text-align: center;
-  color: var(--texto-suave);
-  font-size: 0.9rem;
-  padding: 24px 0;
-}
-
-/* ---------- Tabelas e Ações do Painel Administrativo / Logística ---------- */
-.tabela-wrapper {
-  overflow-x: auto;
-  margin-top: 10px;
-}
-
-.tabela-padrao {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9rem;
-  text-align: left;
-}
-
-.tabela-padrao th, 
-.tabela-padrao td {
-  padding: 12px;
-  border-bottom: 1px solid var(--cinza-borda);
-}
-
-.tabela-padrao th {
-  background: var(--cinza-bg);
-  font-weight: 600;
-  color: var(--azul-escuro);
-}
-
+/* ---------- Botões de ação (tabelas e cards de aprovação) ---------- */
 .btn-acao {
-  background: var(--azul);
-  color: var(--branco);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 14px;
   border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
-  font-size: 0.8rem;
+  border-radius: 7px;
+  font-size: 0.82rem;
   font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
-  transition: opacity .15s;
+  transition: opacity .15s, transform .05s, background .15s;
+  white-space: nowrap;
 }
+.btn-acao:active { transform: scale(0.96); }
+.btn-acao:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 
-.btn-acao:hover {
-  opacity: 0.9;
-}
+.btn-aprovar { background: var(--verde); color: var(--branco); }
+.btn-aprovar:hover:not(:disabled) { opacity: .88; }
 
-.btn-acao:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-aprovar {
-  background: var(--verde);
-}
+.btn-recusar { background: var(--vermelho); color: var(--branco); }
+.btn-recusar:hover:not(:disabled) { opacity: .88; }
 
 .btn-desativar {
-  background: var(--vermelho);
+  background: var(--branco);
+  color: var(--texto);
+  border: 1px solid var(--cinza-borda);
+}
+.btn-desativar:hover:not(:disabled) { background: var(--cinza-bg); }
+
+.btn-salvar-slot, .btn-salvar-usuario {
+  background: var(--azul);
+  color: var(--branco);
+}
+.btn-salvar-slot:hover:not(:disabled), .btn-salvar-usuario:hover:not(:disabled) { background: var(--azul-escuro); }
+
+/* ---------- Selects avulsos (aprovação de usuário, tipo de acesso) ---------- */
+.campo-select,
+select.select-alterar-tipo,
+select.select-alterar-status {
+  padding: 9px 10px;
+  border: 1px solid var(--cinza-borda);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  background: var(--branco);
+  color: var(--texto);
+}
+
+/* ---------- Botões de horário (grid de agendamento) ---------- */
+.btn-slot {
+  border: 1px solid var(--cinza-borda);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  background: var(--branco);
+  cursor: pointer;
+  text-align: center;
+  transition: all .15s;
+}
+.btn-slot:hover { border-color: var(--azul); }
+.btn-slot.selecionado { background: var(--azul); border-color: var(--azul); color: var(--branco); }
+.btn-slot.esgotado { opacity: .45; cursor: not-allowed; }
+
+/* ---------- Tabela padrão (Painel Admin) ---------- */
+.tabela-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+.tabela-padrao { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+
+.tabela-padrao th {
+  text-align: left;
+  padding: 10px 14px;
+  background: var(--cinza-bg);
+  color: var(--texto-suave);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  border-bottom: 2px solid var(--cinza-borda);
+  white-space: nowrap;
+}
+
+.tabela-padrao td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--cinza-borda);
+  vertical-align: middle;
+}
+
+.tabela-padrao tbody tr:hover { background: #fafbfc; }
+
+/* =====================================================================
+   RESPONSIVIDADE / "APP SHELL" — comportamento de aplicativo mobile
+   ===================================================================== */
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button, .btn-primario, .btn-acao, .tab-btn, .topbar button, .slot-opcao, .btn-slot {
+  touch-action: manipulation;
+}
+
+/* Cabeçalho fixo no topo, como o header de um app nativo */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  padding-top: calc(14px + env(safe-area-inset-top));
+  padding-left: max(24px, env(safe-area-inset-left));
+  padding-right: max(24px, env(safe-area-inset-right));
+}
+
+/* Respiro extra no final da página para não ficar colado na borda
+   inferior de telas com "notch"/gesto (iPhone, Android recentes) */
+.container {
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Abas com rolagem horizontal — padrão de app (segmented / scroll tabs),
+   evita quebra feia de linha quando há muitas abas em tela estreita */
+.tabs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  position: sticky;
+  top: 0;
+  background: var(--cinza-bg);
+  z-index: 40;
+}
+.tabs::-webkit-scrollbar { display: none; }
+
+.tab-btn {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+}
+
+@media (max-width: 640px) {
+  /* ---------- Espaçamento geral ---------- */
+  .container { padding: 14px; }
+  .card { padding: 16px; border-radius: 12px; margin-bottom: 14px; }
+
+  .topbar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding-top: calc(12px + env(safe-area-inset-top));
+    padding-bottom: 12px;
+  }
+  .topbar .marca { font-size: 0.95rem; }
+  .topbar > div[style*="display:flex"],
+  .topbar > div[style*="display: flex"] {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  #user-empresa, #user-nome, #user-tipo {
+    max-width: 55vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ---------- Abas (padrão bottom-safe scroll tabs) ---------- */
+  .tabs {
+    margin: 0 -14px 16px;
+    padding: 0 14px;
+    gap: 4px;
+  }
+  .tab-btn { padding: 12px 14px; font-size: 0.88rem; }
+
+  /* ---------- Alvo de toque confortável (padrão iOS/Android: 44px) ---------- */
+  button, .btn-primario, .btn-acao, .tab-btn,
+  .campo input, .campo select, .campo textarea,
+  input, select, textarea {
+    min-height: 44px;
+  }
+  .btn-acao { padding: 10px 14px; font-size: 0.85rem; }
+
+  /* Evita zoom automático do iOS ao focar campos (fonte < 16px dispara zoom) */
+  .campo input, .campo select, .campo textarea, input, select, textarea {
+    font-size: 16px;
+  }
+
+  /* ---------- Grids de formulário viram coluna única ---------- */
+  #form-regra-slot > div[style*="grid-template-columns"],
+  #form-excecao-slot > div[style*="grid-template-columns"],
+  #form-slot-manual {
+    grid-template-columns: 1fr !important;
+  }
+  #form-slot-manual { flex-direction: column; align-items: stretch !important; }
+  #form-slot-manual .campo { width: 100%; }
+
+  /* ---------- Grid de horários disponíveis (agendamento) ---------- */
+  .slots-grid { gap: 8px; }
+  .btn-slot, .slot-opcao { flex: 1 1 calc(50% - 8px); }
+
+  /* CTA principal do formulário de agendamento acompanha a rolagem,
+     como o botão de ação fixo dos apps nativos */
+  #form-agendamento > button.btn-primario {
+    position: sticky;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    box-shadow: 0 6px 18px rgba(15, 41, 66, 0.25);
+  }
+
+  /* ---------- Login / Cadastro / Recuperar senha em tela cheia ---------- */
+  .login-wrap { padding: 0; align-items: stretch; }
+  .login-card, .login-card-larga {
+    max-width: none;
+    min-height: 100vh;
+    border-radius: 0;
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 28px 22px;
+    padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* ---------- Cards de agendamento/solicitação ---------- */
+  .item-agendamento .linha-topo { flex-wrap: wrap; gap: 6px; }
+  .item-agendamento { padding: 12px 14px; }
+
+  /* Linhas flex inline (botões de ação, filtros de data) quebram em
+     vez de transbordar horizontalmente na tela estreita */
+  .card div[style*="display:flex"],
+  .card div[style*="display: flex"],
+  .item-agendamento div[style*="display:flex"] {
+    flex-wrap: wrap;
+  }
+  .card div[style*="display:flex"] > input[type="date"],
+  .card div[style*="display: flex"] > input[type="date"] {
+    flex: 1 1 160px;
+  }
+
+  /* ---------- Tabela do Admin vira lista de cartões no celular ---------- */
+  .tabela-padrao thead { display: none; }
+  .tabela-padrao, .tabela-padrao tbody, .tabela-padrao tr, .tabela-padrao td {
+    display: block;
+    width: 100%;
+  }
+  .tabela-padrao tr {
+    border: 1px solid var(--cinza-borda);
+    border-radius: 10px;
+    margin-bottom: 12px;
+    padding: 4px 14px;
+    background: var(--branco);
+  }
+  .tabela-padrao td {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+    padding: 10px 0;
+    border-bottom: 1px solid #eef0f2;
+    text-align: left;
+  }
+  .tabela-padrao td:last-child { border-bottom: none; }
+  .tabela-padrao td::before {
+    content: attr(data-label);
+    font-weight: 700;
+    font-size: 0.7rem;
+    color: var(--texto-suave);
+    text-transform: uppercase;
+    letter-spacing: .03em;
+  }
+  .tabela-padrao td .select-alterar-tipo,
+  .tabela-padrao td .select-alterar-status,
+  .tabela-padrao td .btn-acao {
+    width: 100%;
+  }
+}
+
+@media (max-width: 400px) {
+  .btn-slot, .slot-opcao { flex: 1 1 100%; }
 }

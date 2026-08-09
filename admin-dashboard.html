@@ -2,7 +2,8 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0f2942">
   <title>Agendamento de Pátio - Painel Administrativo</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -158,25 +159,25 @@
           const tr = document.createElement("tr");
 
           tr.innerHTML = `
-            <td>
+            <td data-label="Nome">
               ${escapeHtml(u.nome || "-")}
               ${ehEuMesmo ? '<br><small style="color:var(--texto-suave);">(sua conta)</small>' : ""}
             </td>
-            <td>${escapeHtml(u.email || "-")}</td>
-            <td>
+            <td data-label="E-mail">${escapeHtml(u.email || "-")}</td>
+            <td data-label="Vínculo / Empresa">
               <span style="font-size:0.78rem; color:var(--texto-suave);">${u.vinculo === "interno" ? "Colaborador Interno" : "Empresa Parceira"}</span>
               <input type="text" class="input-empresa" data-id="${u.id}" value="${escapeHtml(u.empresa || "")}"
                      placeholder="Nome da empresa"
                      style="margin-top:4px; padding:6px 8px; border:1px solid var(--cinza-borda); border-radius:4px; font-size:0.82rem; width:100%;">
             </td>
-            <td>
+            <td data-label="Tipo de Acesso">
               <select class="select-alterar-tipo" data-id="${u.id}" ${ehEuMesmo ? "disabled" : ""} style="padding:6px; border-radius:4px; font-size:0.85rem;">
                 <option value="1" ${u.tipo === 1 ? "selected" : ""}>Transportadora (1)</option>
                 <option value="2" ${u.tipo === 2 ? "selected" : ""}>Logística (2)</option>
                 <option value="3" ${u.tipo === 3 ? "selected" : ""}>Administrador (3)</option>
               </select>
             </td>
-            <td>
+            <td data-label="Status da Conta">
               <select class="select-alterar-status" data-id="${u.id}" ${ehEuMesmo ? "disabled" : ""} style="padding:6px; border-radius:4px; font-size:0.85rem;">
                 <option value="aprovado" ${u.status === "aprovado" ? "selected" : ""}>Ativo</option>
                 <option value="suspenso" ${u.status === "suspenso" ? "selected" : ""}>Suspenso</option>
@@ -184,7 +185,7 @@
                 <option value="recusado" ${u.status === "recusado" ? "selected" : ""}>Recusado</option>
               </select>
             </td>
-            <td>
+            <td data-label="Ações">
               <button class="btn-acao btn-salvar-usuario" data-id="${u.id}" ${ehEuMesmo ? "disabled" : ""}>
                 Salvar
               </button>
