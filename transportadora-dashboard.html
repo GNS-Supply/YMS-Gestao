@@ -57,12 +57,13 @@
 
           <div class="campo">
             <label for="placaCavalo">Placa do Cavalo</label>
-            <input type="text" id="placaCavalo" required maxlength="8" style="text-transform:uppercase;">
+            <input type="text" id="placaCavalo" required maxlength="8" placeholder="AAA-0000 ou AAA0A00" style="text-transform:uppercase;" inputmode="text" autocomplete="off">
+            <small style="display:block; margin-top:4px; color:var(--texto-suave); font-size:0.78rem;">Formatos aceitos: AAA-0000 (antigo) ou AAA0A00 (Mercosul)</small>
           </div>
 
           <div class="campo">
             <label for="placaCarreta">Placa da Carreta</label>
-            <input type="text" id="placaCarreta" maxlength="8" style="text-transform:uppercase;">
+            <input type="text" id="placaCarreta" maxlength="8" placeholder="AAA-0000 ou AAA0A00" style="text-transform:uppercase;" inputmode="text" autocomplete="off">
           </div>
 
           <div class="campo">
@@ -223,6 +224,54 @@
     const inputHoraSelecionada = document.getElementById("horaInicioSelecionada");
     const erroBox = document.getElementById("agendamento-error");
     const listaAgendamentos = document.getElementById("lista-agendamentos");
+    const inputPlacaCavalo = document.getElementById("placaCavalo");
+    const inputPlacaCarreta = document.getElementById("placaCarreta");
+
+    /* ===================================================================
+       MÁSCARA DE PLACA (aceita AAA-0000 e AAA0A00 / Mercosul)
+       Posições (sem contar o traço): 1-3 letras, 4 dígito,
+       5 dígito (formato antigo, insere traço) ou letra (Mercosul, sem traço),
+       6-7 sempre dígitos.
+       =================================================================== */
+    function aplicarMascaraPlaca(valorBruto) {
+      const brutoLimpo = (valorBruto || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      let alfanumerico = "";
+
+      for (let i = 0; i < brutoLimpo.length && alfanumerico.length < 7; i++) {
+        const ch = brutoLimpo[i];
+        const pos = alfanumerico.length;
+
+        if (pos < 3) {
+          if (/[A-Z]/.test(ch)) alfanumerico += ch;
+        } else if (pos === 3) {
+          if (/[0-9]/.test(ch)) alfanumerico += ch;
+        } else if (pos === 4) {
+          if (/[A-Z0-9]/.test(ch)) alfanumerico += ch;
+        } else {
+          if (/[0-9]/.test(ch)) alfanumerico += ch;
+        }
+      }
+
+      // O 5º caractere (índice 4) define o formato: dígito = antigo (com traço), letra = Mercosul (sem traço)
+      if (alfanumerico.length >= 5 && /[0-9]/.test(alfanumerico[4])) {
+        return alfanumerico.slice(0, 3) + "-" + alfanumerico.slice(3);
+      }
+      return alfanumerico;
+    }
+
+    function placaCompleta(valorMascarado) {
+      return valorMascarado.replace("-", "").length === 7;
+    }
+
+    function configurarMascaraPlaca(inputEl) {
+      if (!inputEl) return;
+      inputEl.addEventListener("input", () => {
+        inputEl.value = aplicarMascaraPlaca(inputEl.value);
+      });
+    }
+
+    configurarMascaraPlaca(inputPlacaCavalo);
+    configurarMascaraPlaca(inputPlacaCarreta);
 
     // Não deixa escolher datas retroativas
     if (inputData) {
@@ -370,6 +419,15 @@
 
       if (!horaInicio) {
         erroBox.textContent = "Por favor, selecione um horário disponível no grid acima.";
+        return;
+      }
+
+      if (!placaCompleta(placaCavalo)) {
+        erroBox.textContent = "Placa do cavalo incompleta. Use o formato AAA-0000 ou AAA0A00.";
+        return;
+      }
+      if (placaCarreta && !placaCompleta(placaCarreta)) {
+        erroBox.textContent = "Placa da carreta incompleta. Use o formato AAA-0000 ou AAA0A00.";
         return;
       }
 
