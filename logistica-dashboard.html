@@ -752,9 +752,9 @@
       } catch (err) {
         console.error("Erro ao carregar todos os agendamentos:", err);
         if (reiniciar || !ultimoDocTodos) {
-          container.innerHTML = '<div class="estado-vazio">Erro ao carregar histórico.</div>';
+          container.innerHTML = `<div class="estado-vazio">Erro ao carregar histórico.<br><span style="font-size:0.78rem;">${formatarErroFirestore(err.message)}</span></div>`;
         } else {
-          await mostrarAlerta("Erro ao carregar mais agendamentos.", { titulo: "Erro", tipo: "erro" });
+          await mostrarAlerta("Erro ao carregar mais agendamentos: " + (err.message || ""), { titulo: "Erro", tipo: "erro" });
         }
       } finally {
         btnCarregarMaisTodos.disabled = false;
@@ -1272,6 +1272,19 @@
       }
 
       container.innerHTML = "";
+      const algumaDivergencia = slots.some(s => s.divergeDoPadrao);
+      if (algumaDivergencia) {
+        const aviso = document.createElement("div");
+        aviso.className = "aviso-suporte";
+        aviso.style.borderColor = "#f3c98b";
+        aviso.style.background = "#fff8ec";
+        aviso.innerHTML = `⚠️ Um ou mais horários abaixo têm uma vaga já registrada (por reserva ou ajuste manual anterior) com capacidade
+          <strong>diferente</strong> do que a Regra Padrão/Exceção calcula hoje para este dia. Isso acontece quando o horário foi reservado
+          ou ajustado <em>antes</em> de uma mudança recente na Regra Padrão ou numa Exceção — o registro antigo tem prioridade e não é
+          atualizado sozinho. Use "Ajustar para o padrão atual" no(s) horário(s) destacado(s) abaixo se quiser aplicar o novo valor.`;
+        container.appendChild(aviso);
+      }
+
       slots.forEach(s => {
         const card = document.createElement("div");
         card.className = "item-agendamento";
@@ -1281,6 +1294,11 @@
             <span class="badge ${s.fechado ? "recusado" : "aprovado"}">${s.fechado ? "Fechado (manual)" : ORIGEM_LABEL[s.origem] || ""}</span>
           </div>
           <div class="detalhes">Ocupação atual: ${s.ocupados} / ${s.capacidadeMax}</div>
+          ${s.divergeDoPadrao ? `
+            <div class="detalhes" style="color:var(--laranja); font-weight:600; margin-top:4px;">
+              ⚠️ Divergente do padrão atual (Regra/Exceção calculam ${s.capacidadePadraoAtual === null ? "sem atendimento" : s.capacidadePadraoAtual + " veículo(s)/hora"} para este horário agora).
+            </div>
+          ` : ""}
           <div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <input type="number" min="1" class="input-capacidade-slot" data-hora="${s.horaInicio}" value="${s.capacidadeMax}"
                    style="width:80px; padding:6px 8px; border:1px solid var(--cinza-borda); border-radius:4px;">
@@ -1289,6 +1307,7 @@
               ${s.fechado ? "Reabrir Nesta Data" : "Fechar Nesta Data"}
             </button>
             ${s.temAjusteManual ? `<button class="btn-acao btn-desativar btn-restaurar-slot" data-hora="${s.horaInicio}" ${s.ocupados > 0 ? "disabled title=\"Não é possível restaurar: já há reservas neste horário\"" : ""}>Restaurar Padrão</button>` : ""}
+            ${s.divergeDoPadrao && s.capacidadePadraoAtual !== null ? `<button class="btn-acao btn-aprovar btn-sincronizar-slot" data-hora="${s.horaInicio}" data-padrao="${s.capacidadePadraoAtual}">Ajustar para o padrão atual (${s.capacidadePadraoAtual})</button>` : ""}
           </div>
         `;
         container.appendChild(card);
@@ -1318,6 +1337,39 @@
           } catch (err) {
             console.error(err);
             await mostrarAlerta("Erro ao atualizar a capacidade.", { titulo: "Erro", tipo: "erro" });
+            btn.disabled = false;
+          }
+        });
+      });
+
+      container.querySelectorAll(".btn-sincronizar-slot").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const hora = btn.dataset.hora;
+          const padrao = Number(btn.dataset.padrao);
+          const slotAtual = slots.find(s => s.horaInicio === hora);
+
+          if (slotAtual && padrao < slotAtual.ocupados) {
+            await mostrarAlerta(`Não é possível ajustar para ${padrao} veículo(s)/hora: já existem ${slotAtual.ocupados} reserva(s) confirmada(s) neste horário. Ajuste manualmente para um valor igual ou maior que ${slotAtual.ocupados}, se necessário.`, { titulo: "Capacidade insuficiente", tipo: "erro" });
+            return;
+          }
+
+          const confirmado = await mostrarConfirm(`Ajustar a capacidade deste horário para ${padrao} veículo(s)/hora, igual ao que a Regra Padrão/Exceção calcula hoje?`, { titulo: "Ajustar para o padrão atual", textoConfirmar: "Ajustar" });
+          if (!confirmado) return;
+
+          const horaFim = minutosParaHora((horaParaMinutos(hora) + 60) % (24 * 60));
+          btn.disabled = true;
+          try {
+            await setDoc(doc(db, "timeSlots", idSlotHorario(dataSelecionada, hora)), {
+              data: dataSelecionada,
+              horaInicio: hora,
+              horaFim,
+              capacidadeMax: padrao,
+              ativo: true
+            }, { merge: true });
+            carregarSlotsDoDia();
+          } catch (err) {
+            console.error(err);
+            await mostrarAlerta("Erro ao ajustar a capacidade para o padrão atual.", { titulo: "Erro", tipo: "erro" });
             btn.disabled = false;
           }
         });
@@ -1639,6 +1691,21 @@
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
+    }
+
+    // Se a mensagem de erro do Firestore contiver o link para criação
+    // automática de índice composto (erro clássico "failed-precondition:
+    // The query requires an index..."), transforma em link clicável em
+    // vez de mostrar só o texto cru — acelera bastante o diagnóstico.
+    function formatarErroFirestore(msg) {
+      if (!msg) return "";
+      const match = String(msg).match(/https:\/\/console\.firebase\.google\.com\S*/);
+      if (match) {
+        const url = match[0].replace(/[).,]+$/, "");
+        const antes = escapeHtml(msg.slice(0, msg.indexOf(match[0])));
+        return `${antes}<a href="${url}" target="_blank" rel="noopener" style="color:var(--azul); font-weight:600;">Clique aqui para criar o índice automaticamente</a>`;
+      }
+      return escapeHtml(msg);
     }
   </script>
 </body>

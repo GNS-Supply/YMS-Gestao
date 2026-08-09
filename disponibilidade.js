@@ -75,8 +75,22 @@ function diaSemanaDaData(dataStr) {
  * @returns {Promise<Array<{
  *   horaInicio: string, horaFim: string, capacidadeMax: number,
  *   ocupados: number, origem: "regra"|"excecao"|"manual", fechado: boolean,
- *   temAjusteManual: boolean
+ *   temAjusteManual: boolean, capacidadePadraoAtual: number|null,
+ *   divergeDoPadrao: boolean
  * }>>}
+ *
+ * IMPORTANTE sobre "divergeDoPadrao": o documento em `timeSlots` (camada 3)
+ * tem prioridade máxima e, uma vez criado (seja por uma reserva feita pela
+ * Transportadora, seja por um ajuste manual da Logística), ele NÃO é
+ * recalculado automaticamente se a Regra Padrão ou uma Exceção mudar
+ * depois. Isso é intencional (é o que garante que reservas já feitas não
+ * mudem de capacidade sozinhas), mas pode confundir: se você criar uma
+ * Exceção hoje para um horário que já tinha uma reserva/ajuste manual
+ * anterior naquela data específica, a Exceção não vai valer para essa
+ * data até o ajuste manual ser removido ("Restaurar Padrão", só possível
+ * se não houver reservas) ou a capacidade ser editada manualmente.
+ * `capacidadePadraoAtual` e `divergeDoPadrao` existem para deixar isso
+ * visível na tela em vez de parecer que a Exceção "não funcionou".
  */
 export async function buscarSlotsVirtuaisDoDia(db, dataStr, opcoes = {}) {
   const { incluirFechados = false } = opcoes;
@@ -109,6 +123,11 @@ export async function buscarSlotsVirtuaisDoDia(db, dataStr, opcoes = {}) {
     });
   });
 
+  // Snapshot do que a Regra + Exceções calculam para hoje, ANTES de
+  // aplicar qualquer ajuste manual — usado só para detectar divergência.
+  const padraoAtual = {};
+  Object.keys(mapa).forEach(hora => { padraoAtual[hora] = mapa[hora].capacidadeMax; });
+
   // 3) Ajustes manuais pontuais para esta data específica (prioridade máxima)
   //    Também é onde fica registrada a ocupação real já reservada.
   const snapManual = await getDocs(query(collection(db, "timeSlots"), where("data", "==", dataStr)));
@@ -131,6 +150,10 @@ export async function buscarSlotsVirtuaisDoDia(db, dataStr, opcoes = {}) {
   return Object.keys(mapa).sort().map(hora => {
     const info = mapa[hora];
     const manual = manuais[hora];
+    // undefined = a Regra/Exceção não atende esse horário hoje (ex: foi removido por uma exceção nova)
+    const capacidadePadraoAtual = Object.prototype.hasOwnProperty.call(padraoAtual, hora) ? padraoAtual[hora] : null;
+    const divergeDoPadrao = !!manual && !info.fechado
+      && capacidadePadraoAtual !== info.capacidadeMax;
     return {
       horaInicio: hora,
       horaFim: minutosParaHora((horaParaMinutos(hora) + 60) % (24 * 60)),
@@ -138,7 +161,9 @@ export async function buscarSlotsVirtuaisDoDia(db, dataStr, opcoes = {}) {
       ocupados: manual ? (manual.ocupados || 0) : 0,
       origem: info.origem,
       fechado: !!info.fechado,
-      temAjusteManual: !!manual
+      temAjusteManual: !!manual,
+      capacidadePadraoAtual,
+      divergeDoPadrao
     };
   });
 }
