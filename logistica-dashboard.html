@@ -298,6 +298,81 @@
     let perfilAtual = null;
     let tiposProcessoCache = null;
 
+    /* ===================================================================
+       POPUP / MODAL CUSTOMIZADO (substitui alert() e confirm() nativos)
+       =================================================================== */
+    function criarModalHost() {
+      if (document.getElementById("modal-overlay")) return;
+      const overlay = document.createElement("div");
+      overlay.id = "modal-overlay";
+      overlay.className = "modal-overlay";
+      overlay.innerHTML = `
+        <div class="modal-caixa" id="modal-caixa" role="alertdialog" aria-modal="true">
+          <div class="modal-icone" id="modal-icone"></div>
+          <div class="modal-titulo" id="modal-titulo"></div>
+          <div class="modal-mensagem" id="modal-mensagem"></div>
+          <div class="modal-botoes" id="modal-botoes"></div>
+        </div>`;
+      document.body.appendChild(overlay);
+    }
+    criarModalHost();
+
+    function mostrarAlerta(mensagem, opcoes = {}) {
+      const { titulo = "Aviso", tipo = "info" } = opcoes;
+      const icones = { sucesso: "✅", erro: "⚠️", info: "ℹ️" };
+      return new Promise((resolve) => {
+        const overlay = document.getElementById("modal-overlay");
+        const caixa = document.getElementById("modal-caixa");
+        caixa.className = `modal-caixa modal-${tipo}`;
+        document.getElementById("modal-icone").textContent = icones[tipo] || icones.info;
+        document.getElementById("modal-titulo").textContent = titulo;
+        document.getElementById("modal-mensagem").textContent = mensagem;
+        document.getElementById("modal-botoes").innerHTML =
+          `<button type="button" class="modal-btn-primario" id="modal-btn-ok">OK</button>`;
+        overlay.classList.add("aberto");
+
+        const btnOk = document.getElementById("modal-btn-ok");
+        function fechar() {
+          overlay.classList.remove("aberto");
+          btnOk.removeEventListener("click", fechar);
+          resolve();
+        }
+        btnOk.addEventListener("click", fechar);
+        btnOk.focus();
+      });
+    }
+
+    function mostrarConfirm(mensagem, opcoes = {}) {
+      const { titulo = "Confirmar ação", textoConfirmar = "Confirmar", textoCancelar = "Cancelar", perigo = false } = opcoes;
+      return new Promise((resolve) => {
+        const overlay = document.getElementById("modal-overlay");
+        const caixa = document.getElementById("modal-caixa");
+        caixa.className = "modal-caixa modal-pergunta";
+        document.getElementById("modal-icone").textContent = perigo ? "⚠️" : "❓";
+        document.getElementById("modal-titulo").textContent = titulo;
+        document.getElementById("modal-mensagem").textContent = mensagem;
+        document.getElementById("modal-botoes").innerHTML = `
+          <button type="button" class="modal-btn-secundario" id="modal-btn-cancelar">${textoCancelar}</button>
+          <button type="button" class="modal-btn-primario ${perigo ? "perigo" : ""}" id="modal-btn-confirmar">${textoConfirmar}</button>
+        `;
+        overlay.classList.add("aberto");
+
+        const btnConfirmar = document.getElementById("modal-btn-confirmar");
+        const btnCancelar = document.getElementById("modal-btn-cancelar");
+        function limpar(resultado) {
+          overlay.classList.remove("aberto");
+          btnConfirmar.removeEventListener("click", onConfirmar);
+          btnCancelar.removeEventListener("click", onCancelar);
+          resolve(resultado);
+        }
+        function onConfirmar() { limpar(true); }
+        function onCancelar() { limpar(false); }
+        btnConfirmar.addEventListener("click", onConfirmar);
+        btnCancelar.addEventListener("click", onCancelar);
+        btnCancelar.focus();
+      });
+    }
+
     // Listener em tempo real da aba "Agendamentos de Hoje"
     let unsubscribeHoje = null;
 
@@ -453,11 +528,11 @@
           });
         }
 
-        alert(`Agendamento ${novoStatus.toLowerCase()} com sucesso!`);
+        await mostrarAlerta(`Agendamento ${novoStatus.toLowerCase()} com sucesso!`, { titulo: "Status atualizado", tipo: "sucesso" });
         carregarSolicitacoesPendentes();
       } catch (err) {
         console.error("Erro ao alterar status:", err);
-        alert("Erro ao alterar o status do agendamento: " + (err.message || "Tente novamente."));
+        await mostrarAlerta("Erro ao alterar o status do agendamento: " + (err.message || "Tente novamente."), { titulo: "Erro", tipo: "erro" });
       }
     }
 
@@ -679,7 +754,7 @@
               carregarRegrasRecorrentes();
             } catch (err) {
               console.error(err);
-              alert("Erro ao alterar status da regra.");
+              await mostrarAlerta("Erro ao alterar status da regra.", { titulo: "Erro", tipo: "erro" });
               btn.disabled = false;
             }
           });
@@ -687,14 +762,15 @@
 
         container.querySelectorAll(".btn-excluir-regra").forEach(btn => {
           btn.addEventListener("click", async () => {
-            if (!confirm("Excluir esta regra recorrente? Vagas já geradas no calendário não serão removidas automaticamente.")) return;
+            const confirmado = await mostrarConfirm("Excluir esta regra recorrente? Vagas já geradas no calendário não serão removidas automaticamente.", { titulo: "Excluir regra", perigo: true, textoConfirmar: "Excluir" });
+            if (!confirmado) return;
             btn.disabled = true;
             try {
               await deleteDoc(doc(db, "timeSlotRules", btn.dataset.id));
               carregarRegrasRecorrentes();
             } catch (err) {
               console.error(err);
-              alert("Erro ao excluir a regra.");
+              await mostrarAlerta("Erro ao excluir a regra.", { titulo: "Erro", tipo: "erro" });
               btn.disabled = false;
             }
           });
@@ -810,7 +886,7 @@
               carregarExcecoes();
             } catch (err) {
               console.error(err);
-              alert("Erro ao alterar status da exceção.");
+              await mostrarAlerta("Erro ao alterar status da exceção.", { titulo: "Erro", tipo: "erro" });
               btn.disabled = false;
             }
           });
@@ -818,14 +894,15 @@
 
         container.querySelectorAll(".btn-excluir-excecao").forEach(btn => {
           btn.addEventListener("click", async () => {
-            if (!confirm("Excluir esta exceção? As datas futuras voltarão a seguir a Regra Padrão.")) return;
+            const confirmado = await mostrarConfirm("Excluir esta exceção? As datas futuras voltarão a seguir a Regra Padrão.", { titulo: "Excluir exceção", perigo: true, textoConfirmar: "Excluir" });
+            if (!confirmado) return;
             btn.disabled = true;
             try {
               await deleteDoc(doc(db, "timeSlotExceptions", btn.dataset.id));
               carregarExcecoes();
             } catch (err) {
               console.error(err);
-              alert("Erro ao excluir a exceção.");
+              await mostrarAlerta("Erro ao excluir a exceção.", { titulo: "Erro", tipo: "erro" });
               btn.disabled = false;
             }
           });
@@ -903,7 +980,7 @@
           const input = container.querySelector(`.input-capacidade-slot[data-hora="${hora}"]`);
           const novaCapacidade = Number(input.value);
           if (!novaCapacidade || novaCapacidade < 1) {
-            alert("Informe uma capacidade válida.");
+            await mostrarAlerta("Informe uma capacidade válida.", { titulo: "Valor inválido", tipo: "erro" });
             return;
           }
           const horaFim = minutosParaHora((horaParaMinutos(hora) + 60) % (24 * 60));
@@ -916,11 +993,11 @@
               capacidadeMax: novaCapacidade,
               ativo: true
             }, { merge: true });
-            alert("Capacidade atualizada para este dia!");
+            await mostrarAlerta("Capacidade atualizada para este dia!", { titulo: "Capacidade atualizada", tipo: "sucesso" });
             carregarSlotsDoDia();
           } catch (err) {
             console.error(err);
-            alert("Erro ao atualizar a capacidade.");
+            await mostrarAlerta("Erro ao atualizar a capacidade.", { titulo: "Erro", tipo: "erro" });
             btn.disabled = false;
           }
         });
@@ -944,7 +1021,7 @@
             carregarSlotsDoDia();
           } catch (err) {
             console.error(err);
-            alert("Erro ao alterar o horário.");
+            await mostrarAlerta("Erro ao alterar o horário.", { titulo: "Erro", tipo: "erro" });
             btn.disabled = false;
           }
         });
@@ -952,7 +1029,8 @@
 
       container.querySelectorAll(".btn-restaurar-slot").forEach(btn => {
         btn.addEventListener("click", async () => {
-          if (!confirm("Restaurar este horário para o padrão (Regra/Exceção), removendo o ajuste manual desta data?")) return;
+          const confirmado = await mostrarConfirm("Restaurar este horário para o padrão (Regra/Exceção), removendo o ajuste manual desta data?", { titulo: "Restaurar padrão", perigo: true, textoConfirmar: "Restaurar" });
+          if (!confirmado) return;
           const hora = btn.dataset.hora;
           btn.disabled = true;
           try {
@@ -960,7 +1038,7 @@
             carregarSlotsDoDia();
           } catch (err) {
             console.error(err);
-            alert("Erro ao restaurar o horário.");
+            await mostrarAlerta("Erro ao restaurar o horário.", { titulo: "Erro", tipo: "erro" });
             btn.disabled = false;
           }
         });
@@ -1086,27 +1164,28 @@
           aprovadoEm: serverTimestamp(),
           aprovadoPor: usuarioAtual.uid
         });
-        alert("Usuário aprovado com sucesso!");
+        await mostrarAlerta("Usuário aprovado com sucesso!", { titulo: "Usuário aprovado", tipo: "sucesso" });
         carregarUsuariosPendentes();
       } catch (err) {
         console.error(err);
-        alert("Erro ao aprovar usuário.");
+        await mostrarAlerta("Erro ao aprovar usuário.", { titulo: "Erro", tipo: "erro" });
       }
     }
 
     async function recusarUsuario(userId) {
-      if (!confirm("Tem certeza que deseja recusar este usuário?")) return;
+      const confirmado = await mostrarConfirm("Tem certeza que deseja recusar este usuário?", { titulo: "Recusar cadastro", perigo: true, textoConfirmar: "Recusar" });
+      if (!confirmado) return;
       try {
         await updateDoc(doc(db, "users", userId), {
           status: "recusado",
           atualizadoEm: serverTimestamp(),
           atualizadoPor: usuarioAtual.uid
         });
-        alert("Cadastro recusado.");
+        await mostrarAlerta("Cadastro recusado.", { titulo: "Cadastro recusado", tipo: "sucesso" });
         carregarUsuariosPendentes();
       } catch (err) {
         console.error(err);
-        alert("Erro ao recusar usuário.");
+        await mostrarAlerta("Erro ao recusar usuário.", { titulo: "Erro", tipo: "erro" });
       }
     }
 
@@ -1180,7 +1259,7 @@
               carregarTiposProcesso();
             } catch (err) {
               console.error(err);
-              alert("Erro ao alterar status do processo.");
+              await mostrarAlerta("Erro ao alterar status do processo.", { titulo: "Erro", tipo: "erro" });
               btn.disabled = false;
             }
           });

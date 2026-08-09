@@ -97,6 +97,81 @@
     let usuarioAtual = null;
     let perfilAtual = null;
 
+    /* ===================================================================
+       POPUP / MODAL CUSTOMIZADO (substitui alert() e confirm() nativos)
+       =================================================================== */
+    function criarModalHost() {
+      if (document.getElementById("modal-overlay")) return;
+      const overlay = document.createElement("div");
+      overlay.id = "modal-overlay";
+      overlay.className = "modal-overlay";
+      overlay.innerHTML = `
+        <div class="modal-caixa" id="modal-caixa" role="alertdialog" aria-modal="true">
+          <div class="modal-icone" id="modal-icone"></div>
+          <div class="modal-titulo" id="modal-titulo"></div>
+          <div class="modal-mensagem" id="modal-mensagem"></div>
+          <div class="modal-botoes" id="modal-botoes"></div>
+        </div>`;
+      document.body.appendChild(overlay);
+    }
+    criarModalHost();
+
+    function mostrarAlerta(mensagem, opcoes = {}) {
+      const { titulo = "Aviso", tipo = "info" } = opcoes;
+      const icones = { sucesso: "✅", erro: "⚠️", info: "ℹ️" };
+      return new Promise((resolve) => {
+        const overlay = document.getElementById("modal-overlay");
+        const caixa = document.getElementById("modal-caixa");
+        caixa.className = `modal-caixa modal-${tipo}`;
+        document.getElementById("modal-icone").textContent = icones[tipo] || icones.info;
+        document.getElementById("modal-titulo").textContent = titulo;
+        document.getElementById("modal-mensagem").textContent = mensagem;
+        document.getElementById("modal-botoes").innerHTML =
+          `<button type="button" class="modal-btn-primario" id="modal-btn-ok">OK</button>`;
+        overlay.classList.add("aberto");
+
+        const btnOk = document.getElementById("modal-btn-ok");
+        function fechar() {
+          overlay.classList.remove("aberto");
+          btnOk.removeEventListener("click", fechar);
+          resolve();
+        }
+        btnOk.addEventListener("click", fechar);
+        btnOk.focus();
+      });
+    }
+
+    function mostrarConfirm(mensagem, opcoes = {}) {
+      const { titulo = "Confirmar ação", textoConfirmar = "Confirmar", textoCancelar = "Cancelar", perigo = false } = opcoes;
+      return new Promise((resolve) => {
+        const overlay = document.getElementById("modal-overlay");
+        const caixa = document.getElementById("modal-caixa");
+        caixa.className = "modal-caixa modal-pergunta";
+        document.getElementById("modal-icone").textContent = perigo ? "⚠️" : "❓";
+        document.getElementById("modal-titulo").textContent = titulo;
+        document.getElementById("modal-mensagem").textContent = mensagem;
+        document.getElementById("modal-botoes").innerHTML = `
+          <button type="button" class="modal-btn-secundario" id="modal-btn-cancelar">${textoCancelar}</button>
+          <button type="button" class="modal-btn-primario ${perigo ? "perigo" : ""}" id="modal-btn-confirmar">${textoConfirmar}</button>
+        `;
+        overlay.classList.add("aberto");
+
+        const btnConfirmar = document.getElementById("modal-btn-confirmar");
+        const btnCancelar = document.getElementById("modal-btn-cancelar");
+        function limpar(resultado) {
+          overlay.classList.remove("aberto");
+          btnConfirmar.removeEventListener("click", onConfirmar);
+          btnCancelar.removeEventListener("click", onCancelar);
+          resolve(resultado);
+        }
+        function onConfirmar() { limpar(true); }
+        function onCancelar() { limpar(false); }
+        btnConfirmar.addEventListener("click", onConfirmar);
+        btnCancelar.addEventListener("click", onCancelar);
+        btnCancelar.focus();
+      });
+    }
+
     document.getElementById("btn-logout").addEventListener("click", logout);
 
     // ---------------- Proteção de Página (estrita — apenas Tipo 3, Admin Master) ----------------
@@ -224,11 +299,11 @@
           atualizadoEm: serverTimestamp()
         });
 
-        alert("Usuário atualizado com sucesso!");
+        await mostrarAlerta("Usuário atualizado com sucesso!", { titulo: "Usuário atualizado", tipo: "sucesso" });
         carregarResumoPendentes();
       } catch (err) {
         console.error(err);
-        alert("Erro ao atualizar o usuário.");
+        await mostrarAlerta("Erro ao atualizar o usuário.", { titulo: "Erro", tipo: "erro" });
       } finally {
         linha.querySelectorAll("button, select, input").forEach(el => (el.disabled = false));
         btn.textContent = "Salvar";
