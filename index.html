@@ -21,7 +21,10 @@
         </div>
         <div class="campo">
           <label for="senha">Senha</label>
-          <input type="password" id="senha" required autocomplete="current-password">
+          <div class="campo-senha-wrap">
+            <input type="password" id="senha" required autocomplete="current-password">
+            <button type="button" class="btn-toggle-senha" data-target="senha" aria-label="Mostrar senha">👁️</button>
+          </div>
         </div>
         <button type="submit" class="btn-primario">Entrar</button>
         <div class="erro" id="login-error"></div>
@@ -48,6 +51,18 @@
 
     const form = document.getElementById("login-form");
     const errorBox = document.getElementById("login-error");
+
+    // Botão "mostrar/ocultar senha"
+    document.querySelectorAll(".btn-toggle-senha").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const input = document.getElementById(btn.dataset.target);
+        if (!input) return;
+        const mostrando = input.type === "text";
+        input.type = mostrando ? "password" : "text";
+        btn.textContent = mostrando ? "👁️" : "🙈";
+        btn.setAttribute("aria-label", mostrando ? "Mostrar senha" : "Ocultar senha");
+      });
+    });
 
     // Mapa de redirecionamento por tipo de perfil (arquivos todos na raiz)
     const ROTAS_POR_TIPO = {

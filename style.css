@@ -133,6 +133,36 @@ button.btn-primario:disabled { opacity: 0.6; cursor: not-allowed; }
   margin: 0 8px;
 }
 
+/* ---------- Campo de senha com botão "mostrar/ocultar" ---------- */
+.campo-senha-wrap {
+  position: relative;
+}
+
+.campo-senha-wrap input {
+  padding-right: 46px !important;
+}
+
+.btn-toggle-senha {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.15rem;
+  line-height: 1;
+  color: var(--texto-suave);
+  padding: 0;
+}
+
+.btn-toggle-senha:hover { color: var(--azul); }
+.btn-toggle-senha:focus-visible { outline: 2px solid var(--azul); outline-offset: -2px; border-radius: 4px; }
+
 /* ---------- Campos de rádio (Cadastro) ---------- */
 .campo-radio {
   display: flex;

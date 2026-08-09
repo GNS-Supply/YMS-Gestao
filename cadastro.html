@@ -27,12 +27,18 @@
 
         <div class="campo">
           <label for="senha">Senha</label>
-          <input type="password" id="senha" required minlength="6" autocomplete="new-password">
+          <div class="campo-senha-wrap">
+            <input type="password" id="senha" required minlength="6" autocomplete="new-password">
+            <button type="button" class="btn-toggle-senha" data-target="senha" aria-label="Mostrar senha">👁️</button>
+          </div>
         </div>
 
         <div class="campo">
           <label for="confirmarSenha">Confirmar Senha</label>
-          <input type="password" id="confirmarSenha" required minlength="6" autocomplete="new-password">
+          <div class="campo-senha-wrap">
+            <input type="password" id="confirmarSenha" required minlength="6" autocomplete="new-password">
+            <button type="button" class="btn-toggle-senha" data-target="confirmarSenha" aria-label="Mostrar senha">👁️</button>
+          </div>
         </div>
 
         <div class="campo">
@@ -101,6 +107,18 @@
     const errorBox = document.getElementById("cadastro-error");
     const camposExterno = document.getElementById("campos-externo");
     const avisoInterno = document.getElementById("aviso-interno");
+
+    // Botão "mostrar/ocultar senha" (senha e confirmar senha)
+    document.querySelectorAll(".btn-toggle-senha").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const input = document.getElementById(btn.dataset.target);
+        if (!input) return;
+        const mostrando = input.type === "text";
+        input.type = mostrando ? "password" : "text";
+        btn.textContent = mostrando ? "👁️" : "🙈";
+        btn.setAttribute("aria-label", mostrando ? "Mostrar senha" : "Ocultar senha");
+      });
+    });
 
     // Alterna os campos extras conforme o vínculo escolhido
     document.querySelectorAll('input[name="vinculo"]').forEach(radio => {
