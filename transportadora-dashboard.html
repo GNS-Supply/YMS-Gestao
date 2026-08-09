@@ -412,8 +412,13 @@
       const tipoProcessoId = selectTipoProcesso.value;
       const dataAgendada = inputData.value;
       const horaInicio = inputHoraSelecionada.value;
-      const placaCavalo = document.getElementById("placaCavalo").value.trim().toUpperCase();
-      const placaCarreta = document.getElementById("placaCarreta").value.trim().toUpperCase();
+      // Reaplica a máscara agora (não só no evento "input") para garantir que
+      // colar/autofill/preenchimento programático também fiquem padronizados
+      // antes de ir para o Firestore (sem espaços, traços extras, minúsculas etc.)
+      const placaCavalo = aplicarMascaraPlaca(document.getElementById("placaCavalo").value);
+      const placaCarreta = aplicarMascaraPlaca(document.getElementById("placaCarreta").value);
+      document.getElementById("placaCavalo").value = placaCavalo;
+      document.getElementById("placaCarreta").value = placaCarreta;
       const motorista = document.getElementById("motorista").value.trim();
       const observacoes = document.getElementById("observacoes").value.trim();
 

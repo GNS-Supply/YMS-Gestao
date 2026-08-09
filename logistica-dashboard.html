@@ -26,6 +26,7 @@
       <button class="tab-btn ativo" data-tab="solicitacoes">Solicitações Pendentes</button>
       <button class="tab-btn" data-tab="hoje">Agendamentos de Hoje</button>
       <button class="tab-btn" data-tab="todos">Todos os Agendamentos</button>
+      <button class="tab-btn" data-tab="metricas">Métricas Operacionais</button>
       <button class="tab-btn" data-tab="slots">Gestão de Horários e Vagas</button>
       <button class="tab-btn" data-tab="usuarios">Aprovação de Usuários</button>
       <button class="tab-btn" data-tab="processos">Tipos de Processo</button>
@@ -65,6 +66,27 @@
         <div id="lista-todos" class="lista-agendamentos">
           <div class="estado-vazio">Selecione uma data para filtrar.</div>
         </div>
+        <div style="margin-top:16px; display:flex; justify-content:center;">
+          <button type="button" id="btn-carregar-mais-todos" class="btn-acao btn-desativar" style="display:none;">Carregar mais</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-conteudo" id="tab-metricas">
+      <div class="card">
+        <h3>Métricas Operacionais</h3>
+        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
+          Indicadores calculados a partir dos agendamentos e vagas no período selecionado.
+        </p>
+        <div style="margin-bottom: 16px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+          <label for="metricasDataInicio" style="font-size:0.85rem; font-weight:600;">De:</label>
+          <input type="date" id="metricasDataInicio" style="padding:6px 10px; border:1px solid var(--cinza-borda); border-radius:6px;">
+          <label for="metricasDataFim" style="font-size:0.85rem; font-weight:600;">Até:</label>
+          <input type="date" id="metricasDataFim" style="padding:6px 10px; border:1px solid var(--cinza-borda); border-radius:6px;">
+          <button type="button" id="btn-calcular-metricas" class="btn-acao btn-salvar-usuario">Calcular</button>
+        </div>
+        <div id="metricas-erro" class="erro"></div>
+        <div id="metricas-resultado"></div>
       </div>
     </div>
 
@@ -259,6 +281,9 @@
       setDoc,
       query,
       where,
+      orderBy,
+      limit,
+      startAfter,
       serverTimestamp,
       onSnapshot,
       runTransaction
@@ -406,6 +431,7 @@
       }
       if (tab === "usuarios") carregarUsuariosPendentes();
       if (tab === "processos") carregarTiposProcesso();
+      if (tab === "metricas") inicializarMetricas();
     }
 
     /* ===================================================================
@@ -565,6 +591,7 @@
 
         container.innerHTML = "";
         lista.forEach(a => {
+          const id = a.id;
           const card = document.createElement("div");
           card.className = "item-agendamento";
           card.innerHTML = `
@@ -578,8 +605,25 @@
               Placas: ${escapeHtml(a.placaCavalo || "-")}${a.placaCarreta ? " / " + escapeHtml(a.placaCarreta) : ""}<br>
               Motorista: ${escapeHtml(a.motorista || "-")}
             </div>
+            ${a.status === "Aprovado" ? `
+              <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--cinza-borda); display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+                <div>
+                  <label style="display:block; font-size:0.72rem; color:var(--texto-suave); margin-bottom:4px;">Entrada no pátio</label>
+                  <input type="time" class="input-entrada-patio" data-id="${id}" value="${a.horaEntrada || ""}" style="padding:6px 8px; border:1px solid var(--cinza-borda); border-radius:4px;">
+                </div>
+                <div>
+                  <label style="display:block; font-size:0.72rem; color:var(--texto-suave); margin-bottom:4px;">Saída do pátio</label>
+                  <input type="time" class="input-saida-patio" data-id="${id}" value="${a.horaSaida || ""}" style="padding:6px 8px; border:1px solid var(--cinza-borda); border-radius:4px;">
+                </div>
+                <button class="btn-acao btn-salvar-usuario btn-salvar-permanencia" data-id="${id}">Salvar horário</button>
+              </div>
+            ` : ""}
           `;
           container.appendChild(card);
+        });
+
+        container.querySelectorAll(".btn-salvar-permanencia").forEach(btn => {
+          btn.addEventListener("click", () => salvarPermanenciaPatio(btn.dataset.id, container, btn));
         });
       }, (err) => {
         console.error("Erro no Listener de hoje:", err);
@@ -587,13 +631,56 @@
       });
     }
 
-    /* ===================================================================
-       3. ABA: TODOS OS AGENDAMENTOS (com filtro por data)
-       =================================================================== */
-    const inputFiltroDataGeral = document.getElementById("filtroDataGeral");
-    inputFiltroDataGeral?.addEventListener("change", () => carregarTodosAgendamentos());
+    // Registra a hora de entrada/saída real do veículo no pátio para um
+    // agendamento aprovado. Alimenta o cálculo de "tempo médio de
+    // permanência" na aba de Métricas. Requer os campos horaEntrada/
+    // horaSaida liberados nas Firestore Rules para Logística/Admin.
+    async function salvarPermanenciaPatio(bookingId, container, btn) {
+      const inputEntrada = container.querySelector(`.input-entrada-patio[data-id="${bookingId}"]`);
+      const inputSaida = container.querySelector(`.input-saida-patio[data-id="${bookingId}"]`);
+      const horaEntrada = inputEntrada?.value || "";
+      const horaSaida = inputSaida?.value || "";
 
-    async function carregarTodosAgendamentos() {
+      if (horaEntrada && horaSaida && horaSaida <= horaEntrada) {
+        await mostrarAlerta("A hora de saída deve ser depois da hora de entrada.", { titulo: "Horário inválido", tipo: "erro" });
+        return;
+      }
+
+      btn.disabled = true;
+      const textoOriginal = btn.textContent;
+      btn.textContent = "Salvando...";
+      try {
+        const dados = { atualizadoEm: serverTimestamp(), atualizadoPor: usuarioAtual.uid };
+        if (horaEntrada) dados.horaEntrada = horaEntrada;
+        if (horaSaida) dados.horaSaida = horaSaida;
+        await updateDoc(doc(db, "bookings", bookingId), dados);
+      } catch (err) {
+        console.error("Erro ao salvar permanência:", err);
+        await mostrarAlerta("Erro ao salvar o horário de entrada/saída.", { titulo: "Erro", tipo: "erro" });
+      } finally {
+        btn.disabled = false;
+        btn.textContent = textoOriginal;
+      }
+    }
+
+    /* ===================================================================
+       3. ABA: TODOS OS AGENDAMENTOS (com filtro por data + paginação)
+
+       Usa paginação por cursor (limit + startAfter) em vez de trazer a
+       coleção inteira do dia de uma vez: útil para dias com centenas de
+       agendamentos. Requer um índice composto (dataAgendada ASC,
+       horaInicio ASC) — ver firestore.indexes.json.
+       =================================================================== */
+    const TAMANHO_PAGINA_TODOS = 20;
+    const inputFiltroDataGeral = document.getElementById("filtroDataGeral");
+    const btnCarregarMaisTodos = document.getElementById("btn-carregar-mais-todos");
+    let ultimoDocTodos = null;
+    let dataFiltroTodosAtual = null;
+
+    inputFiltroDataGeral?.addEventListener("change", () => carregarTodosAgendamentos({ reiniciar: true }));
+    btnCarregarMaisTodos?.addEventListener("click", () => carregarTodosAgendamentos({ reiniciar: false }));
+
+    async function carregarTodosAgendamentos({ reiniciar = true } = {}) {
       const container = document.getElementById("lista-todos");
       if (!container) return;
 
@@ -601,26 +688,44 @@
 
       if (!dataFiltro) {
         container.innerHTML = '<div class="estado-vazio">Selecione uma data para filtrar.</div>';
+        btnCarregarMaisTodos.style.display = "none";
         return;
       }
 
-      container.innerHTML = '<div class="estado-vazio">Carregando histórico...</div>';
+      // Trocou de data: reinicia o cursor de paginação
+      if (reiniciar || dataFiltro !== dataFiltroTodosAtual) {
+        ultimoDocTodos = null;
+        dataFiltroTodosAtual = dataFiltro;
+        container.innerHTML = '<div class="estado-vazio">Carregando histórico...</div>';
+      } else {
+        btnCarregarMaisTodos.disabled = true;
+        btnCarregarMaisTodos.textContent = "Carregando...";
+      }
 
       try {
         const tipos = await obterTiposProcessoMap();
-        const q = query(collection(db, "bookings"), where("dataAgendada", "==", dataFiltro));
+
+        const clausulas = [
+          collection(db, "bookings"),
+          where("dataAgendada", "==", dataFiltro),
+          orderBy("horaInicio"),
+          limit(TAMANHO_PAGINA_TODOS)
+        ];
+        if (ultimoDocTodos) clausulas.splice(3, 0, startAfter(ultimoDocTodos));
+
+        const q = query(...clausulas);
         const snap = await getDocs(q);
 
-        if (snap.empty) {
+        if (snap.empty && !ultimoDocTodos) {
           container.innerHTML = '<div class="estado-vazio">Nenhum agendamento encontrado para esta data.</div>';
+          btnCarregarMaisTodos.style.display = "none";
           return;
         }
 
-        const lista = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        lista.sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
+        if (reiniciar || !ultimoDocTodos) container.innerHTML = "";
 
-        container.innerHTML = "";
-        lista.forEach(a => {
+        snap.docs.forEach(docSnap => {
+          const a = docSnap.data();
           const card = document.createElement("div");
           card.className = "item-agendamento";
           card.innerHTML = `
@@ -639,10 +744,225 @@
           container.appendChild(card);
         });
 
+        ultimoDocTodos = snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : ultimoDocTodos;
+
+        // Só mostra "Carregar mais" se a página veio cheia (indício de que pode haver mais)
+        btnCarregarMaisTodos.style.display = snap.docs.length === TAMANHO_PAGINA_TODOS ? "inline-flex" : "none";
+
       } catch (err) {
         console.error("Erro ao carregar todos os agendamentos:", err);
-        container.innerHTML = '<div class="estado-vazio">Erro ao carregar histórico.</div>';
+        if (reiniciar || !ultimoDocTodos) {
+          container.innerHTML = '<div class="estado-vazio">Erro ao carregar histórico.</div>';
+        } else {
+          await mostrarAlerta("Erro ao carregar mais agendamentos.", { titulo: "Erro", tipo: "erro" });
+        }
+      } finally {
+        btnCarregarMaisTodos.disabled = false;
+        btnCarregarMaisTodos.textContent = "Carregar mais";
       }
+    }
+
+    /* ===================================================================
+       4. ABA: MÉTRICAS OPERACIONAIS
+
+       Indicadores calculados a partir de dados já existentes no período
+       (sem tabela de agregação separada — ok para o volume esperado de
+       um pátio; se o histórico crescer muito, considerar pré-agregar via
+       Cloudflare Worker/Cron).
+
+       - Taxa de ocupação (geral, por dia e por horário): soma de
+         `ocupados` / soma de `capacidadeMax` nos documentos de
+         `timeSlots` dentro do período. Só entram no cálculo horários que
+         já têm documento em timeSlots (criado na primeira reserva ou por
+         ajuste manual da Logística) — horários sem nenhuma reserva no
+         período não têm como ser contados aqui.
+       - Transportadoras mais frequentes: contagem de agendamentos
+         Aprovados por empresa, no período.
+       - Tempo médio de permanência: média de (horaSaida - horaEntrada)
+         dos agendamentos que tiveram esse registro preenchido na aba
+         "Agendamentos de Hoje". Campo novo — só existirá para
+         agendamentos registrados a partir de agora.
+       =================================================================== */
+    const LIMITE_DIAS_METRICAS = 31; // trava simples para não fazer range query enorme sem índice/paginação
+
+    function inicializarMetricas() {
+      const inputInicio = document.getElementById("metricasDataInicio");
+      const inputFim = document.getElementById("metricasDataFim");
+      if (!inputInicio || !inputFim) return;
+
+      if (!inputInicio.value || !inputFim.value) {
+        const hoje = new Date();
+        const seteDiasAtras = new Date();
+        seteDiasAtras.setDate(hoje.getDate() - 6);
+        inputFim.value = dataDeHojeStr();
+        inputInicio.value = `${seteDiasAtras.getFullYear()}-${String(seteDiasAtras.getMonth() + 1).padStart(2, "0")}-${String(seteDiasAtras.getDate()).padStart(2, "0")}`;
+        calcularMetricas();
+      }
+    }
+
+    document.getElementById("btn-calcular-metricas")?.addEventListener("click", calcularMetricas);
+
+    async function calcularMetricas() {
+      const erroBox = document.getElementById("metricas-erro");
+      const resultado = document.getElementById("metricas-resultado");
+      const dataInicio = document.getElementById("metricasDataInicio")?.value || "";
+      const dataFim = document.getElementById("metricasDataFim")?.value || "";
+      erroBox.textContent = "";
+
+      if (!dataInicio || !dataFim) {
+        erroBox.textContent = "Selecione as duas datas do período.";
+        return;
+      }
+      if (dataFim < dataInicio) {
+        erroBox.textContent = "A data final deve ser igual ou depois da data inicial.";
+        return;
+      }
+      const diffDias = (new Date(dataFim) - new Date(dataInicio)) / 86400000;
+      if (diffDias > LIMITE_DIAS_METRICAS) {
+        erroBox.textContent = `Selecione um período de no máximo ${LIMITE_DIAS_METRICAS} dias.`;
+        return;
+      }
+
+      resultado.innerHTML = '<div class="estado-vazio">Calculando métricas...</div>';
+
+      try {
+        // --- Ocupação: todos os timeSlots com "data" dentro do período ---
+        const qSlots = query(
+          collection(db, "timeSlots"),
+          where("data", ">=", dataInicio),
+          where("data", "<=", dataFim)
+        );
+        const snapSlots = await getDocs(qSlots);
+
+        let somaOcupados = 0;
+        let somaCapacidade = 0;
+        const porHora = {}; // "08:00" -> { ocupados, capacidade }
+        const porDia = {};  // "2026-08-10" -> { ocupados, capacidade }
+
+        snapSlots.docs.forEach(d => {
+          const s = d.data();
+          const ocupados = s.ocupados || 0;
+          const capacidade = s.capacidadeMax || 0;
+          somaOcupados += ocupados;
+          somaCapacidade += capacidade;
+
+          if (!porHora[s.horaInicio]) porHora[s.horaInicio] = { ocupados: 0, capacidade: 0 };
+          porHora[s.horaInicio].ocupados += ocupados;
+          porHora[s.horaInicio].capacidade += capacidade;
+
+          if (!porDia[s.data]) porDia[s.data] = { ocupados: 0, capacidade: 0 };
+          porDia[s.data].ocupados += ocupados;
+          porDia[s.data].capacidade += capacidade;
+        });
+
+        const taxaGeral = somaCapacidade > 0 ? (somaOcupados / somaCapacidade) * 100 : null;
+
+        const horariosOrdenados = Object.keys(porHora)
+          .map(hora => ({ hora, ...porHora[hora], taxa: porHora[hora].capacidade > 0 ? (porHora[hora].ocupados / porHora[hora].capacidade) * 100 : 0 }))
+          .sort((a, b) => b.taxa - a.taxa)
+          .slice(0, 6);
+
+        const diasOrdenados = Object.keys(porDia)
+          .map(data => ({ data, ...porDia[data], taxa: porDia[data].capacidade > 0 ? (porDia[data].ocupados / porDia[data].capacidade) * 100 : 0 }))
+          .sort((a, b) => a.data.localeCompare(b.data));
+
+        // --- Transportadoras mais frequentes + tempo médio de permanência: bookings do período ---
+        const qBookings = query(
+          collection(db, "bookings"),
+          where("dataAgendada", ">=", dataInicio),
+          where("dataAgendada", "<=", dataFim)
+        );
+        const snapBookings = await getDocs(qBookings);
+
+        const contagemEmpresas = {};
+        let somaMinutosPermanencia = 0;
+        let qtdComPermanencia = 0;
+
+        snapBookings.docs.forEach(d => {
+          const b = d.data();
+          if (b.status === "Aprovado") {
+            const chave = b.empresa || "—";
+            contagemEmpresas[chave] = (contagemEmpresas[chave] || 0) + 1;
+          }
+          if (b.horaEntrada && b.horaSaida) {
+            const minutos = horaParaMinutos(b.horaSaida) - horaParaMinutos(b.horaEntrada);
+            if (minutos > 0) {
+              somaMinutosPermanencia += minutos;
+              qtdComPermanencia++;
+            }
+          }
+        });
+
+        const topEmpresas = Object.keys(contagemEmpresas)
+          .map(nome => ({ nome, qtd: contagemEmpresas[nome] }))
+          .sort((a, b) => b.qtd - a.qtd)
+          .slice(0, 5);
+
+        const permanenciaMediaMin = qtdComPermanencia > 0 ? Math.round(somaMinutosPermanencia / qtdComPermanencia) : null;
+
+        renderizarMetricas({
+          taxaGeral, somaOcupados, somaCapacidade,
+          horariosOrdenados, diasOrdenados,
+          topEmpresas, permanenciaMediaMin, qtdComPermanencia
+        });
+
+      } catch (err) {
+        console.error("Erro ao calcular métricas:", err);
+        resultado.innerHTML = "";
+        erroBox.textContent = "Erro ao calcular as métricas do período.";
+      }
+    }
+
+    function formatarMinutos(min) {
+      const h = Math.floor(min / 60);
+      const m = min % 60;
+      return h > 0 ? `${h}h${String(m).padStart(2, "0")}min` : `${m}min`;
+    }
+
+    function renderizarMetricas(dados) {
+      const resultado = document.getElementById("metricas-resultado");
+      const { taxaGeral, somaOcupados, somaCapacidade, horariosOrdenados, topEmpresas, permanenciaMediaMin, qtdComPermanencia } = dados;
+
+      const cartaoOcupacao = `
+        <div class="item-agendamento">
+          <div class="linha-topo"><span class="data-hora">📊 Taxa de Ocupação do Período</span></div>
+          <div class="detalhes">
+            ${taxaGeral !== null
+              ? `<strong style="font-size:1.3rem; color:var(--azul);">${taxaGeral.toFixed(1)}%</strong> (${somaOcupados} de ${somaCapacidade} vagas ocupadas)`
+              : "Sem horários registrados no período para calcular ocupação."}
+          </div>
+          ${horariosOrdenados.length ? `
+            <div class="detalhes" style="margin-top:10px;">
+              <strong>Horários com maior ocupação:</strong><br>
+              ${horariosOrdenados.map(h => `${escapeHtml(h.hora)} — ${h.taxa.toFixed(0)}% (${h.ocupados}/${h.capacidade})`).join("<br>")}
+            </div>
+          ` : ""}
+        </div>
+      `;
+
+      const cartaoEmpresas = `
+        <div class="item-agendamento">
+          <div class="linha-topo"><span class="data-hora">🏆 Transportadoras Mais Frequentes</span></div>
+          <div class="detalhes">
+            ${topEmpresas.length
+              ? topEmpresas.map((e, i) => `${i + 1}. <strong>${escapeHtml(e.nome)}</strong> — ${e.qtd} agendamento(s) aprovado(s)`).join("<br>")
+              : "Nenhum agendamento aprovado no período."}
+          </div>
+        </div>
+      `;
+
+      const cartaoPermanencia = `
+        <div class="item-agendamento">
+          <div class="linha-topo"><span class="data-hora">⏱️ Tempo Médio de Permanência no Pátio</span></div>
+          <div class="detalhes">
+            ${permanenciaMediaMin !== null
+              ? `<strong style="font-size:1.3rem; color:var(--azul);">${formatarMinutos(permanenciaMediaMin)}</strong> (baseado em ${qtdComPermanencia} registro(s) de entrada/saída)`
+              : `Ainda não há registros de entrada/saída no período. Registre a hora de entrada e saída do veículo na aba "Agendamentos de Hoje" (aparece nos agendamentos com status Aprovado) para alimentar esta métrica.`}
+          </div>
+        </div>
+      `;
+
+      resultado.innerHTML = `<div class="lista-agendamentos">${cartaoOcupacao}${cartaoEmpresas}${cartaoPermanencia}</div>`;
     }
 
     /* ===================================================================
