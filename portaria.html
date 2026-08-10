@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0f2942">
+  <title>Agendamento de Pátio - Módulo Portaria</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Estilos específicos para a operação ágil de portaria */
+    .grid-filtros {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .btn-filtro {
+      padding: 8px 16px;
+      border: 1px solid var(--borda, #ccc);
+      background: #f8f9fa;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .btn-filtro.ativo {
+      background: var(--primaria, #0f2942);
+      color: #fff;
+      border-color: var(--primaria, #0f2942);
+    }
+    .badge-status {
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      font-weight: bold;
+      display: inline-block;
+    }
+    .status-aprovado { background: #e3f2fd; color: #1565c0; }
+    .status-empatio { background: #fff3cd; color: #856404; }
+    .status-concluido { background: #d4edda; color: #155724; }
+    .status-noshow { background: #f8d7da; color: #721c24; }
+    
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .modal-overlay.oculto { display: none; }
+    .modal-card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 24px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    }
+    .acoes-tabela {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .btn-acao {
+      padding: 6px 12px;
+      font-size: 0.85rem;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-checkin { background: #28a745; color: white; }
+    .btn-checkout { background: #007bff; color: white; }
+    .btn-noshow { background: #dc3545; color: white; }
+  </style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="marca">🚛 Agendamento de Pátio — Controle de Portaria</div>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <div style="text-align: right; font-size: 0.85rem;">
+        <div id="user-nome" style="font-weight: 600;">--</div>
+        <div id="user-tipo" style="opacity: 0.75; font-size: 0.75rem;">--</div>
+      </div>
+      <button id="btn-logout">Sair</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+        <div>
+          <h2>Movimentação de Pátio do Dia</h2>
+          <p style="font-size: 0.85rem; color: #666;">Gerenciamento rápido de entradas, saídas e recepção sem agendamento.</p>
+        </div>
+        <div>
+          <button id="btn-abrir-encaixe" class="btn-primario" style="background: #17a2b8;">⚡ Entrada Sem Agendamento (Encaixe)</button>
+        </div>
+      </div>
+
+      <div class="grid-filtros">
+        <button class="btn-filtro ativo" data-filtro="todos">Todos (<span id="count-todos">0</span>)</button>
+        <button class="btn-filtro" data-filtro="Aprovado">A Caminho / Agendados (<span id="count-aprovados">0</span>)</button>
+        <button class="btn-filtro" data-filtro="Em Pátio">Em Pátio (<span id="count-empatio">0</span>)</button>
+        <button class="btn-filtro" data-filtro="Concluído">Concluídos (<span id="count-concluidos">0</span>)</button>
+        <button class="btn-filtro" data-filtro="No-Show">No-Show (<span id="count-noshow">0</span>)</button>
+      </div>
+
+      <div style="overflow-x: auto;">
+        <table width="100%" style="border-collapse: collapse; margin-top: 10px;">
+          <thead>
+            <tr style="border-bottom: 2px solid #ddd; text-align: left; font-size: 0.85rem; background: #f4f6f9;">
+              <th style="padding: 10px;">Horário</th>
+              <th style="padding: 10px;">Empresa</th>
+              <th style="padding: 10px;">Placas (Cavalo / Carreta)</th>
+              <th style="padding: 10px;">Motorista</th>
+              <th style="padding: 10px;">Tipo / Processo</th>
+              <th style="padding: 10px;">Status</th>
+              <th style="padding: 10px; text-align: center;">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-portaria">
+            <tr>
+              <td colspan="7" style="text-align: center; padding: 20px; color: #888;">Carregando movimentação do dia...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-checkin" class="modal-overlay oculto">
+    <div class="modal-card">
+      <h3> Confirmar Entrada em Pátio (Check-in)</h3>
+      <p style="font-size: 0.85rem; color: #666; margin-bottom: 15px;">Confirme as informações do veículo e motorista antes da liberação.</p>
+      
+      <form id="form-checkin">
+        <input type="hidden" id="checkin-booking-id">
+        <input type="hidden" id="checkin-hora-agendada">
+
+        <div class="campo">
+          <label for="checkin-empresa">Empresa</label>
+          <input type="text" id="checkin-empresa" disabled style="background: #eee;">
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <div class="campo" style="flex: 1;">
+            <label for="checkin-placa-cavalo">Placa Cavalo</label>
+            <input type="text" id="checkin-placa-cavalo" required style="text-transform: uppercase;">
+          </div>
+          <div class="campo" style="flex: 1;">
+            <label for="checkin-placa-carreta">Placa Carreta</label>
+            <input type="text" id="checkin-placa-carreta" style="text-transform: uppercase;">
+          </div>
+        </div>
+
+        <div class="campo">
+          <label for="checkin-motorista">Nome do Motorista</label>
+          <input type="text" id="checkin-motorista" required>
+        </div>
+
+        <div class="campo">
+          <label for="checkin-pontualidade">Pontualidade Calculada</label>
+          <input type="text" id="checkin-pontualidade" readonly style="background: #e9ecef; font-weight: bold;">
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn-secundario btn-fechar-modal">Cancelar</button>
+          <button type="submit" class="btn-primario btn-checkin">Confirmar Check-in</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-checkout" class="modal-overlay oculto">
+    <div class="modal-card">
+      <h3> Finalizar Operação (Check-out)</h3>
+      <p style="font-size: 0.85rem; color: #666; margin-bottom: 15px;">Informe os dados de saída e nota fiscal para liberar o veículo.</p>
+      
+      <form id="form-checkout">
+        <input type="hidden" id="checkout-booking-id">
+        <input type="hidden" id="checkout-entrada-timestamp">
+
+        <div class="campo">
+          <label for="checkout-nf">Número da Nota Fiscal (NF) *</label>
+          <input type="text" id="checkout-nf" placeholder="Ex: 102938" required>
+        </div>
+
+        <div class="campo">
+          <label for="checkout-permanencia">Tempo em Pátio</label>
+          <input type="text" id="checkout-permanencia" readonly style="background: #e9ecef; font-weight: bold;">
+        </div>
+
+        <div class="campo">
+          <label for="checkout-obs">Observações da Saída (Opcional)</label>
+          <textarea id="checkout-obs" rows="2" placeholder="Ocorrências ou divergências na carga/descarga"></textarea>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn-secundario btn-fechar-modal">Cancelar</button>
+          <button type="submit" class="btn-primario btn-checkout">Confirmar Check-out</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-encaixe" class="modal-overlay oculto">
+    <div class="modal-card">
+      <h3>⚡ Entrada Expresso Sem Agendamento</h3>
+      <p style="font-size: 0.85rem; color: #666; margin-bottom: 15px;">Registro direto de veículos de encaixe. Entrará imediatamente como "Em Pátio".</p>
+      
+      <form id="form-encaixe">
+        <div class="campo">
+          <label for="encaixe-empresa">Nome da Empresa / Transportadora *</label>
+          <input type="text" id="encaixe-empresa" required placeholder="Ex: Transportes Silva">
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <div class="campo" style="flex: 1;">
+            <label for="encaixe-placa-cavalo">Placa Cavalo *</label>
+            <input type="text" id="encaixe-placa-cavalo" required style="text-transform: uppercase;">
+          </div>
+          <div class="campo" style="flex: 1;">
+            <label for="encaixe-placa-carreta">Placa Carreta</label>
+            <input type="text" id="encaixe-placa-carreta" style="text-transform: uppercase;">
+          </div>
+        </div>
+
+        <div class="campo">
+          <label for="encaixe-motorista">Nome do Motorista *</label>
+          <input type="text" id="encaixe-motorista" required>
+        </div>
+
+        <div class="campo">
+          <label for="encaixe-processo">Tipo de Processo *</label>
+          <select id="encaixe-processo" required>
+            <option value="">Carregando tipos...</option>
+          </select>
+        </div>
+
+        <div class="campo">
+          <label for="encaixe-obs">Observação / Motivo do Encaixe</label>
+          <input type="text" id="encaixe-obs" placeholder="Ex: Carga emergencial liberada por Logística">
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn-secundario btn-fechar-modal">Cancelar</button>
+          <button type="submit" class="btn-primario" style="background: #17a2b8;">Registrar e Dar Entrada</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module">
+    import { auth, db } from "./firebase-config.js";
+    import { protegerPagina } from "./auth.js";
+    import {
+      collection,
+      doc,
+      getDocs,
+      getDoc,
+      addDoc,
+      updateDoc,
+      query,
+      where,
+      orderBy,
+      serverTimestamp,
+      Timestamp
+    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+    import { signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import {
+      STATUS,
+      TIPO_AGENDAMENTO,
+      PONTUALIDADE,
+      calcularPontualidade,
+      calcularPermanenciaMinutos,
+      formatarPermanencia
+    } from "./bookingSchema.js";
+
+    let usuarioLogado = null;
+    let agendamentosHoje = [];
+    let filtroAtual = "todos";
+    let tiposProcessoMap = {};
+
+    // Proteger acesso: Apenas Logística (2) e Admin (3) acessam o Módulo Portaria
+    protegerPagina([2, 3], async (user, dadosPerfil) => {
+      usuarioLogado = { ...user, ...dadosPerfil };
+      document.getElementById("user-nome").textContent = dadosPerfil.nome || user.email;
+      document.getElementById("user-tipo").textContent = dadosPerfil.tipo === 3 ? "Administrador" : "Operador Portaria/Logística";
+
+      tiposProcessoMap = await carregarTiposProcesso();
+      preencherSelectProcessos();
+      carregarMovimentacaoDia();
+    });
+
+    document.getElementById("btn-logout").addEventListener("click", () => signOut(auth));
+
+    /* ===================================================================
+       CARREGAMENTO DE DADOS E FILTROS
+       =================================================================== */
+    async function carregarTiposProcesso() {
+      const map = {};
+      try {
+        const snap = await getDocs(collection(db, "processTypes"));
+        snap.docs.forEach(d => { map[d.id] = d.data().nome; });
+      } catch (err) {
+        console.error("Erro ao carregar tipos de processo:", err);
+      }
+      return map;
+    }
+
+    function preencherSelectProcessos() {
+      const select = document.getElementById("encaixe-processo");
+      select.innerHTML = '<option value="">Selecione o processo...</option>';
+      Object.entries(tiposProcessoMap).forEach(([id, nome]) => {
+        select.innerHTML += `<option value="${id}">${escapeHtml(nome)}</option>`;
+      });
+    }
+
+    function obterDataHojeStr() {
+      const hoje = new Date();
+      const ano = hoje.getFullYear();
+      const mes = String(hoje.getMonth() + 1).padStart(2, "0");
+      const dia = String(hoje.getDate()).padStart(2, "0");
+      return `${ano}-${mes}-${dia}`;
+    }
+
+    async function carregarMovimentacaoDia() {
+      const dataHoje = obterDataHojeStr();
+      const tbody = document.getElementById("tbody-portaria");
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px;">Buscando agendamentos do dia...</td></tr>';
+
+      try {
+        const q = query(
+          collection(db, "bookings"),
+          where("dataAgendada", "==", dataHoje),
+          orderBy("horaInicio", "asc")
+        );
+
+        const snap = await getDocs(q);
+        agendamentosHoje = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        atualizarContadores();
+        renderizarTabela();
+      } catch (err) {
+        console.error("Erro ao carregar movimentação:", err);
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px; color: red;">Erro ao carregar agendamentos do dia.</td></tr>';
+      }
+    }
+
+    function atualizarContadores() {
+      document.getElementById("count-todos").textContent = agendamentosHoje.length;
+      document.getElementById("count-aprovados").textContent = agendamentosHoje.filter(b => b.status === STATUS.APROVADO).length;
+      document.getElementById("count-empatio").textContent = agendamentosHoje.filter(b => b.status === STATUS.EM_PATIO).length;
+      document.getElementById("count-concluidos").textContent = agendamentosHoje.filter(b => b.status === STATUS.CONCLUIDO).length;
+      document.getElementById("count-noshow").textContent = agendamentosHoje.filter(b => b.status === STATUS.NO_SHOW).length;
+    }
+
+    function renderizarTabela() {
+      const tbody = document.getElementById("tbody-portaria");
+      tbody.innerHTML = "";
+
+      let listaFiltrada = agendamentosHoje;
+      if (filtroAtual !== "todos") {
+        listaFiltrada = agendamentosHoje.filter(b => b.status === filtroAtual);
+      }
+
+      if (listaFiltrada.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px; color: #888;">Nenhum registro encontrado para este filtro.</td></tr>';
+        return;
+      }
+
+      listaFiltrada.forEach(b => {
+        const tr = document.createElement("tr");
+        tr.style.borderBottom = "1px solid #eee";
+
+        const horaFormatada = b.horaInicio || "--:--";
+        const nomeProcesso = tiposProcessoMap[b.tipoProcessoId] || b.tipoProcessoId || "Não especificado";
+        const badgeClasse = {
+          [STATUS.APROVADO]: "status-aprovado",
+          [STATUS.EM_PATIO]: "status-empatio",
+          [STATUS.CONCLUIDO]: "status-concluido",
+          [STATUS.NO_SHOW]: "status-noshow"
+        }[b.status] || "";
+
+        tr.innerHTML = `
+          <td style="padding: 10px; font-weight: bold;">${escapeHtml(horaFormatada)}</td>
+          <td style="padding: 10px;">
+            ${escapeHtml(b.empresa || "Avulso")}
+            ${b.tipoAgendamento === TIPO_AGENDAMENTO.PORTARIA_ENCAIXE ? '<br><small style="color:#17a2b8;">⚡ Encaixe</small>' : ''}
+          </td>
+          <td style="padding: 10px;">
+            <b>Cavalo:</b> ${escapeHtml(b.placaCavalo || "-")}<br>
+            <small style="color:#666;">Carreta: ${escapeHtml(b.placaCarreta || "-")}</small>
+          </td>
+          <td style="padding: 10px;">${escapeHtml(b.motorista || "-")}</td>
+          <td style="padding: 10px;">${escapeHtml(nomeProcesso)}</td>
+          <td style="padding: 10px;">
+            <span class="badge-status ${badgeClasse}">${escapeHtml(b.status)}</span>
+            ${b.checkIn?.pontualidade ? `<br><small style="font-size:0.75rem; color:#666;">${escapeHtml(b.checkIn.pontualidade)}</small>` : ''}
+          </td>
+          <td style="padding: 10px; text-align: center;">
+            <div class="acoes-tabela" style="justify-content: center;">
+              ${gerarBotoesAcao(b)}
+            </div>
+          </td>
+        `;
+
+        tbody.appendChild(tr);
+      });
+
+      vincularEventosAcao();
+    }
+
+    function gerarBotoesAcao(booking) {
+      if (booking.status === STATUS.APROVADO) {
+        return `
+          <button class="btn-acao btn-checkin" data-id="${booking.id}">Check-in</button>
+          <button class="btn-acao btn-noshow" data-id="${booking.id}">No-Show</button>
+        `;
+      } else if (booking.status === STATUS.EM_PATIO) {
+        return `
+          <button class="btn-acao btn-checkout" data-id="${booking.id}">Check-out</button>
+        `;
+      } else if (booking.status === STATUS.CONCLUIDO) {
+        const perf = booking.checkOut?.permanenciaMinutos !== undefined 
+          ? formatarPermanencia(booking.checkOut.permanenciaMinutos) 
+          : "-";
+        return `<small style="color:#155724; font-weight:bold;">Permanência: ${perf}</small>`;
+      } else {
+        return `<small style="color:#888;">Sem ações</small>`;
+      }
+    }
+
+    // Filtros por aba/botão
+    document.querySelectorAll(".btn-filtro").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".btn-filtro").forEach(b => b.classList.remove("ativo"));
+        btn.classList.add("ativo");
+        filtroAtual = btn.getAttribute("data-filtro");
+        renderizarTabela();
+      });
+    });
+
+    /* ===================================================================
+       FLUXO DE CHECK-IN
+       =================================================================== */
+    function vincularEventosAcao() {
+      // Eventos Check-in
+      document.querySelectorAll(".btn-checkin").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-id");
+          const booking = agendamentosHoje.find(b => b.id === id);
+          if (!booking) return;
+
+          document.getElementById("checkin-booking-id").value = booking.id;
+          document.getElementById("checkin-empresa").value = booking.empresa || "";
+          document.getElementById("checkin-placa-cavalo").value = booking.placaCavalo || "";
+          document.getElementById("checkin-placa-carreta").value = booking.placaCarreta || "";
+          document.getElementById("checkin-motorista").value = booking.motorista || "";
+          document.getElementById("checkin-hora-agendada").value = booking.horaInicio;
+
+          const pontualidade = calcularPontualidade(booking.horaInicio, new Date());
+          document.getElementById("checkin-pontualidade").value = pontualidade;
+
+          abrirModal("modal-checkin");
+        });
+      });
+
+      // Eventos Check-out
+      document.querySelectorAll(".btn-checkout").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-id");
+          const booking = agendamentosHoje.find(b => b.id === id);
+          if (!booking) return;
+
+          document.getElementById("checkout-booking-id").value = booking.id;
+          document.getElementById("checkout-nf").value = booking.checkOut?.notaFiscal || "";
+          document.getElementById("checkout-obs").value = "";
+
+          const entradaDate = booking.checkIn?.dataHora?.toDate ? booking.checkIn.dataHora.toDate() : new Date();
+          document.getElementById("checkout-entrada-timestamp").value = entradaDate.getTime();
+
+          const minutos = calcularPermanenciaMinutos(entradaDate, new Date());
+          document.getElementById("checkout-permanencia").value = formatarPermanencia(minutos);
+
+          abrirModal("modal-checkout");
+        });
+      });
+
+      // Eventos No-Show
+      document.querySelectorAll(".btn-noshow").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.getAttribute("data-id");
+          const booking = agendamentosHoje.find(b => b.id === id);
+          if (!booking) return;
+
+          if (confirm(`Confirmar que o veículo da empresa ${booking.empresa} (Horário: ${booking.horaInicio}) não compareceu (NO-SHOW)?`)) {
+            await registrarNoShow(booking);
+          }
+        });
+      });
+    }
+
+    // Submissão do Check-in
+    document.getElementById("form-checkin").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const id = document.getElementById("checkin-booking-id").value;
+      const placaCavalo = document.getElementById("checkin-placa-cavalo").value.trim().toUpperCase();
+      const placaCarreta = document.getElementById("checkin-placa-carreta").value.trim().toUpperCase();
+      const motorista = document.getElementById("checkin-motorista").value.trim();
+      const horaAgendada = document.getElementById("checkin-hora-agendada").value;
+      
+      const agora = new Date();
+      const pontualidade = calcularPontualidade(horaAgendada, agora);
+
+      try {
+        const bookingRef = doc(db, "bookings", id);
+        await updateDoc(bookingRef, {
+          placaCavalo,
+          placaCarreta,
+          motorista,
+          status: STATUS.EM_PATIO,
+          checkIn: {
+            dataHora: serverTimestamp(),
+            pontualidade: pontualidade,
+            dadosConferidos: true
+          },
+          atualizadoEm: serverTimestamp(),
+          atualizadoPor: usuarioLogado.uid
+        });
+
+        await registrarAuditLog(id, "Check-In");
+        fecharModais();
+        await carregarMovimentacaoDia();
+      } catch (err) {
+        console.error("Erro ao realizar Check-in:", err);
+        alert("Erro ao realizar check-in. Tente novamente.");
+      }
+    });
+
+    /* ===================================================================
+       FLUXO DE CHECK-OUT
+       =================================================================== */
+    document.getElementById("form-checkout").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const id = document.getElementById("checkout-booking-id").value;
+      const notaFiscal = document.getElementById("checkout-nf").value.trim();
+      const obsSaida = document.getElementById("checkout-obs").value.trim();
+      const entradaMs = parseInt(document.getElementById("checkout-entrada-timestamp").value, 10);
+      
+      if (!notaFiscal) {
+        alert("O número da Nota Fiscal é obrigatório para realizar o Check-out.");
+        return;
+      }
+
+      const entradaDate = new Date(entradaMs);
+      const agora = new Date();
+      const permanenciaMinutos = calcularPermanenciaMinutos(entradaDate, agora);
+
+      try {
+        const bookingRef = doc(db, "bookings", id);
+        await updateDoc(bookingRef, {
+          status: STATUS.CONCLUIDO,
+          checkOut: {
+            dataHora: serverTimestamp(),
+            notaFiscal: notaFiscal,
+            permanenciaMinutos: permanenciaMinutos,
+            observacoesSaida: obsSaida
+          },
+          atualizadoEm: serverTimestamp(),
+          atualizadoPor: usuarioLogado.uid
+        });
+
+        await registrarAuditLog(id, "Check-Out");
+        fecharModais();
+        await carregarMovimentacaoDia();
+      } catch (err) {
+        console.error("Erro ao realizar Check-out:", err);
+        alert("Erro ao realizar check-out. Tente novamente.");
+      }
+    });
+
+    /* ===================================================================
+       FLUXO NO-SHOW
+       =================================================================== */
+    async function registrarNoShow(booking) {
+      try {
+        const bookingRef = doc(db, "bookings", booking.id);
+        await updateDoc(bookingRef, {
+          status: STATUS.NO_SHOW,
+          atualizadoEm: serverTimestamp(),
+          atualizadoPor: usuarioLogado.uid
+        });
+
+        await registrarAuditLog(booking.id, "No-Show");
+        await carregarMovimentacaoDia();
+      } catch (err) {
+        console.error("Erro ao registrar No-Show:", err);
+        alert("Erro ao registrar No-Show.");
+      }
+    }
+
+    /* ===================================================================
+       ENTRADA SEM AGENDAMENTO (ENCAIXE / PORTARIA)
+       =================================================================== */
+    document.getElementById("btn-abrir-encaixe").addEventListener("click", () => {
+      document.getElementById("form-encaixe").reset();
+      abrirModal("modal-encaixe");
+    });
+
+    document.getElementById("form-encaixe").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const empresa = document.getElementById("encaixe-empresa").value.trim();
+      const placaCavalo = document.getElementById("encaixe-placa-cavalo").value.trim().toUpperCase();
+      const placaCarreta = document.getElementById("encaixe-placa-carreta").value.trim().toUpperCase();
+      const motorista = document.getElementById("encaixe-motorista").value.trim();
+      const tipoProcessoId = document.getElementById("encaixe-processo").value;
+      const obs = document.getElementById("encaixe-obs").value.trim();
+
+      const agora = new Date();
+      const horaInicio = `${String(agora.getHours()).padStart(2, "0")}:${String(agora.getMinutes()).padStart(2, "0")}`;
+
+      try {
+        const novoBooking = {
+          usuarioId: null,
+          empresa: empresa,
+          tipoProcessoId: tipoProcessoId,
+          dataAgendada: obterDataHojeStr(),
+          horaInicio: horaInicio,
+          placaCavalo: placaCavalo,
+          placaCarreta: placaCarreta,
+          motorista: motorista,
+          observacoes: obs ? `[ENCAIXE PORTARIA] ${obs}` : "[ENCAIXE PORTARIA]",
+          status: STATUS.EM_PATIO,
+          tipoAgendamento: TIPO_AGENDAMENTO.PORTARIA_ENCAIXE,
+          vagaLiberada: false,
+          checkIn: {
+            dataHora: serverTimestamp(),
+            pontualidade: PONTUALIDADE.NO_HORARIO,
+            dadosConferidos: true
+          },
+          criadoEm: serverTimestamp(),
+          criadoPor: usuarioLogado.uid,
+          atualizadoEm: serverTimestamp(),
+          atualizadoPor: usuarioLogado.uid
+        };
+
+        const docRef = await addDoc(collection(db, "bookings"), novoBooking);
+        await registrarAuditLog(docRef.id, "Entrada Encaixe Portaria");
+
+        fecharModais();
+        await carregarMovimentacaoDia();
+      } catch (err) {
+        console.error("Erro ao registrar entrada sem agendamento:", err);
+        alert("Erro ao salvar entrada de encaixe. Tente novamente.");
+      }
+    });
+
+    /* ===================================================================
+       UTILITÁRIOS E MODAIS
+       =================================================================== */
+    async function registrarAuditLog(bookingId, acao) {
+      try {
+        await addDoc(collection(db, "auditLogs"), {
+          bookingId,
+          usuarioId: usuarioLogado.uid,
+          acao,
+          dataHora: serverTimestamp()
+        });
+      } catch (e) {
+        console.error("Erro no auditLog:", e);
+      }
+    }
+
+    function abrirModal(id) {
+      document.getElementById(id).classList.remove("oculto");
+    }
+
+    function fecharModais() {
+      document.querySelectorAll(".modal-overlay").forEach(m => m.classList.add("oculto"));
+    }
+
+    document.querySelectorAll(".btn-fechar-modal").forEach(btn => {
+      btn.addEventListener("click", fecharModais);
+    });
+
+    function escapeHtml(texto) {
+      if (!texto) return "";
+      return String(texto)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+  </script>
+</body>
+</html>
