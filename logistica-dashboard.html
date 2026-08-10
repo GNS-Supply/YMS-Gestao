@@ -677,8 +677,8 @@
         btnSalvar.textContent = "Gravando...";
 
         try {
-          await criarAgendamentoOperacional({
-            usuarioId,
+          await criarAgendamentoOperacional(db, usuarioLogado, {
+            transportadoraId: usuarioId,
             empresa,
             dataAgendada: inputData.value,
             horaInicio: document.getElementById("op-horario").value,
@@ -686,8 +686,7 @@
             placaCavalo: document.getElementById("op-placa-cavalo").value.trim().toUpperCase(),
             placaCarreta: document.getElementById("op-placa-carreta").value.trim().toUpperCase(),
             motorista: document.getElementById("op-motorista").value.trim(),
-            observacoes: document.getElementById("op-observacoes").value.trim(),
-            usuarioLogado
+            observacoes: document.getElementById("op-observacoes").value.trim()
           });
 
           alert("Agendamento Operacional criado com sucesso!");
