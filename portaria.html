@@ -398,7 +398,7 @@
           <td style="padding: 10px; font-weight: bold;">${escapeHtml(horaFormatada)}</td>
           <td style="padding: 10px;">
             ${escapeHtml(b.empresa || "Avulso")}
-            ${b.tipoAgendamento === TIPO_AGENDAMENTO.PORTARIA_ENCAIXE ? '<br><small style="color:#17a2b8;">⚡ Encaixe</small>' : ''}
+            ${b.tipoAgendamento === TIPO_AGENDAMENTO.PORTARIA ? '<br><small style="color:#17a2b8;">⚡ Encaixe</small>' : ''}
           </td>
           <td style="padding: 10px;">
             <b>Cavalo:</b> ${escapeHtml(b.placaCavalo || "-")}<br>
@@ -644,11 +644,11 @@
           motorista: motorista,
           observacoes: obs ? `[ENCAIXE PORTARIA] ${obs}` : "[ENCAIXE PORTARIA]",
           status: STATUS.EM_PATIO,
-          tipoAgendamento: TIPO_AGENDAMENTO.PORTARIA_ENCAIXE,
+          tipoAgendamento: TIPO_AGENDAMENTO.PORTARIA,
           vagaLiberada: false,
           checkIn: {
             dataHora: serverTimestamp(),
-            pontualidade: PONTUALIDADE.NO_HORARIO,
+            pontualidade: PONTUALIDADE.PONTUAL,
             dadosConferidos: true
           },
           criadoEm: serverTimestamp(),
