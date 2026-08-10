@@ -103,6 +103,8 @@
       doc,
       getDoc,
       getDocs,
+      addDoc,
+      updateDoc,
       query,
       where,
       serverTimestamp,
@@ -500,9 +502,23 @@
             motorista,
             observacoes,
             status: "Pendente",
+            vagaLiberada: false, // controle interno: vira true quando a vaga é de fato liberada (recusa/cancelamento/expiração)
             criadoEm: serverTimestamp()
           });
         });
+
+        // Log de auditoria (fora da transação — não afeta a reserva em si;
+        // se falhar por algum motivo, a reserva já está confirmada mesmo assim).
+        try {
+          await addDoc(collection(db, "auditLogs"), {
+            bookingId: bookingRef.id,
+            usuarioId: usuarioAtual.uid,
+            acao: "Solicitou",
+            dataHora: serverTimestamp()
+          });
+        } catch (errAudit) {
+          console.error("Erro ao registrar log de auditoria:", errAudit);
+        }
 
         await mostrarAlerta("Solicitação de agendamento enviada com sucesso!", { titulo: "Agendamento enviado", tipo: "sucesso" });
         form.reset();
@@ -540,7 +556,7 @@
           return;
         }
 
-        const agendamentos = snap.docs.map(d => d.data());
+        const agendamentos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         agendamentos.sort((a, b) => (b.dataAgendada || "").localeCompare(a.dataAgendada || ""));
 
         listaAgendamentos.innerHTML = "";
@@ -556,6 +572,8 @@
             Cancelado: "recusado"
           }[a.status] || "pendente";
 
+          const podeCancelar = a.status === "Pendente" || a.status === "Aprovado";
+
           div.innerHTML = `
             <div class="linha-topo">
               <span class="data-hora">📅 ${formatarData(a.dataAgendada)} às ${escapeHtml(a.horaInicio || "-")}</span>
@@ -567,13 +585,70 @@
               Motorista: ${escapeHtml(a.motorista || "-")}
               ${a.observacoes ? `<br>Obs.: ${escapeHtml(a.observacoes)}` : ""}
             </div>
+            ${podeCancelar ? `
+              <div style="margin-top:10px;">
+                <button type="button" class="btn-acao btn-recusar btn-cancelar-agendamento" data-id="${a.id}">Cancelar Agendamento</button>
+              </div>
+            ` : ""}
           `;
           listaAgendamentos.appendChild(div);
+        });
+
+        listaAgendamentos.querySelectorAll(".btn-cancelar-agendamento").forEach(btn => {
+          btn.addEventListener("click", () => cancelarMeuAgendamento(btn.dataset.id, btn));
         });
 
       } catch (err) {
         console.error("Erro ao carregar agendamentos:", err);
         listaAgendamentos.innerHTML = '<div class="estado-vazio">Erro ao carregar seus agendamentos.</div>';
+      }
+    }
+
+    /* ===================================================================
+       5. CANCELAMENTO PELA PRÓPRIA TRANSPORTADORA
+
+       A Transportadora só marca o status como "Cancelado" — ela não tem
+       permissão para mexer em timeSlots (ver firestore.rules), então a
+       vaga em si é liberada depois, numa rotina que roda quando a
+       Logística/Admin abre o painel deles. Ou seja: a reserva some da
+       sua lista na hora, mas a vaga pode levar um pouco pra reaparecer
+       como disponível pra outras transportadoras.
+       =================================================================== */
+    async function cancelarMeuAgendamento(bookingId, btn) {
+      const confirmado = await mostrarConfirm(
+        "Tem certeza que deseja cancelar este agendamento? Essa ação não pode ser desfeita.",
+        { titulo: "Cancelar agendamento", perigo: true, textoConfirmar: "Cancelar Agendamento" }
+      );
+      if (!confirmado) return;
+
+      btn.disabled = true;
+      btn.textContent = "Cancelando...";
+
+      try {
+        await updateDoc(doc(db, "bookings", bookingId), {
+          status: "Cancelado",
+          atualizadoEm: serverTimestamp(),
+          atualizadoPor: usuarioAtual.uid
+        });
+
+        try {
+          await addDoc(collection(db, "auditLogs"), {
+            bookingId,
+            usuarioId: usuarioAtual.uid,
+            acao: "Cancelou",
+            dataHora: serverTimestamp()
+          });
+        } catch (errAudit) {
+          console.error("Erro ao registrar log de auditoria:", errAudit);
+        }
+
+        await mostrarAlerta("Agendamento cancelado.", { titulo: "Cancelado", tipo: "sucesso" });
+        carregarMeusAgendamentos();
+      } catch (err) {
+        console.error("Erro ao cancelar agendamento:", err);
+        await mostrarAlerta("Erro ao cancelar o agendamento. Tente novamente.", { titulo: "Erro", tipo: "erro" });
+        btn.disabled = false;
+        btn.textContent = "Cancelar Agendamento";
       }
     }
 

@@ -498,6 +498,11 @@
 
       // Carrega a aba inicial por padrão
       ativarAba("painel");
+
+      // Rotinas de manutenção que substituem, de forma manual/on-demand, o
+      // Cron de expiração ainda não implementado (ver README): rodam uma
+      // vez sempre que alguém de Logística/Admin abre o painel.
+      executarRotinasDeManutencao();
     });
 
     /* ===================================================================
@@ -562,54 +567,188 @@
     /* ===================================================================
        ALTERAR STATUS COM TRANSAÇÃO E LIBERAÇÃO DE VAGA
        =================================================================== */
-    async function alterarStatusAgendamento(bookingId, novoStatus, dataAgendada, horaInicio) {
+    const ACAO_AUDITORIA_POR_STATUS = { Aprovado: "Aprovou", Recusado: "Recusou", Expirado: "Expirou", Cancelado: "Cancelou" };
+
+    async function registrarAuditLog(bookingId, acao) {
+      if (!acao) return; // ex: reversão pra "Pendente" não tem ação de auditoria definida
+      try {
+        await addDoc(collection(db, "auditLogs"), {
+          bookingId,
+          usuarioId: usuarioAtual.uid,
+          acao,
+          dataHora: serverTimestamp()
+        });
+      } catch (err) {
+        console.error("Erro ao registrar log de auditoria:", err);
+      }
+    }
+
+    // Núcleo silencioso (sem alert/reload) — reaproveitado tanto pelos
+    // botões da UI (Aprovar/Recusar) quanto pelas rotinas de manutenção
+    // automáticas (expiração, liberação de vaga de cancelamento).
+    async function aplicarNovoStatusAgendamento(bookingId, novoStatus, dataAgendada, horaInicio) {
       const bookingRef = doc(db, "bookings", bookingId);
 
-      try {
-        // Se o novo status for Recusado ou Cancelado, decrementa o contador 'ocupados'
-        if (novoStatus === "Recusado" || novoStatus === "Cancelado") {
-          const slotId = `${dataAgendada}_${(horaInicio || "").replace(":", "-")}`;
-          const slotRef = doc(db, "timeSlots", slotId);
+      // Recusado, Cancelado (pela Logística/rotina) ou Expirado liberam a vaga
+      if (novoStatus === "Recusado" || novoStatus === "Cancelado" || novoStatus === "Expirado") {
+        const slotId = `${dataAgendada}_${(horaInicio || "").replace(":", "-")}`;
+        const slotRef = doc(db, "timeSlots", slotId);
 
-          await runTransaction(db, async (transaction) => {
-            const bookingSnap = await transaction.get(bookingRef);
-            const slotSnap = await transaction.get(slotRef);
+        await runTransaction(db, async (transaction) => {
+          const bookingSnap = await transaction.get(bookingRef);
+          const slotSnap = await transaction.get(slotRef);
 
-            if (!bookingSnap.exists()) {
-              throw new Error("Agendamento não encontrado.");
-            }
+          if (!bookingSnap.exists()) {
+            throw new Error("Agendamento não encontrado.");
+          }
 
-            const statusAtual = bookingSnap.data().status;
+          const statusAtual = bookingSnap.data().status;
 
-            // Só libera a vaga se o agendamento não estava previamente cancelado/recusado
-            if (statusAtual !== "Recusado" && statusAtual !== "Cancelado" && slotSnap.exists()) {
-              const ocupadosAtuais = slotSnap.data().ocupados || 0;
-              const novosOcupados = Math.max(0, ocupadosAtuais - 1);
+          // Só libera a vaga se o agendamento não estava previamente cancelado/recusado
+          if (statusAtual !== "Recusado" && statusAtual !== "Cancelado" && slotSnap.exists()) {
+            const ocupadosAtuais = slotSnap.data().ocupados || 0;
+            const novosOcupados = Math.max(0, ocupadosAtuais - 1);
 
-              transaction.update(slotRef, { ocupados: novosOcupados });
-            }
+            transaction.update(slotRef, { ocupados: novosOcupados });
+          }
 
-            transaction.update(bookingRef, {
-              status: novoStatus,
-              atualizadoEm: serverTimestamp(),
-              atualizadoPor: usuarioAtual.uid
-            });
-          });
-        } else {
-          // Para Aprovação ou Reversão
-          await updateDoc(bookingRef, {
+          transaction.update(bookingRef, {
             status: novoStatus,
             atualizadoEm: serverTimestamp(),
-            atualizadoPor: usuarioAtual.uid
+            atualizadoPor: usuarioAtual.uid,
+            vagaLiberada: true
           });
-        }
+        });
+      } else {
+        // Para Aprovação ou Reversão
+        await updateDoc(bookingRef, {
+          status: novoStatus,
+          atualizadoEm: serverTimestamp(),
+          atualizadoPor: usuarioAtual.uid
+        });
+      }
 
+      await registrarAuditLog(bookingId, ACAO_AUDITORIA_POR_STATUS[novoStatus]);
+    }
+
+    async function alterarStatusAgendamento(bookingId, novoStatus, dataAgendada, horaInicio) {
+      try {
+        await aplicarNovoStatusAgendamento(bookingId, novoStatus, dataAgendada, horaInicio);
         await mostrarAlerta(`Agendamento ${novoStatus.toLowerCase()} com sucesso!`, { titulo: "Status atualizado", tipo: "sucesso" });
         carregarSolicitacoesPendentes();
       } catch (err) {
         console.error("Erro ao alterar status:", err);
         await mostrarAlerta("Erro ao alterar o status do agendamento: " + (err.message || "Tente novamente."), { titulo: "Erro", tipo: "erro" });
       }
+    }
+
+    /* ===================================================================
+       ROTINAS DE MANUTENÇÃO (rodam uma vez ao abrir o painel)
+
+       O README prevê um Cloudflare Worker com Cron pra expiração
+       automática, mas ele ainda não existe. Enquanto isso, estas duas
+       rotinas fazem o trabalho "sob demanda": rodam sempre que alguém
+       de Logística/Admin abre o painel, o que cobre bem o caso de uso
+       real (o painel costuma ficar aberto/sendo revisitado durante o
+       expediente). Limitação: se ninguém abrir o painel por um longo
+       período, agendamentos vencidos ou cancelamentos da Transportadora
+       não são processados até a próxima visita — um Worker com Cron
+       real resolveria isso de vez.
+       =================================================================== */
+    const TOLERANCIA_EXPIRACAO_MIN = 60; // minutos de tolerância após o horário reservado antes de considerar "vencido"
+    // As duas varreduras abaixo usam limit(200) como proteção contra
+    // custo de leitura descontrolado se o número de Pendentes/Cancelados
+    // não processados crescer muito. Em operação normal (ninguém deixa
+    // acumular centenas de agendamentos pendentes/cancelados) isso nunca
+    // chega perto do limite; se acontecer, é sinal de que vale a pena
+    // migrar pro Worker com Cron real do README.
+
+    async function executarRotinasDeManutencao() {
+      try {
+        const [qtdExpirados, qtdLiberados] = await Promise.all([
+          expirarAgendamentosVencidos(),
+          liberarVagasCanceladasPelaTransportadora()
+        ]);
+        if (qtdExpirados > 0 || qtdLiberados > 0) {
+          console.info(`Manutenção: ${qtdExpirados} agendamento(s) expirado(s), ${qtdLiberados} vaga(s) liberada(s) de cancelamentos.`);
+        }
+      } catch (err) {
+        console.error("Erro nas rotinas de manutenção:", err);
+      }
+    }
+
+    // Marca como "Expirado" (e libera a vaga) qualquer agendamento ainda
+    // Pendente cujo horário já passou há mais que a tolerância definida.
+    async function expirarAgendamentosVencidos() {
+      const agora = new Date();
+      const hojeStr = dataDeHojeStr();
+      const minutosAgora = agora.getHours() * 60 + agora.getMinutes();
+
+      const snap = await getDocs(query(collection(db, "bookings"), where("status", "==", "Pendente"), limit(200)));
+
+      let processados = 0;
+      for (const docSnap of snap.docs) {
+        const b = docSnap.data();
+        if (!b.dataAgendada || !b.horaInicio) continue;
+
+        const venceu = b.dataAgendada < hojeStr
+          || (b.dataAgendada === hojeStr && (horaParaMinutos(b.horaInicio) + TOLERANCIA_EXPIRACAO_MIN) <= minutosAgora);
+
+        if (!venceu) continue;
+
+        try {
+          await aplicarNovoStatusAgendamento(docSnap.id, "Expirado", b.dataAgendada, b.horaInicio);
+          processados++;
+        } catch (err) {
+          console.error(`Erro ao expirar agendamento ${docSnap.id}:`, err);
+        }
+      }
+      return processados;
+    }
+
+    // Um agendamento cancelado pela própria Transportadora só marca o
+    // status (ela não tem permissão de mexer em timeSlots — ver
+    // firestore.rules). Esta rotina termina o trabalho: libera a vaga de
+    // fato para quem tiver vagaLiberada ainda false/ausente.
+    async function liberarVagasCanceladasPelaTransportadora() {
+      const snap = await getDocs(query(collection(db, "bookings"), where("status", "==", "Cancelado"), limit(200)));
+
+      let processados = 0;
+      for (const docSnap of snap.docs) {
+        const b = docSnap.data();
+        if (b.vagaLiberada === true) continue; // já foi liberada (ex: cancelamento feito pela própria Logística)
+        if (!b.dataAgendada || !b.horaInicio) continue;
+
+        const slotId = `${b.dataAgendada}_${b.horaInicio.replace(":", "-")}`;
+        const slotRef = doc(db, "timeSlots", slotId);
+
+        try {
+          await runTransaction(db, async (transaction) => {
+            const bookingRef = doc(db, "bookings", docSnap.id);
+            const bookingSnap = await transaction.get(bookingRef);
+            const slotSnap = await transaction.get(slotRef);
+
+            if (!bookingSnap.exists() || bookingSnap.data().status !== "Cancelado" || bookingSnap.data().vagaLiberada === true) {
+              return; // outra sessão já processou, ou o estado mudou entretanto
+            }
+
+            if (slotSnap.exists()) {
+              const ocupadosAtuais = slotSnap.data().ocupados || 0;
+              transaction.update(slotRef, { ocupados: Math.max(0, ocupadosAtuais - 1) });
+            }
+
+            transaction.update(bookingRef, {
+              vagaLiberada: true,
+              atualizadoEm: serverTimestamp(),
+              atualizadoPor: usuarioAtual.uid
+            });
+          });
+          processados++;
+        } catch (err) {
+          console.error(`Erro ao liberar vaga do cancelamento ${docSnap.id}:`, err);
+        }
+      }
+      return processados;
     }
 
     /* ===================================================================
