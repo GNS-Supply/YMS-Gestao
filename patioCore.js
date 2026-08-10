@@ -497,13 +497,17 @@ export async function obterHorariosDisponiveis(db, dataStr, opcoes = {}) {
    agendando o mesmo horário simultaneamente).
 
    -----------------------------------------------------------------
-   ⚠️ AVISO SOBRE AS FIRESTORE RULES: do jeito que `rulles - firebase.txt`
-   está hoje, a regra de create em `bookings` (`novoAgendamentoValido`)
-   exige `usuarioId == request.auth.uid` e `status == 'Pendente'`. Ou
-   seja: um documento criado por esta função (usuarioId de OUTRA pessoa,
-   ou null, com status "Aprovado") seria REJEITADO pelas Rules hoje. A
-   atualização das Rules para liberar esse caso para Logística/Admin
-   fica para quando for solicitada.
+   NOTA SOBRE AS FIRESTORE RULES: `firestore.rules` já libera este
+   caso desde a revisão que adicionou `novoAgendamentoOperacionalValido()`
+   (match /bookings/{bookingId} -> allow create). Ela aceita um
+   documento criado por Logística/Admin com usuarioId de OUTRA pessoa
+   (ou null) e status "Aprovado" + tipoAgendamento "Operacional",
+   exigindo em troca `criadoPor == request.auth.uid` e as validações de
+   forma usuais (empresa, tipoProcessoId existente, placaCavalo,
+   motorista, data/hora válidas). Confirme que essa versão das Rules
+   está de fato publicada no Console antes de usar esta função em
+   produção — o comportamento antigo (rejeição) valia só para a versão
+   anterior das Rules.
    ----------------------------------------------------------------- */
 
 const REGEX_DATA = /^\d{4}-\d{2}-\d{2}$/;
