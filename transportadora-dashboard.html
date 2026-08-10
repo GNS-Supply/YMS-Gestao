@@ -110,7 +110,7 @@
       serverTimestamp,
       runTransaction
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-    import { buscarSlotsVirtuaisDoDia, idSlotHorario } from "./disponibilidade.js";
+    import { buscarSlotsVirtuaisDoDia, idSlotHorario } from "./patioCore.js";
 
     /* ===================================================================
        AUTENTICAÇÃO / PROTEÇÃO DE PÁGINA (duplicado de auth.js — apenas Tipo 1)
@@ -362,7 +362,7 @@
        2. CÁLCULO DOS HORÁRIOS DISPONÍVEIS NA DATA
        Não depende mais de vagas "geradas" previamente: qualquer data
        futura já é calculada a partir da Regra Padrão de Atendimento +
-       Exceções configuradas pela Logística/Admin (ver disponibilidade.js).
+       Exceções configuradas pela Logística/Admin (ver patioCore.js).
        =================================================================== */
     inputData?.addEventListener("change", async (e) => {
       const dataSelecionada = e.target.value;

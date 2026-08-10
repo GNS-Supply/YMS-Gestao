@@ -272,12 +272,11 @@
           <div style="display:flex; gap:15px; flex-wrap:wrap;">
             <div class="campo" style="flex:1; min-width:140px;">
               <label for="op-placa-cavalo">Placa Cavalo</label>
-              <input type="text" id="op-placa-cavalo" required maxlength="8" placeholder="AAA-0000 ou AAA0A00" style="text-transform:uppercase;" inputmode="text" autocomplete="off">
-              <small style="display:block; margin-top:4px; color:var(--texto-suave); font-size:0.78rem;">Formatos aceitos: AAA-0000 (antigo) ou AAA0A00 (Mercosul)</small>
+              <input type="text" id="op-placa-cavalo" required style="text-transform:uppercase;">
             </div>
             <div class="campo" style="flex:1; min-width:140px;">
               <label for="op-placa-carreta">Placa Carreta (opcional)</label>
-              <input type="text" id="op-placa-carreta" maxlength="8" placeholder="AAA-0000 ou AAA0A00" style="text-transform:uppercase;" inputmode="text" autocomplete="off">
+              <input type="text" id="op-placa-carreta" style="text-transform:uppercase;">
             </div>
           </div>
 
@@ -415,9 +414,12 @@
       serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
-    import { obterHorariosDisponiveis } from "./disponibilidade.js"; // agora exportada corretamente
-    import { criarAgendamentoOperacional } from "./agendamentoOperacional.js";
-    import { filtrarBookings, calcularKPIs } from "./kpiMetrics.js";
+    import {
+      obterHorariosDisponiveis,
+      criarAgendamentoOperacional,
+      filtrarBookings,
+      calcularKPIs
+    } from "./patioCore.js";
 
     let usuarioLogado = null;
     let mapProcessos = {};
@@ -425,56 +427,11 @@
     let todosBookingsGerais = [];
     let dataSelecionadaPainel = new Date().toISOString().split("T")[0];
 
-    /* ===================================================================
-       MÁSCARA DE PLACA (aceita AAA-0000 e AAA0A00 / Mercosul)
-       Mesma lógica usada em transportadora-dashboard.html — mantém o
-       padrão de digitação/validação em todas as telas que cadastram placas.
-       =================================================================== */
-    function aplicarMascaraPlaca(valorBruto) {
-      const brutoLimpo = (valorBruto || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-      let alfanumerico = "";
-
-      for (let i = 0; i < brutoLimpo.length && alfanumerico.length < 7; i++) {
-        const ch = brutoLimpo[i];
-        const pos = alfanumerico.length;
-
-        if (pos < 3) {
-          if (/[A-Z]/.test(ch)) alfanumerico += ch;
-        } else if (pos === 3) {
-          if (/[0-9]/.test(ch)) alfanumerico += ch;
-        } else if (pos === 4) {
-          if (/[A-Z0-9]/.test(ch)) alfanumerico += ch;
-        } else {
-          if (/[0-9]/.test(ch)) alfanumerico += ch;
-        }
-      }
-
-      // O 5º caractere (índice 4) define o formato: dígito = antigo (com traço), letra = Mercosul (sem traço)
-      if (alfanumerico.length >= 5 && /[0-9]/.test(alfanumerico[4])) {
-        return alfanumerico.slice(0, 3) + "-" + alfanumerico.slice(3);
-      }
-      return alfanumerico;
-    }
-
-    function placaCompleta(valorMascarado) {
-      return valorMascarado.replace("-", "").length === 7;
-    }
-
-    function configurarMascaraPlaca(inputEl) {
-      if (!inputEl) return;
-      inputEl.addEventListener("input", () => {
-        inputEl.value = aplicarMascaraPlaca(inputEl.value);
-      });
-    }
-
     // Proteção de acesso (Tipo 2 = Logística, 3 = Admin)
     protegerPagina([2, 3], async (user, dadosUser) => {
       usuarioLogado = { uid: user.uid, ...dadosUser };
       document.getElementById("user-nome").textContent = dadosUser.nome || user.email;
       document.getElementById("user-tipo").textContent = dadosUser.tipo === 3 ? "Administrador Master" : "Operador Logística";
-
-      configurarMascaraPlaca(document.getElementById("op-placa-cavalo"));
-      configurarMascaraPlaca(document.getElementById("op-placa-carreta"));
 
       const hojeIso = new Date().toISOString().split("T")[0];
       document.getElementById("picker-data-painel").value = hojeIso;
@@ -500,83 +457,6 @@
     });
 
     document.getElementById("btn-logout").addEventListener("click", () => signOut(auth));
-
-    /* ===================================================================
-       POPUP / MODAL CUSTOMIZADO (substitui alert() e confirm() nativos —
-       mesmo padrão visual usado em admin-dashboard.html, cadastro.html
-       e transportadora-dashboard.html)
-       =================================================================== */
-    function criarModalHost() {
-      if (document.getElementById("modal-overlay")) return;
-      const overlay = document.createElement("div");
-      overlay.id = "modal-overlay";
-      overlay.className = "modal-overlay";
-      overlay.innerHTML = `
-        <div class="modal-caixa" id="modal-caixa" role="alertdialog" aria-modal="true">
-          <div class="modal-icone" id="modal-icone"></div>
-          <div class="modal-titulo" id="modal-titulo"></div>
-          <div class="modal-mensagem" id="modal-mensagem"></div>
-          <div class="modal-botoes" id="modal-botoes"></div>
-        </div>`;
-      document.body.appendChild(overlay);
-    }
-    criarModalHost();
-
-    function mostrarAlerta(mensagem, opcoes = {}) {
-      const { titulo = "Aviso", tipo = "info" } = opcoes;
-      const icones = { sucesso: "✅", erro: "⚠️", info: "ℹ️" };
-      return new Promise((resolve) => {
-        const overlay = document.getElementById("modal-overlay");
-        const caixa = document.getElementById("modal-caixa");
-        caixa.className = `modal-caixa modal-${tipo}`;
-        document.getElementById("modal-icone").textContent = icones[tipo] || icones.info;
-        document.getElementById("modal-titulo").textContent = titulo;
-        document.getElementById("modal-mensagem").textContent = mensagem;
-        document.getElementById("modal-botoes").innerHTML =
-          `<button type="button" class="modal-btn-primario" id="modal-btn-ok">OK</button>`;
-        overlay.classList.add("aberto");
-
-        const btnOk = document.getElementById("modal-btn-ok");
-        function fechar() {
-          overlay.classList.remove("aberto");
-          btnOk.removeEventListener("click", fechar);
-          resolve();
-        }
-        btnOk.addEventListener("click", fechar);
-        btnOk.focus();
-      });
-    }
-
-    function mostrarConfirm(mensagem, opcoes = {}) {
-      const { titulo = "Confirmar ação", textoConfirmar = "Confirmar", textoCancelar = "Cancelar", perigo = false } = opcoes;
-      return new Promise((resolve) => {
-        const overlay = document.getElementById("modal-overlay");
-        const caixa = document.getElementById("modal-caixa");
-        caixa.className = "modal-caixa modal-pergunta";
-        document.getElementById("modal-icone").textContent = perigo ? "⚠️" : "❓";
-        document.getElementById("modal-titulo").textContent = titulo;
-        document.getElementById("modal-mensagem").textContent = mensagem;
-        document.getElementById("modal-botoes").innerHTML = `
-          <button type="button" class="modal-btn-secundario" id="modal-btn-cancelar">${textoCancelar}</button>
-          <button type="button" class="modal-btn-primario ${perigo ? "perigo" : ""}" id="modal-btn-confirmar">${textoConfirmar}</button>
-        `;
-        overlay.classList.add("aberto");
-
-        const btnConfirmar = document.getElementById("modal-btn-confirmar");
-        const btnCancelar = document.getElementById("modal-btn-cancelar");
-        function limpar(resultado) {
-          overlay.classList.remove("aberto");
-          btnConfirmar.removeEventListener("click", onConfirmar);
-          btnCancelar.removeEventListener("click", onCancelar);
-          resolve(resultado);
-        }
-        function onConfirmar() { limpar(true); }
-        function onCancelar() { limpar(false); }
-        btnConfirmar.addEventListener("click", onConfirmar);
-        btnCancelar.addEventListener("click", onCancelar);
-        btnCancelar.focus();
-      });
-    }
 
     /* ===================================================================
        GERENCIAMENTO DE ABAS
@@ -796,25 +676,6 @@
           ? inputExterna.value.trim() 
           : listaTransportadoras.find(t => t.id === usuarioId)?.empresa || "";
 
-        // Reaplica a máscara agora (não só no evento "input") para garantir que
-        // colar/autofill/preenchimento programático também fiquem padronizados
-        // antes de ir para o Firestore (sem espaços, traços extras, minúsculas etc.)
-        const inputPlacaCavalo = document.getElementById("op-placa-cavalo");
-        const inputPlacaCarreta = document.getElementById("op-placa-carreta");
-        const placaCavalo = aplicarMascaraPlaca(inputPlacaCavalo.value);
-        const placaCarreta = aplicarMascaraPlaca(inputPlacaCarreta.value);
-        inputPlacaCavalo.value = placaCavalo;
-        inputPlacaCarreta.value = placaCarreta;
-
-        if (!placaCompleta(placaCavalo)) {
-          alert("Placa do cavalo incompleta. Use o formato AAA-0000 ou AAA0A00.");
-          return;
-        }
-        if (placaCarreta && !placaCompleta(placaCarreta)) {
-          alert("Placa da carreta incompleta. Use o formato AAA-0000 ou AAA0A00.");
-          return;
-        }
-
         btnSalvar.disabled = true;
         btnSalvar.textContent = "Gravando...";
 
@@ -825,8 +686,8 @@
             dataAgendada: inputData.value,
             horaInicio: document.getElementById("op-horario").value,
             tipoProcessoId: document.getElementById("op-processo").value,
-            placaCavalo,
-            placaCarreta,
+            placaCavalo: document.getElementById("op-placa-cavalo").value.trim().toUpperCase(),
+            placaCarreta: document.getElementById("op-placa-carreta").value.trim().toUpperCase(),
             motorista: document.getElementById("op-motorista").value.trim(),
             observacoes: document.getElementById("op-observacoes").value.trim()
           });
