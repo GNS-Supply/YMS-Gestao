@@ -93,7 +93,7 @@
       deleteUser
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
     import {
-      doc, setDoc, getDocs, collection, query, limit, serverTimestamp
+      doc, setDoc, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
     // Mapa de redirecionamento por tipo de perfil (duplicado de index.html)
@@ -247,11 +247,19 @@
       }
 
       try {
-        // Se a coleção "users" ainda está vazia, este é o usuário fundador
-        // do sistema e vira Admin Master aprovado automaticamente.
-        const usersSnap = await getDocs(query(collection(db, "users"), limit(1)));
-        const ehPrimeiroUsuario = usersSnap.empty;
-
+        // NOTA IMPORTANTE: o "primeiro usuário vira Admin Master automaticamente"
+        // foi removido daqui de propósito. Ele fazia uma consulta
+        // (getDocs sobre a coleção "users") que as Firestore Rules atuais
+        // NEGAM para qualquer pessoa que não seja Logística/Admin/dona do
+        // próprio doc — ou seja, funcionava só na conta fundadora (quando a
+        // coleção estava vazia) e QUEBRAVA o cadastro de todo mundo depois
+        // disso com "Não foi possível concluir o cadastro" (o erro de
+        // permissão da consulta caía no catch e desfazia a conta criada).
+        //
+        // O Admin Master inicial deve ser criado manualmente (Console do
+        // Firebase > Authentication, criar o usuário, e depois Firestore >
+        // criar o documento em users/{uid} com tipo:3 e status:"aprovado" —
+        // ou via Admin SDK/Cloud Function, que não passa pelas Rules).
         const dadosBase = {
           nome,
           email,
@@ -259,14 +267,9 @@
           criadoEm: serverTimestamp()
         };
 
-        let dadosUser;
-        if (ehPrimeiroUsuario) {
-          dadosUser = { ...dadosBase, tipo: 3, status: "aprovado" };
-        } else if (vinculo === "interno") {
-          dadosUser = { ...dadosBase, tipo: null, status: "pendente_aprovacao" };
-        } else {
-          dadosUser = { ...dadosBase, tipo: 1, status: "aprovado", empresa, tipoVinculo };
-        }
+        const dadosUser = vinculo === "interno"
+          ? { ...dadosBase, tipo: null, status: "pendente_aprovacao" }
+          : { ...dadosBase, tipo: 1, status: "aprovado", empresa, tipoVinculo };
 
         await setDoc(doc(db, "users", cred.user.uid), dadosUser);
 
@@ -277,7 +280,7 @@
           return;
         }
 
-        // Aprovado (fundador ou externo) — já segue direto para a área correta
+        // Aprovado (empresa parceira) — já segue direto para a área correta
         window.location.href = ROTAS_POR_TIPO[dadosUser.tipo];
 
       } catch (err) {

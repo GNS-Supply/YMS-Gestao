@@ -23,7 +23,8 @@
   <div class="container">
 
     <div class="tabs">
-      <button class="tab-btn ativo" data-tab="solicitacoes">Solicitações Pendentes</button>
+      <button class="tab-btn ativo" data-tab="painel">Painel do Dia</button>
+      <button class="tab-btn" data-tab="solicitacoes">Solicitações Pendentes</button>
       <button class="tab-btn" data-tab="hoje">Agendamentos de Hoje</button>
       <button class="tab-btn" data-tab="todos">Todos os Agendamentos</button>
       <button class="tab-btn" data-tab="metricas">Métricas Operacionais</button>
@@ -32,7 +33,35 @@
       <button class="tab-btn" data-tab="processos">Tipos de Processo</button>
     </div>
 
-    <div class="tab-conteudo ativo" id="tab-solicitacoes">
+    <div class="tab-conteudo ativo" id="tab-painel">
+      <div class="card">
+        <h3>Painel do Dia — Visão do Pátio</h3>
+        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
+          Visão rápida de ocupação por horário: o que já está reservado e o que ainda tem vaga, hoje e nos próximos dias.
+        </p>
+
+        <div class="tira-dias" id="tira-dias"></div>
+
+        <div style="margin:16px 0; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <label for="painelDataEscolhida" style="font-size:0.85rem; font-weight:600;">Ou escolha outra data:</label>
+          <input type="date" id="painelDataEscolhida" style="padding:6px 10px; border:1px solid var(--cinza-borda); border-radius:6px;">
+          <span id="painel-data-titulo" style="margin-left:auto; font-weight:700; color:var(--azul-escuro);"></span>
+        </div>
+
+        <div class="legenda-ocupacao">
+          <span><i class="ponto ponto-livre"></i> Disponível</span>
+          <span><i class="ponto ponto-parcial"></i> Quase cheio</span>
+          <span><i class="ponto ponto-cheio"></i> Esgotado</span>
+          <span><i class="ponto ponto-fechado"></i> Fechado</span>
+        </div>
+
+        <div id="painel-linha-tempo" class="linha-tempo">
+          <div class="estado-vazio">Carregando...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-conteudo" id="tab-solicitacoes">
       <div class="card">
         <h3>Solicitações Aguardando Aprovação</h3>
         <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
@@ -96,6 +125,25 @@
         Nenhuma vaga precisa ser "gerada" no calendário. Toda data futura já fica automaticamente
         disponível seguindo a Regra Padrão de Atendimento abaixo, sujeita às Exceções configuradas.
         Use o Ajuste Manual apenas para tratar um dia específico fora do padrão.
+      </div>
+
+      <div class="card">
+        <h3>0. Limite de Segurança por Horário</h3>
+        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
+          Teto máximo de veículos/hora que o sistema aceita ao criar uma vaga automaticamente na
+          primeira reserva de um horário. Serve como trava de segurança contra valores absurdos —
+          não precisa ser igual à capacidade real das suas regras, só maior o suficiente para nunca
+          barrar um agendamento legítimo (ex: se sua maior Regra/Exceção usa 5 veículos/hora, deixe
+          uma folga e configure 10 ou 15 aqui).
+        </p>
+        <form id="form-limite-capacidade" style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+          <div class="campo" style="margin-bottom:0;">
+            <label for="limiteCapacidadeInput">Máximo de veículos/hora aceito</label>
+            <input type="number" id="limiteCapacidadeInput" min="1" max="100" style="max-width:140px;">
+          </div>
+          <button type="submit" class="btn-acao btn-salvar-usuario">Salvar Limite</button>
+        </form>
+        <div class="erro" id="limite-capacidade-error"></div>
       </div>
 
       <div class="card">
@@ -422,10 +470,12 @@
         unsubscribeHoje = null;
       }
 
+      if (tab === "painel") inicializarPainelDia();
       if (tab === "solicitacoes") carregarSolicitacoesPendentes();
       if (tab === "hoje") carregarAgendamentosHoje();
       if (tab === "todos") carregarTodosAgendamentos();
       if (tab === "slots") {
+        carregarLimiteCapacidade();
         carregarRegrasRecorrentes();
         carregarExcecoes();
       }
@@ -447,7 +497,7 @@
       if (tipoEl) tipoEl.textContent = perfil.tipo === 3 ? "Administrador" : "Logística";
 
       // Carrega a aba inicial por padrão
-      ativarAba("solicitacoes");
+      ativarAba("painel");
     });
 
     /* ===================================================================
@@ -763,6 +813,187 @@
     }
 
     /* ===================================================================
+       PAINEL DO DIA — Visão do Pátio (tira de dias + linha do tempo)
+
+       Objetivo: dar uma leitura visual rápida de ocupação por horário
+       (o que já está reservado x o que ainda tem vaga), tanto para hoje
+       quanto para os próximos dias, sem precisar abrir várias abas.
+       Reaproveita buscarSlotsVirtuaisDoDia (Regra + Exceção + Manual) e
+       cruza com os bookings do dia para listar quem está em cada horário.
+       =================================================================== */
+    let painelDataSelecionada = null;
+
+    function inicializarPainelDia() {
+      if (!painelDataSelecionada) painelDataSelecionada = dataDeHojeStr();
+      const inputData = document.getElementById("painelDataEscolhida");
+      if (inputData) inputData.value = painelDataSelecionada;
+      carregarTiraDias();
+      carregarLinhaTempoPainel(painelDataSelecionada);
+    }
+
+    document.getElementById("painelDataEscolhida")?.addEventListener("change", (e) => {
+      if (!e.target.value) return;
+      painelDataSelecionada = e.target.value;
+      atualizarSelecaoTiraDias();
+      carregarLinhaTempoPainel(painelDataSelecionada);
+    });
+
+    function proximosDiasStr(qtd) {
+      const dias = [];
+      const hoje = new Date();
+      for (let i = 0; i < qtd; i++) {
+        const d = new Date(hoje);
+        d.setDate(hoje.getDate() + i);
+        dias.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+      }
+      return dias;
+    }
+
+    function diaSemanaLocal(dataStr) {
+      const [ano, mes, dia] = dataStr.split("-").map(Number);
+      return new Date(ano, mes - 1, dia).getDay();
+    }
+
+    // Classifica o nível de ocupação para colorir chips/faixas (verde/laranja/vermelho/cinza)
+    function classificarNivel(ocupados, capacidade) {
+      if (!capacidade || capacidade <= 0) return "fechado";
+      if (ocupados >= capacidade) return "cheio";
+      if (ocupados / capacidade >= 0.7) return "parcial";
+      return "livre";
+    }
+
+    async function carregarTiraDias() {
+      const tira = document.getElementById("tira-dias");
+      if (!tira) return;
+      const dias = proximosDiasStr(7);
+
+      tira.innerHTML = dias.map(d => `
+        <button type="button" class="chip-dia" data-data="${d}">
+          <div class="chip-dia-semana">${NOMES_DIAS[diaSemanaLocal(d)]}</div>
+          <div class="chip-dia-numero">${d.split("-")[2]}</div>
+          <div class="chip-dia-badge nivel-vazio" id="badge-dia-${d}">···</div>
+        </button>
+      `).join("");
+
+      atualizarSelecaoTiraDias();
+
+      tira.querySelectorAll(".chip-dia").forEach(chip => {
+        chip.addEventListener("click", () => {
+          painelDataSelecionada = chip.dataset.data;
+          const inputData = document.getElementById("painelDataEscolhida");
+          if (inputData) inputData.value = painelDataSelecionada;
+          atualizarSelecaoTiraDias();
+          carregarLinhaTempoPainel(painelDataSelecionada);
+        });
+      });
+
+      // Ocupação de cada chip é calculada em paralelo (não bloqueia a lista principal)
+      dias.forEach(async (d) => {
+        try {
+          const slots = await buscarSlotsVirtuaisDoDia(db, d, { incluirFechados: false });
+          const badge = document.getElementById(`badge-dia-${d}`);
+          if (!badge) return;
+          if (slots.length === 0) {
+            badge.textContent = "Fechado";
+            badge.className = "chip-dia-badge nivel-vazio";
+            return;
+          }
+          const capacidade = slots.reduce((s, x) => s + x.capacidadeMax, 0);
+          const ocupados = slots.reduce((s, x) => s + x.ocupados, 0);
+          const taxa = capacidade > 0 ? ocupados / capacidade : 0;
+          badge.textContent = `${Math.round(taxa * 100)}%`;
+          badge.className = `chip-dia-badge nivel-${classificarNivel(ocupados, capacidade)}`;
+        } catch (err) {
+          console.error("Erro ao calcular ocupação do dia", d, err);
+        }
+      });
+    }
+
+    function atualizarSelecaoTiraDias() {
+      document.querySelectorAll(".chip-dia").forEach(chip => {
+        chip.classList.toggle("selecionado", chip.dataset.data === painelDataSelecionada);
+      });
+    }
+
+    function formatarDataLonga(dataStr) {
+      const [ano, mes, dia] = dataStr.split("-");
+      return `${NOMES_DIAS[diaSemanaLocal(dataStr)]}, ${dia}/${mes}/${ano}`;
+    }
+
+    async function carregarLinhaTempoPainel(dataStr) {
+      const container = document.getElementById("painel-linha-tempo");
+      const titulo = document.getElementById("painel-data-titulo");
+      if (!container) return;
+
+      if (titulo) titulo.textContent = formatarDataLonga(dataStr);
+      container.innerHTML = '<div class="estado-vazio">Carregando horários...</div>';
+
+      try {
+        const [slots, snapBookings] = await Promise.all([
+          buscarSlotsVirtuaisDoDia(db, dataStr, { incluirFechados: true }),
+          getDocs(query(collection(db, "bookings"), where("dataAgendada", "==", dataStr)))
+        ]);
+
+        // Recusado/Cancelado já liberaram a vaga (ver alterarStatusAgendamento),
+        // então não entram na lista — Expirado ainda ocupa, então continua aparecendo.
+        const bookingsPorHora = {};
+        snapBookings.docs.forEach(d => {
+          const b = d.data();
+          if (b.status === "Recusado" || b.status === "Cancelado") return;
+          const hora = b.horaInicio || "-";
+          if (!bookingsPorHora[hora]) bookingsPorHora[hora] = [];
+          bookingsPorHora[hora].push(b);
+        });
+
+        if (slots.length === 0) {
+          container.innerHTML = '<div class="estado-vazio">Pátio fechado nesta data (sem Regra Padrão nem Exceção configurada para este dia da semana).</div>';
+          return;
+        }
+
+        container.innerHTML = "";
+        slots.forEach(s => {
+          const reservas = bookingsPorHora[s.horaInicio] || [];
+          const nivel = s.fechado ? "fechado" : classificarNivel(s.ocupados, s.capacidadeMax);
+          const taxa = s.capacidadeMax > 0 ? Math.min(100, (s.ocupados / s.capacidadeMax) * 100) : 0;
+          const vagasLivres = Math.max(0, s.capacidadeMax - s.ocupados);
+
+          const faixa = document.createElement("div");
+          faixa.className = `faixa-horario nivel-${nivel}`;
+          faixa.innerHTML = `
+            <button type="button" class="faixa-horario-cabecalho">
+              <span class="faixa-horario-hora">${escapeHtml(s.horaInicio)}–${escapeHtml(s.horaFim)}</span>
+              <span class="faixa-horario-barra"><span class="faixa-horario-barra-preenchida" style="width:${taxa}%;"></span></span>
+              <span class="faixa-horario-contagem">${s.fechado ? "Fechado" : `${s.ocupados}/${s.capacidadeMax}`}</span>
+              <span class="faixa-horario-seta">▶</span>
+            </button>
+            <div class="faixa-horario-corpo">
+              ${s.fechado
+                ? "Horário fechado manualmente para esta data."
+                : (reservas.length
+                    ? reservas.map(b => `
+                        <div class="reserva-mini">
+                          <strong>${escapeHtml(b.empresa || "-")}</strong> — ${escapeHtml(b.placaCavalo || "-")}${b.placaCarreta ? " / " + escapeHtml(b.placaCarreta) : ""}<br>
+                          Motorista: ${escapeHtml(b.motorista || "-")}
+                          <span class="badge ${classeStatus(b.status)}" style="margin-left:6px;">${escapeHtml(b.status)}</span>
+                        </div>
+                      `).join("")
+                    : `${vagasLivres} vaga(s) livre(s) — nenhuma reserva neste horário ainda.`)
+              }
+            </div>
+          `;
+          faixa.querySelector(".faixa-horario-cabecalho").addEventListener("click", () => {
+            faixa.classList.toggle("aberta");
+          });
+          container.appendChild(faixa);
+        });
+
+      } catch (err) {
+        console.error("Erro ao carregar painel do dia:", err);
+        container.innerHTML = `<div class="estado-vazio">Erro ao carregar o painel.<br><span style="font-size:0.78rem;">${formatarErroFirestore(err.message)}</span></div>`;
+      }
+    }
+
+    /* ===================================================================
        4. ABA: MÉTRICAS OPERACIONAIS
 
        Indicadores calculados a partir de dados já existentes no período
@@ -964,6 +1195,58 @@
 
       resultado.innerHTML = `<div class="lista-agendamentos">${cartaoOcupacao}${cartaoEmpresas}${cartaoPermanencia}</div>`;
     }
+
+    /* ===================================================================
+       0. LIMITE DE SEGURANÇA POR HORÁRIO (config/capacidadeGlobal)
+
+       Teto de veículos/hora que as Rules aceitam quando uma Transportadora
+       cria uma vaga automaticamente (primeira reserva de um horário).
+       Não substitui a Regra Padrão/Exceções — é só uma trava contra
+       valores absurdos vindos de um cliente adulterado.
+       =================================================================== */
+    const LIMITE_CAPACIDADE_PADRAO = 10; // mesmo fallback usado nas Firestore Rules se o doc não existir
+
+    async function carregarLimiteCapacidade() {
+      const input = document.getElementById("limiteCapacidadeInput");
+      const erroBox = document.getElementById("limite-capacidade-error");
+      if (!input) return;
+      erroBox.textContent = "";
+
+      try {
+        const snap = await getDoc(doc(db, "config", "capacidadeGlobal"));
+        input.value = snap.exists() ? snap.data().maximoPorHora : LIMITE_CAPACIDADE_PADRAO;
+      } catch (err) {
+        console.error("Erro ao carregar limite de capacidade:", err);
+        erroBox.innerHTML = formatarErroFirestore(err.message) || "Erro ao carregar o limite atual.";
+      }
+    }
+
+    document.getElementById("form-limite-capacidade")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = document.getElementById("limiteCapacidadeInput");
+      const erroBox = document.getElementById("limite-capacidade-error");
+      erroBox.textContent = "";
+
+      const valor = Number(input.value);
+      if (!valor || valor < 1 || valor > 100) {
+        erroBox.textContent = "Informe um valor entre 1 e 100.";
+        return;
+      }
+
+      const btn = e.target.querySelector("button[type=submit]");
+      btn.disabled = true;
+      btn.textContent = "Salvando...";
+      try {
+        await setDoc(doc(db, "config", "capacidadeGlobal"), { maximoPorHora: valor });
+        await mostrarAlerta("Limite de segurança atualizado!", { titulo: "Limite atualizado", tipo: "sucesso" });
+      } catch (err) {
+        console.error("Erro ao salvar limite de capacidade:", err);
+        erroBox.innerHTML = formatarErroFirestore(err.message) || "Erro ao salvar o limite.";
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Salvar Limite";
+      }
+    });
 
     /* ===================================================================
        GESTÃO DE HORÁRIOS E VAGAS

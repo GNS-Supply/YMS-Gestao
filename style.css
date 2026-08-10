@@ -664,3 +664,145 @@ button, .btn-primario, .btn-acao, .tab-btn, .topbar button, .slot-opcao, .btn-sl
 @media (max-width: 400px) {
   .btn-slot, .slot-opcao { flex: 1 1 100%; }
 }
+
+/* =====================================================================
+   PAINEL DO DIA — Visão visual de ocupação (tira de dias + linha do tempo)
+   ===================================================================== */
+
+/* ---------- Tira de dias (próximos 7 dias) ---------- */
+.tira-dias {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+  scroll-snap-type: x proximity;
+}
+
+.chip-dia {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  min-width: 76px;
+  border: 2px solid var(--cinza-borda);
+  border-radius: 12px;
+  background: var(--branco);
+  padding: 10px 6px;
+  text-align: center;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color .15s, transform .05s;
+}
+.chip-dia:active { transform: scale(0.97); }
+.chip-dia.selecionado { border-color: var(--azul); box-shadow: 0 0 0 2px rgba(26,95,158,0.15); }
+
+.chip-dia .chip-dia-semana {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+  letter-spacing: .03em;
+}
+.chip-dia .chip-dia-numero { font-size: 1.15rem; font-weight: 700; color: var(--texto); margin: 2px 0; }
+.chip-dia .chip-dia-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+  margin-top: 2px;
+}
+.chip-dia .chip-dia-badge.nivel-livre { background: #e6f7ed; color: var(--verde); }
+.chip-dia .chip-dia-badge.nivel-parcial { background: #fff3e0; color: var(--laranja); }
+.chip-dia .chip-dia-badge.nivel-cheio { background: #fdeaea; color: var(--vermelho); }
+.chip-dia .chip-dia-badge.nivel-vazio { background: var(--cinza-bg); color: var(--texto-suave); }
+
+/* ---------- Legenda ---------- */
+.legenda-ocupacao {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 0.78rem;
+  color: var(--texto-suave);
+  margin-bottom: 14px;
+}
+.legenda-ocupacao .ponto {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+.ponto-livre { background: var(--verde); }
+.ponto-parcial { background: var(--laranja); }
+.ponto-cheio { background: var(--vermelho); }
+.ponto-fechado { background: #b8c0c9; }
+
+/* ---------- Linha do tempo por horário ---------- */
+.linha-tempo { display: flex; flex-direction: column; gap: 8px; }
+
+.faixa-horario {
+  border: 1px solid var(--cinza-borda);
+  border-left: 5px solid var(--cinza-borda);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--branco);
+}
+.faixa-horario.nivel-livre { border-left-color: var(--verde); }
+.faixa-horario.nivel-parcial { border-left-color: var(--laranja); }
+.faixa-horario.nivel-cheio { border-left-color: var(--vermelho); }
+.faixa-horario.nivel-fechado { border-left-color: #b8c0c9; opacity: .7; }
+
+.faixa-horario-cabecalho {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  touch-action: manipulation;
+}
+
+.faixa-horario-hora { font-weight: 700; font-size: 0.92rem; min-width: 92px; }
+
+.faixa-horario-barra {
+  flex: 1;
+  height: 10px;
+  background: var(--cinza-bg);
+  border-radius: 6px;
+  overflow: hidden;
+  min-width: 60px;
+}
+.faixa-horario-barra-preenchida { height: 100%; border-radius: 6px; transition: width .2s; }
+.nivel-livre .faixa-horario-barra-preenchida { background: var(--verde); }
+.nivel-parcial .faixa-horario-barra-preenchida { background: var(--laranja); }
+.nivel-cheio .faixa-horario-barra-preenchida { background: var(--vermelho); }
+.nivel-fechado .faixa-horario-barra-preenchida { background: #b8c0c9; }
+
+.faixa-horario-contagem { font-size: 0.82rem; font-weight: 600; color: var(--texto-suave); min-width: 54px; text-align: right; white-space: nowrap; }
+.faixa-horario-seta { font-size: 0.75rem; color: var(--texto-suave); transition: transform .15s; }
+.faixa-horario.aberta .faixa-horario-seta { transform: rotate(90deg); }
+
+.faixa-horario-corpo { display: none; padding: 0 14px 14px; border-top: 1px solid var(--cinza-borda); }
+.faixa-horario.aberta .faixa-horario-corpo { display: block; padding-top: 12px; }
+
+.reserva-mini {
+  padding: 8px 10px;
+  border: 1px solid var(--cinza-borda);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.reserva-mini:last-child { margin-bottom: 0; }
+.reserva-mini strong { color: var(--texto); }
+
+@media (max-width: 640px) {
+  .chip-dia { min-width: 64px; padding: 8px 4px; }
+  .faixa-horario-hora { min-width: 70px; font-size: 0.85rem; }
+  .faixa-horario-contagem { min-width: 44px; font-size: 0.78rem; }
+}
