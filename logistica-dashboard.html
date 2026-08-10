@@ -26,37 +26,31 @@
       <button class="tab-btn ativo" data-tab="painel">Painel do Dia</button>
       <button class="tab-btn" data-tab="solicitacoes">Solicitações Pendentes</button>
       <button class="tab-btn" data-tab="hoje">Agendamentos de Hoje</button>
+      <button class="tab-btn" data-tab="novo-operacional">➕ Novo Agendamento</button>
       <button class="tab-btn" data-tab="todos">Todos os Agendamentos</button>
-      <button class="tab-btn" data-tab="metricas">Métricas Operacionais</button>
-      <button class="tab-btn" data-tab="slots">Gestão de Horários e Vagas</button>
-      <button class="tab-btn" data-tab="usuarios">Aprovação de Usuários</button>
-      <button class="tab-btn" data-tab="processos">Tipos de Processo</button>
+      <button class="tab-btn" data-tab="vagas">Gestão de Vagas</button>
     </div>
 
     <div class="tab-conteudo ativo" id="tab-painel">
       <div class="card">
-        <h3>Painel do Dia — Visão do Pátio</h3>
-        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
-          Visão rápida de ocupação por horário: o que já está reservado e o que ainda tem vaga, hoje e nos próximos dias.
+        <h3>Resumo Operacional de Hoje</h3>
+        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:12px;">
+          Visão rápida dos agendamentos confirmados e ocupação do pátio para a data de hoje.
         </p>
 
-        <div class="tira-dias" id="tira-dias"></div>
-
-        <div style="margin:16px 0; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <label for="painelDataEscolhida" style="font-size:0.85rem; font-weight:600;">Ou escolha outra data:</label>
-          <input type="date" id="painelDataEscolhida" style="padding:6px 10px; border:1px solid var(--cinza-borda); border-radius:6px;">
-          <span id="painel-data-titulo" style="margin-left:auto; font-weight:700; color:var(--azul-escuro);"></span>
-        </div>
-
-        <div class="legenda-ocupacao">
-          <span><i class="ponto ponto-livre"></i> Disponível</span>
-          <span><i class="ponto ponto-parcial"></i> Quase cheio</span>
-          <span><i class="ponto ponto-cheio"></i> Esgotado</span>
-          <span><i class="ponto ponto-fechado"></i> Fechado</span>
-        </div>
-
-        <div id="painel-linha-tempo" class="linha-tempo">
-          <div class="estado-vazio">Carregando...</div>
+        <div class="grade-cards-resumo" id="cards-resumo-painel">
+          <div class="card-kpi">
+            <div class="valor" id="kpi-total-hoje">--</div>
+            <div class="rotulo">Total Agendado Hoje</div>
+          </div>
+          <div class="card-kpi">
+            <div class="valor" id="kpi-aprovados-hoje">--</div>
+            <div class="rotulo">Confirmados</div>
+          </div>
+          <div class="card-kpi">
+            <div class="valor" id="kpi-pendentes-hoje">--</div>
+            <div class="rotulo">Aguardando Aprovação</div>
+          </div>
         </div>
       </div>
     </div>
@@ -64,248 +58,203 @@
     <div class="tab-conteudo" id="tab-solicitacoes">
       <div class="card">
         <h3>Solicitações Aguardando Aprovação</h3>
-        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
-          Análise e aprovação de novos agendamentos submetidos pelas transportadoras.
+        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:12px;">
+          Aprove ou recuse os pedidos enviados pelas transportadoras.
         </p>
-        <div id="lista-solicitacoes" class="lista-agendamentos">
-          <div class="estado-vazio">Carregando solicitações...</div>
+
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Data / Horário</th>
+                <th>Transportadora</th>
+                <th>Processo</th>
+                <th>Veículo / Motorista</th>
+                <th>Solicitado em</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-solicitacoes">
+              <tr><td colspan="6" style="text-align:center;">Carregando solicitações...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
 
     <div class="tab-conteudo" id="tab-hoje">
       <div class="card">
-        <h3>Agendamentos de Hoje (Tempo Real)</h3>
-        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
-          Acompanhamento das entradas e operações agendadas para a data atual.
-        </p>
-        <div id="lista-hoje" class="lista-agendamentos">
-          <div class="estado-vazio">Carregando agendamentos do dia...</div>
+        <h3>Programação do Dia</h3>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Horário</th>
+                <th>Transportadora</th>
+                <th>Processo</th>
+                <th>Placas</th>
+                <th>Motorista</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-hoje">
+              <tr><td colspan="7" style="text-align:center;">Carregando agendamentos...</td></tr>
+            </tbody>
+          </table>
         </div>
+      </div>
+    </div>
+
+    <div class="tab-conteudo" id="tab-novo-operacional">
+      <div class="card">
+        <h3>Novo Agendamento Operacional Direto</h3>
+        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
+          Crie um agendamento direto para atender emergências ou encaixes. Este agendamento nascerá automaticamente como <strong>Aprovado</strong>.
+        </p>
+
+        <form id="form-novo-operacional">
+          <div class="campo">
+            <label for="op-transportadora-select">Transportadora Parceira</label>
+            <select id="op-transportadora-select" required>
+              <option value="">Carregando transportadoras...</option>
+            </select>
+          </div>
+
+          <div class="campo" id="wrap-op-empresa-externa" style="display:none;">
+            <label for="op-empresa-externa">Nome da Empresa / Parceiro Externo</label>
+            <input type="text" id="op-empresa-externa" placeholder="Ex: Transportes Silva LTDA">
+          </div>
+
+          <div class="campo-duplo">
+            <div class="campo">
+              <label for="op-data">Data da Carga/Descarga</label>
+              <input type="date" id="op-data" required>
+            </div>
+            <div class="campo">
+              <label for="op-horario">Horário / Janela Disponível</label>
+              <select id="op-horario" required disabled>
+                <option value="">Selecione primeiro a data...</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="campo">
+            <label for="op-processo">Tipo de Processo</label>
+            <select id="op-processo" required>
+              <option value="">Selecione o tipo de processo...</option>
+            </select>
+          </div>
+
+          <div class="campo-duplo">
+            <div class="campo">
+              <label for="op-placa-cavalo">Placa do Cavalo</label>
+              <input type="text" id="op-placa-cavalo" placeholder="ABC-1234 ou ABC1D23" required style="text-transform:uppercase;">
+            </div>
+            <div class="campo">
+              <label for="op-placa-carreta">Placa da Carreta (opcional)</label>
+              <input type="text" id="op-placa-carreta" placeholder="XYZ-5678" style="text-transform:uppercase;">
+            </div>
+          </div>
+
+          <div class="campo">
+            <label for="op-motorista">Nome do Motorista</label>
+            <input type="text" id="op-motorista" placeholder="Nome completo do condutor" required>
+          </div>
+
+          <div class="campo">
+            <label for="op-observacoes">Observações Operacionais (opcional)</label>
+            <textarea id="op-observacoes" rows="2" placeholder="Ex: Carga frágil, encaixe autorizado por telefone..."></textarea>
+          </div>
+
+          <button type="submit" id="btn-salvar-operacional" class="btn-primario" style="margin-top:12px;">Salvar Agendamento Direto</button>
+        </form>
       </div>
     </div>
 
     <div class="tab-conteudo" id="tab-todos">
       <div class="card">
-        <h3>Consulta Geral de Agendamentos</h3>
-        <div style="margin-bottom: 16px; display:flex; gap:12px; align-items:center;">
-          <label for="filtroDataGeral" style="font-size:0.85rem; font-weight:600;">Filtrar por Data:</label>
-          <input type="date" id="filtroDataGeral" style="padding:6px 10px; border:1px solid var(--cinza-borda); border-radius:6px;">
+        <h3>Histórico Geral de Agendamentos</h3>
+        
+        <div style="display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
+          <div style="flex:1; min-width:180px;">
+            <label for="filtro-data-inicio" style="font-size:0.8rem; font-weight:600;">Data Início</label>
+            <input type="date" id="filtro-data-inicio">
+          </div>
+          <div style="flex:1; min-width:180px;">
+            <label for="filtro-data-fim" style="font-size:0.8rem; font-weight:600;">Data Fim</label>
+            <input type="date" id="filtro-data-fim">
+          </div>
+          <div style="flex:1; min-width:180px;">
+            <label for="filtro-status" style="font-size:0.8rem; font-weight:600;">Status</label>
+            <select id="filtro-status">
+              <option value="">Todos</option>
+              <option value="Pendente">Pendente</option>
+              <option value="Aprovado">Aprovado</option>
+              <option value="Recusado">Recusado</option>
+              <option value="Expirado">Expirado</option>
+              <option value="Cancelado">Cancelado</option>
+            </select>
+          </div>
+          <div style="align-self:flex-end;">
+            <button id="btn-filtrar-todos" class="btn-secundario">Filtrar</button>
+          </div>
         </div>
-        <div id="lista-todos" class="lista-agendamentos">
-          <div class="estado-vazio">Selecione uma data para filtrar.</div>
-        </div>
-        <div style="margin-top:16px; display:flex; justify-content:center;">
-          <button type="button" id="btn-carregar-mais-todos" class="btn-acao btn-desativar" style="display:none;">Carregar mais</button>
+
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Data / Horário</th>
+                <th>Transportadora</th>
+                <th>Processo</th>
+                <th>Placas</th>
+                <th>Motorista</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-todos">
+              <tr><td colspan="7" style="text-align:center;">Selecione o período para buscar...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
 
-    <div class="tab-conteudo" id="tab-metricas">
+    <div class="tab-conteudo" id="tab-vagas">
       <div class="card">
-        <h3>Métricas Operacionais</h3>
+        <h3>Configuração Manual de Capacidadede Pátio</h3>
         <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
-          Indicadores calculados a partir dos agendamentos e vagas no período selecionado.
-        </p>
-        <div style="margin-bottom: 16px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-          <label for="metricasDataInicio" style="font-size:0.85rem; font-weight:600;">De:</label>
-          <input type="date" id="metricasDataInicio" style="padding:6px 10px; border:1px solid var(--cinza-borda); border-radius:6px;">
-          <label for="metricasDataFim" style="font-size:0.85rem; font-weight:600;">Até:</label>
-          <input type="date" id="metricasDataFim" style="padding:6px 10px; border:1px solid var(--cinza-borda); border-radius:6px;">
-          <button type="button" id="btn-calcular-metricas" class="btn-acao btn-salvar-usuario">Calcular</button>
-        </div>
-        <div id="metricas-erro" class="erro"></div>
-        <div id="metricas-resultado"></div>
-      </div>
-    </div>
-
-    <div class="tab-conteudo" id="tab-slots">
-
-      <div class="aviso-suporte">
-        Nenhuma vaga precisa ser "gerada" no calendário. Toda data futura já fica automaticamente
-        disponível seguindo a Regra Padrão de Atendimento abaixo, sujeita às Exceções configuradas.
-        Use o Ajuste Manual apenas para tratar um dia específico fora do padrão.
-      </div>
-
-      <div class="card">
-        <h3>0. Limite de Segurança por Horário</h3>
-        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
-          Teto máximo de veículos/hora que o sistema aceita ao criar uma vaga automaticamente na
-          primeira reserva de um horário. Serve como trava de segurança contra valores absurdos —
-          não precisa ser igual à capacidade real das suas regras, só maior o suficiente para nunca
-          barrar um agendamento legítimo (ex: se sua maior Regra/Exceção usa 5 veículos/hora, deixe
-          uma folga e configure 10 ou 15 aqui).
-        </p>
-        <form id="form-limite-capacidade" style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
-          <div class="campo" style="margin-bottom:0;">
-            <label for="limiteCapacidadeInput">Máximo de veículos/hora aceito</label>
-            <input type="number" id="limiteCapacidadeInput" min="1" max="100" style="max-width:140px;">
-          </div>
-          <button type="submit" class="btn-acao btn-salvar-usuario">Salvar Limite</button>
-        </form>
-        <div class="erro" id="limite-capacidade-error"></div>
-      </div>
-
-      <div class="card">
-        <h3>1. Regra Padrão de Atendimento (Recorrente)</h3>
-        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
-          Define o horário de funcionamento do pátio por dia da semana e a capacidade padrão
-          (ex: Seg a Sex, 06:00 às 00:00, 2 veículos/h). Vale para qualquer data futura, sem limite,
-          automaticamente — não é necessário gerar nada no calendário.
+          Ajuste manualmente o número máximo de caminhões aceitos por horário para uma data específica.
         </p>
 
-        <form id="form-regra-slot">
-          <div style="margin-bottom:12px;">
-            <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:6px;">Dias da Semana Aplicáveis:</label>
-            <div style="display:flex; flex-wrap:wrap; gap:12px; font-size:0.85rem;">
-              <label><input type="checkbox" name="diasSemana" value="1" checked> Seg</label>
-              <label><input type="checkbox" name="diasSemana" value="2" checked> Ter</label>
-              <label><input type="checkbox" name="diasSemana" value="3" checked> Quar</label>
-              <label><input type="checkbox" name="diasSemana" value="4" checked> Qui</label>
-              <label><input type="checkbox" name="diasSemana" value="5" checked> Sex</label>
-              <label><input type="checkbox" name="diasSemana" value="6"> Sáb</label>
-              <label><input type="checkbox" name="diasSemana" value="0"> Dom</label>
-            </div>
-          </div>
-
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;">
-            <div class="campo">
-              <label for="regraHoraInicio">Horário Início</label>
-              <input type="time" id="regraHoraInicio" value="06:00" required>
-            </div>
-            <div class="campo">
-              <label for="regraHoraFim">Horário Fim</label>
-              <input type="time" id="regraHoraFim" value="00:00" required>
-            </div>
-            <div class="campo">
-              <label for="regraCapacidade">Veículos por Hora</label>
-              <input type="number" id="regraCapacidade" min="1" value="2" required>
-            </div>
-          </div>
-
-          <button type="submit" class="btn-primario" style="margin-top:12px; max-width:260px;">Salvar Regra Recorrente</button>
-          <div class="erro" id="regra-error"></div>
-        </form>
-
-        <h4 style="margin-top:24px; margin-bottom:8px;">Regras Recorrentes Ativas</h4>
-        <div id="lista-regras" class="lista-agendamentos">
-          <div class="estado-vazio">Carregando regras...</div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>2. Exceções à Regra Padrão</h3>
-        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
-          Use para bloquear um período recorrente (ex: Domingo sem atendimento) ou reduzir a
-          capacidade em um intervalo específico (ex: Seg a Sex das 11:00 às 14:00, limite de
-          1 veículo/hora para o almoço). Exceções têm prioridade sobre a Regra Padrão acima,
-          para qualquer data futura que caia naquele dia da semana/horário.
-        </p>
-
-        <form id="form-excecao-slot">
-          <div style="margin-bottom:12px;">
-            <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:6px;">Dias da Semana Aplicáveis:</label>
-            <div style="display:flex; flex-wrap:wrap; gap:12px; font-size:0.85rem;">
-              <label><input type="checkbox" name="excDiasSemana" value="1"> Seg</label>
-              <label><input type="checkbox" name="excDiasSemana" value="2"> Ter</label>
-              <label><input type="checkbox" name="excDiasSemana" value="3"> Quar</label>
-              <label><input type="checkbox" name="excDiasSemana" value="4"> Qui</label>
-              <label><input type="checkbox" name="excDiasSemana" value="5"> Sex</label>
-              <label><input type="checkbox" name="excDiasSemana" value="6"> Sáb</label>
-              <label><input type="checkbox" name="excDiasSemana" value="0" checked> Dom</label>
-            </div>
-          </div>
-
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;">
-            <div class="campo">
-              <label for="excHoraInicio">Horário Início</label>
-              <input type="time" id="excHoraInicio" value="00:00" required>
-            </div>
-            <div class="campo">
-              <label for="excHoraFim">Horário Fim</label>
-              <input type="time" id="excHoraFim" value="23:59" required>
-            </div>
-            <div class="campo">
-              <label for="excCapacidade">Veículos por Hora (0 = sem atendimento)</label>
-              <input type="number" id="excCapacidade" min="0" value="0" required>
-            </div>
-          </div>
-
-          <button type="submit" class="btn-primario" style="margin-top:12px; max-width:280px;">Salvar Exceção</button>
-          <div class="erro" id="excecao-error"></div>
-        </form>
-
-        <h4 style="margin-top:24px; margin-bottom:8px;">Exceções Cadastradas</h4>
-        <div id="lista-excecoes" class="lista-agendamentos">
-          <div class="estado-vazio">Carregando exceções...</div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>3. Ajuste Manual por Data (Exceção Pontual)</h3>
-        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:12px;">
-          Consulte os horários já calculados (regra + exceções) para um dia específico. Aqui você
-          pode fechar, reabrir, mudar a capacidade só daquele dia, ou adicionar um horário extra
-          que não segue o padrão — sem afetar nenhuma outra data.
-        </p>
-
-        <div style="margin-bottom: 16px; display:flex; gap:10px; align-items:center;">
-          <label for="filtroDataSlot" style="font-size:0.85rem; font-weight:600;">Data do Ajuste:</label>
-          <input type="date" id="filtroDataSlot" style="padding:6px 10px; border:1px solid var(--cinza-borda); border-radius:6px;">
-        </div>
-
-        <div id="lista-slots" class="lista-agendamentos">
-          <div class="estado-vazio">Selecione uma data para alterar.</div>
-        </div>
-
-        <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--cinza-borda);">
-          <h4 style="margin-bottom:10px; font-size:0.9rem;">Adicionar/Forçar Horário Específico Nesta Data</h4>
-          <form id="form-slot-manual" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
-            <div class="campo" style="margin-bottom:0;">
-              <label for="manualHoraInicio">Hora Início</label>
-              <input type="time" id="manualHoraInicio" required>
-            </div>
-            <div class="campo" style="margin-bottom:0;">
-              <label for="manualCapacidade">Capacidade</label>
-              <input type="number" id="manualCapacidade" min="1" value="1" required>
-            </div>
-            <button type="submit" class="btn-acao btn-aprovar">Adicionar</button>
-          </form>
-          <div class="erro" id="slot-manual-error"></div>
-        </div>
-      </div>
-
-    </div>
-
-    <div class="tab-conteudo" id="tab-usuarios">
-      <div class="card">
-        <h3>Colaboradores Aguardando Aprovação</h3>
-        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
-          Defina o perfil de acesso (Logística ou Administrador) para liberar o primeiro acesso do colaborador interno, ou recuse o cadastro.
-        </p>
-        <div id="lista-pendentes-usuarios" class="lista-agendamentos">
-          <div class="estado-vazio">Carregando solicitações...</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="tab-conteudo" id="tab-processos">
-      <div class="card">
-        <h3>Novo Tipo de Processo</h3>
-        <form id="form-processo" style="margin-top:16px;">
+        <div class="campo-duplo" style="margin-bottom:16px;">
           <div class="campo">
-            <label for="nomeProcesso">Nome do Processo</label>
-            <input type="text" id="nomeProcesso" placeholder="Ex: Carga Geral, Descarga Seca, Container..." required>
+            <label for="vagas-data">Selecione a Data</label>
+            <input type="date" id="vagas-data">
           </div>
-          <button type="submit" class="btn-primario" style="max-width:200px;">Cadastrar Processo</button>
-          <div class="erro" id="processo-error"></div>
-        </form>
-      </div>
+          <div class="campo" style="align-self:flex-end;">
+            <button id="btn-carregar-vagas" class="btn-secundario">Carregar Horários</button>
+          </div>
+        </div>
 
-      <div class="card">
-        <h3>Processos Configurados</h3>
-        <div id="lista-processos" class="lista-agendamentos" style="margin-top:16px;">
-          <div class="estado-vazio">Carregando processos...</div>
+        <div id="container-vagas-grid" style="display:none;">
+          <div style="overflow-x:auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Horário Janela</th>
+                  <th>Capacidade Máxima</th>
+                  <th>Ocupados Atual</th>
+                  <th>Status Horário</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-vagas">
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -314,1820 +263,510 @@
 
   <script type="module">
     import { auth, db } from "./firebase-config.js";
-    import {
-      onAuthStateChanged,
-      signOut
-    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import { protegerPagina } from "./auth.js";
     import {
       collection,
       doc,
-      getDocs,
       getDoc,
-      addDoc,
-      updateDoc,
-      deleteDoc,
-      setDoc,
+      getDocs,
       query,
       where,
       orderBy,
-      limit,
-      startAfter,
-      serverTimestamp,
-      onSnapshot,
-      runTransaction
+      updateDoc,
+      addDoc,
+      serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-    import {
-      buscarSlotsVirtuaisDoDia,
-      idSlotHorario,
-      horaParaMinutos,
-      minutosParaHora
-    } from "./disponibilidade.js";
+    import { signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import { mostrarAlerta, mostrarConfirmacao } from "./modais.js";
+    import { obterHorariosDisponiveis } from "./disponibilidade.js";
+    import { criarAgendamentoOperacional } from "./agendamentoOperacional.js";
 
-    /* ===================================================================
-       AUTENTICAÇÃO / PROTEÇÃO DE PÁGINA (duplicado de auth.js — Logística e Admin)
-       =================================================================== */
-    function protegerPagina(tiposPermitidos, callback) {
-      onAuthStateChanged(auth, async (user) => {
-        if (!user) {
-          window.location.href = "index.html";
-          return;
-        }
-        const snap = await getDoc(doc(db, "users", user.uid));
-        if (!snap.exists() || snap.data().status === "pendente_aprovacao" || !tiposPermitidos.includes(snap.data().tipo)) {
-          await signOut(auth);
-          window.location.href = "index.html";
-          return;
-        }
-        callback(user, snap.data());
-      });
-    }
+    let usuarioLogado = null;
+    let mapProcessos = {};
+    let listaTransportadoras = [];
 
-    async function logout() {
-      await signOut(auth);
-      window.location.href = "index.html";
-    }
+    // Proteção de acesso: Apenas perfis Logística (2) e Admin (3)
+    protegerPagina([2, 3], async (user, dadosUser) => {
+      usuarioLogado = { uid: user.uid, ...dadosUser };
+      document.getElementById("user-nome").textContent = dadosUser.nome || user.email;
+      document.getElementById("user-tipo").textContent = dadosUser.tipo === 3 ? "Administrador Master" : "Operador de Logística";
 
-    let usuarioAtual = null;
-    let perfilAtual = null;
-    let tiposProcessoCache = null;
+      // Define data atual padrão nos campos de data
+      const hojeIso = new Date().toISOString().split("T")[0];
+      document.getElementById("op-data").value = hojeIso;
+      document.getElementById("vagas-data").value = hojeIso;
+      document.getElementById("filtro-data-inicio").value = hojeIso;
+      document.getElementById("filtro-data-fim").value = hojeIso;
 
-    /* ===================================================================
-       POPUP / MODAL CUSTOMIZADO (substitui alert() e confirm() nativos)
-       =================================================================== */
-    function criarModalHost() {
-      if (document.getElementById("modal-overlay")) return;
-      const overlay = document.createElement("div");
-      overlay.id = "modal-overlay";
-      overlay.className = "modal-overlay";
-      overlay.innerHTML = `
-        <div class="modal-caixa" id="modal-caixa" role="alertdialog" aria-modal="true">
-          <div class="modal-icone" id="modal-icone"></div>
-          <div class="modal-titulo" id="modal-titulo"></div>
-          <div class="modal-mensagem" id="modal-mensagem"></div>
-          <div class="modal-botoes" id="modal-botoes"></div>
-        </div>`;
-      document.body.appendChild(overlay);
-    }
-    criarModalHost();
+      // Carregamentos iniciais
+      mapProcessos = await obterTiposProcessoMap();
+      preencherSelectProcessos();
+      await carregarTransportadoras();
 
-    function mostrarAlerta(mensagem, opcoes = {}) {
-      const { titulo = "Aviso", tipo = "info" } = opcoes;
-      const icones = { sucesso: "✅", erro: "⚠️", info: "ℹ️" };
-      return new Promise((resolve) => {
-        const overlay = document.getElementById("modal-overlay");
-        const caixa = document.getElementById("modal-caixa");
-        caixa.className = `modal-caixa modal-${tipo}`;
-        document.getElementById("modal-icone").textContent = icones[tipo] || icones.info;
-        document.getElementById("modal-titulo").textContent = titulo;
-        document.getElementById("modal-mensagem").textContent = mensagem;
-        document.getElementById("modal-botoes").innerHTML =
-          `<button type="button" class="modal-btn-primario" id="modal-btn-ok">OK</button>`;
-        overlay.classList.add("aberto");
+      inicializarAbas();
+      carregarResumoPainel();
+      carregarSolicitacoesPendentes();
+      carregarAgendamentosHoje();
 
-        const btnOk = document.getElementById("modal-btn-ok");
-        function fechar() {
-          overlay.classList.remove("aberto");
-          btnOk.removeEventListener("click", fechar);
-          resolve();
-        }
-        btnOk.addEventListener("click", fechar);
-        btnOk.focus();
-      });
-    }
-
-    function mostrarConfirm(mensagem, opcoes = {}) {
-      const { titulo = "Confirmar ação", textoConfirmar = "Confirmar", textoCancelar = "Cancelar", perigo = false } = opcoes;
-      return new Promise((resolve) => {
-        const overlay = document.getElementById("modal-overlay");
-        const caixa = document.getElementById("modal-caixa");
-        caixa.className = "modal-caixa modal-pergunta";
-        document.getElementById("modal-icone").textContent = perigo ? "⚠️" : "❓";
-        document.getElementById("modal-titulo").textContent = titulo;
-        document.getElementById("modal-mensagem").textContent = mensagem;
-        document.getElementById("modal-botoes").innerHTML = `
-          <button type="button" class="modal-btn-secundario" id="modal-btn-cancelar">${textoCancelar}</button>
-          <button type="button" class="modal-btn-primario ${perigo ? "perigo" : ""}" id="modal-btn-confirmar">${textoConfirmar}</button>
-        `;
-        overlay.classList.add("aberto");
-
-        const btnConfirmar = document.getElementById("modal-btn-confirmar");
-        const btnCancelar = document.getElementById("modal-btn-cancelar");
-        function limpar(resultado) {
-          overlay.classList.remove("aberto");
-          btnConfirmar.removeEventListener("click", onConfirmar);
-          btnCancelar.removeEventListener("click", onCancelar);
-          resolve(resultado);
-        }
-        function onConfirmar() { limpar(true); }
-        function onCancelar() { limpar(false); }
-        btnConfirmar.addEventListener("click", onConfirmar);
-        btnCancelar.addEventListener("click", onCancelar);
-        btnCancelar.focus();
-      });
-    }
-
-    // Listener em tempo real da aba "Agendamentos de Hoje"
-    let unsubscribeHoje = null;
-    // Listener em tempo real da aba "Painel do Dia" (linha do tempo da data selecionada)
-    let unsubscribePainel = null;
-
-    document.getElementById("btn-logout")?.addEventListener("click", logout);
-
-    /* ===================================================================
-       NAVEGAÇÃO POR ABAS
-       =================================================================== */
-    document.querySelectorAll(".tab-btn").forEach(btn => {
-      btn.addEventListener("click", () => ativarAba(btn.dataset.tab));
+      inicializarFormularioOperacional();
     });
 
-    function ativarAba(tab) {
-      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("ativo"));
-      document.querySelectorAll(".tab-conteudo").forEach(c => c.classList.remove("ativo"));
-      document.querySelector(`.tab-btn[data-tab="${tab}"]`)?.classList.add("ativo");
-      document.getElementById(`tab-${tab}`)?.classList.add("ativo");
+    document.getElementById("btn-logout")?.addEventListener("click", () => signOut(auth));
 
-      // Mantém os listeners em tempo real apenas nas abas onde são usados
-      if (tab !== "hoje" && unsubscribeHoje) {
-        unsubscribeHoje();
-        unsubscribeHoje = null;
-      }
-      if (tab !== "painel" && unsubscribePainel) {
-        unsubscribePainel();
-        unsubscribePainel = null;
-      }
+    /* ===================================================================
+       GERENCIAMENTO DE ABAS
+       =================================================================== */
+    function inicializarAbas() {
+      const btns = document.querySelectorAll(".tab-btn");
+      const conteudos = document.querySelectorAll(".tab-conteudo");
 
-      if (tab === "painel") inicializarPainelDia();
-      if (tab === "solicitacoes") carregarSolicitacoesPendentes();
-      if (tab === "hoje") carregarAgendamentosHoje();
-      if (tab === "todos") carregarTodosAgendamentos();
-      if (tab === "slots") {
-        carregarLimiteCapacidade();
-        carregarRegrasRecorrentes();
-        carregarExcecoes();
-      }
-      if (tab === "usuarios") carregarUsuariosPendentes();
-      if (tab === "processos") carregarTiposProcesso();
-      if (tab === "metricas") inicializarMetricas();
+      btns.forEach(btn => {
+        btn.addEventListener("click", () => {
+          const target = btn.dataset.tab;
+          btns.forEach(b => b.classList.remove("ativo"));
+          conteudos.forEach(c => c.classList.remove("ativo"));
+
+          btn.classList.add("ativo");
+          document.getElementById(`tab-${target}`)?.classList.add("ativo");
+
+          if (target === "painel") carregarResumoPainel();
+          if (target === "solicitacoes") carregarSolicitacoesPendentes();
+          if (target === "hoje") carregarAgendamentosHoje();
+          if (target === "novo-operacional") atualizarHorariosOperacionais();
+          if (target === "todos") carregarTodosAgendamentos();
+        });
+      });
     }
 
     /* ===================================================================
-       PROTEÇÃO DE TELA (Apenas Logística - 2 e Admin - 3)
+       ETAPA 2B: LÓGICA DO NOVO AGENDAMENTO OPERACIONAL
        =================================================================== */
-    protegerPagina([2, 3], (user, perfil) => {
-      usuarioAtual = user;
-      perfilAtual = perfil;
-
-      const nomeEl = document.getElementById("user-nome");
-      const tipoEl = document.getElementById("user-tipo");
-      if (nomeEl) nomeEl.textContent = perfil.nome || user.email;
-      if (tipoEl) tipoEl.textContent = perfil.tipo === 3 ? "Administrador" : "Logística";
-
-      // Carrega a aba inicial por padrão
-      ativarAba("painel");
-
-      // Rotinas de manutenção que substituem, de forma manual/on-demand, o
-      // Cron de expiração ainda não implementado (ver README): rodam uma
-      // vez sempre que alguém de Logística/Admin abre o painel.
-      executarRotinasDeManutencao();
-    });
-
-    /* ===================================================================
-       1. ABA: SOLICITAÇÕES PENDENTES
-       =================================================================== */
-    async function carregarSolicitacoesPendentes() {
-      const container = document.getElementById("lista-solicitacoes");
-      if (!container) return;
-      container.innerHTML = '<div class="estado-vazio">Carregando solicitações...</div>';
+    async function carregarTransportadoras() {
+      const select = document.getElementById("op-transportadora-select");
+      select.innerHTML = '<option value="">Carregando...</option>';
 
       try {
-        const tipos = await obterTiposProcessoMap();
-        const q = query(collection(db, "bookings"), where("status", "==", "Pendente"));
+        const q = query(
+          collection(db, "users"),
+          where("tipo", "==", 1),
+          where("status", "==", "aprovado")
+        );
+        const snap = await getDocs(q);
+        
+        listaTransportadoras = [];
+        snap.docs.forEach(d => {
+          const data = d.data();
+          listaTransportadoras.push({
+            id: d.id,
+            empresa: data.empresa || data.nome || "Empresa sem nome"
+          });
+        });
+
+        // Ordena por nome da empresa
+        listaTransportadoras.sort((a, b) => a.empresa.localeCompare(b.empresa));
+
+        select.innerHTML = '<option value="">Selecione uma transportadora...</option>';
+        listaTransportadoras.forEach(t => {
+          const opt = document.createElement("option");
+          opt.value = t.id;
+          opt.textContent = t.empresa;
+          select.appendChild(opt);
+        });
+
+        // Opção para empresas externas / pontuais
+        const optOutra = document.createElement("option");
+        optOutra.value = "__OUTRA__";
+        optOutra.textContent = "➕ Outra / Empresa Externa (Digitar)";
+        select.appendChild(optOutra);
+
+      } catch (err) {
+        console.error("Erro ao carregar transportadoras:", err);
+        select.innerHTML = '<option value="">Erro ao carregar lista</option>';
+      }
+    }
+
+    function inicializarFormularioOperacional() {
+      const selectTransp = document.getElementById("op-transportadora-select");
+      const wrapExterna = document.getElementById("wrap-op-empresa-externa");
+      const inputExterna = document.getElementById("op-empresa-externa");
+      const inputData = document.getElementById("op-data");
+      const form = document.getElementById("form-novo-operacional");
+
+      // Alterna exibição do campo de texto para empresa externa
+      selectTransp.addEventListener("change", () => {
+        if (selectTransp.value === "__OUTRA__") {
+          wrapExterna.style.display = "block";
+          inputExterna.required = true;
+          inputExterna.focus();
+        } else {
+          wrapExterna.style.display = "none";
+          inputExterna.required = false;
+          inputExterna.value = "";
+        }
+      });
+
+      // Atualiza horários ao mudar a data
+      inputData.addEventListener("change", () => {
+        atualizarHorariosOperacionais();
+      });
+
+      // Submissão do formulário
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        
+        const btnSalvar = document.getElementById("btn-salvar-operacional");
+        const transpValue = selectTransp.value;
+        const dataAgendada = inputData.value;
+        const horaInicio = document.getElementById("op-horario").value;
+        const tipoProcessoId = document.getElementById("op-processo").value;
+        const placaCavalo = document.getElementById("op-placa-cavalo").value.trim().toUpperCase();
+        const placaCarreta = document.getElementById("op-placa-carreta").value.trim().toUpperCase();
+        const motorista = document.getElementById("op-motorista").value.trim();
+        const observacoes = document.getElementById("op-observacoes").value.trim();
+
+        if (!transpValue) {
+          await mostrarAlerta("Selecione uma transportadora ou escolha a opção externa.", { tipo: "erro" });
+          return;
+        }
+
+        let usuarioId = null;
+        let empresa = "";
+
+        if (transpValue === "__OUTRA__") {
+          empresa = inputExterna.value.trim();
+          if (!empresa) {
+            await mostrarAlerta("Informe o nome da empresa parceira.", { tipo: "erro" });
+            return;
+          }
+        } else {
+          usuarioId = transpValue;
+          const tEncontrada = listaTransportadoras.find(t => t.id === transpValue);
+          empresa = tEncontrada ? tEncontrada.empresa : "";
+        }
+
+        btnSalvar.disabled = true;
+        btnSalvar.textContent = "Salvando Agendamento...";
+
+        try {
+          await criarAgendamentoOperacional({
+            usuarioId,
+            empresa,
+            dataAgendada,
+            horaInicio,
+            tipoProcessoId,
+            placaCavalo,
+            placaCarreta,
+            motorista,
+            observacoes,
+            usuarioLogado
+          });
+
+          await mostrarAlerta("Agendamento operacional criado com sucesso!", { titulo: "Sucesso", tipo: "sucesso" });
+          
+          form.reset();
+          wrapExterna.style.display = "none";
+          inputData.value = new Date().toISOString().split("T")[0];
+          await atualizarHorariosOperacionais();
+
+          // Alterna para a aba de hoje se for a mesma data
+          const hojeStr = new Date().toISOString().split("T")[0];
+          if (dataAgendada === hojeStr) {
+            document.querySelector('.tab-btn[data-tab="hoje"]')?.click();
+          }
+
+        } catch (err) {
+          console.error("Erro ao criar agendamento operacional:", err);
+          await mostrarAlerta(err.message || "Erro ao realizar o agendamento.", { titulo: "Erro", tipo: "erro" });
+        } finally {
+          btnSalvar.disabled = false;
+          btnSalvar.textContent = "Salvar Agendamento Direto";
+        }
+      });
+    }
+
+    async function atualizarHorariosOperacionais() {
+      const selectHorario = document.getElementById("op-horario");
+      const dataStr = document.getElementById("op-data").value;
+
+      if (!dataStr) {
+        selectHorario.innerHTML = '<option value="">Selecione primeiro a data...</option>';
+        selectHorario.disabled = true;
+        return;
+      }
+
+      selectHorario.disabled = true;
+      selectHorario.innerHTML = '<option value="">Buscando disponibilidade...</option>';
+
+      try {
+        const slots = await obterHorariosDisponiveis(db, dataStr);
+        selectHorario.innerHTML = "";
+
+        if (slots.length === 0) {
+          selectHorario.innerHTML = '<option value="">Sem atendimento/vagas nesta data</option>';
+          return;
+        }
+
+        let disponiveisContador = 0;
+        slots.forEach(s => {
+          const opt = document.createElement("option");
+          opt.value = s.horaInicio;
+
+          if (s.vagasRestantes <= 0) {
+            opt.textContent = `${s.horaInicio} às ${s.horaFim} — (Esgotado - ${s.ocupados}/${s.capacidadeMax})`;
+          } else {
+            opt.textContent = `${s.horaInicio} às ${s.horaFim} — (${s.vagasRestantes} ${s.vagasRestantes === 1 ? 'vaga' : 'vagas'})`;
+            disponiveisContador++;
+          }
+          selectHorario.appendChild(opt);
+        });
+
+        selectHorario.disabled = false;
+
+      } catch (err) {
+        console.error("Erro ao buscar horários disponíveis:", err);
+        selectHorario.innerHTML = '<option value="">Erro ao carregar horários</option>';
+      }
+    }
+
+    function preencherSelectProcessos() {
+      const select = document.getElementById("op-processo");
+      select.innerHTML = '<option value="">Selecione o tipo de processo...</option>';
+
+      Object.keys(mapProcessos).forEach(id => {
+        const opt = document.createElement("option");
+        opt.value = id;
+        opt.textContent = mapProcessos[id];
+        select.appendChild(opt);
+      });
+    }
+
+    /* ===================================================================
+       CONSULTAS E TABELAS DA LOGÍSTICA
+       =================================================================== */
+    async function carregarResumoPainel() {
+      const hojeStr = new Date().toISOString().split("T")[0];
+      try {
+        const q = query(collection(db, "bookings"), where("dataAgendada", "==", hojeStr));
+        const snap = await getDocs(q);
+
+        let total = 0;
+        let aprovados = 0;
+        let pendentes = 0;
+
+        snap.docs.forEach(d => {
+          const st = d.data().status;
+          total++;
+          if (st === "Aprovado") aprovados++;
+          if (st === "Pendente") pendentes++;
+        });
+
+        document.getElementById("kpi-total-hoje").textContent = total;
+        document.getElementById("kpi-aprovados-hoje").textContent = aprovados;
+        document.getElementById("kpi-pendentes-hoje").textContent = pendentes;
+      } catch (err) {
+        console.error("Erro ao carregar resumo do painel:", err);
+      }
+    }
+
+    async function carregarSolicitacoesPendentes() {
+      const tbody = document.getElementById("tbody-solicitacoes");
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Carregando solicitações...</td></tr>';
+
+      try {
+        const q = query(
+          collection(db, "bookings"),
+          where("status", "==", "Pendente"),
+          orderBy("dataAgendada", "asc"),
+          orderBy("horaInicio", "asc")
+        );
         const snap = await getDocs(q);
 
         if (snap.empty) {
-          container.innerHTML = '<div class="estado-vazio">Nenhuma solicitação pendente no momento.</div>';
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--texto-suave);">Nenhuma solicitação pendente no momento.</td></tr>';
           return;
         }
 
-        const lista = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        lista.sort((a, b) => (a.dataAgendada || "").localeCompare(b.dataAgendada || ""));
+        tbody.innerHTML = "";
+        snap.docs.forEach(d => {
+          const b = d.data();
+          const tr = document.createElement("tr");
 
-        container.innerHTML = "";
-        lista.forEach(a => {
-          const card = document.createElement("div");
-          card.className = "item-agendamento";
-          card.innerHTML = `
-            <div class="linha-topo">
-              <span class="data-hora">📅 ${formatarData(a.dataAgendada)} às ${escapeHtml(a.horaInicio || "-")}</span>
-              <span class="badge pendente">Pendente</span>
-            </div>
-            <div class="detalhes">
-              Empresa: <strong>${escapeHtml(a.empresa || "-")}</strong><br>
-              Processo: <strong>${escapeHtml(tipos[a.tipoProcessoId] || "-")}</strong><br>
-              Placas: ${escapeHtml(a.placaCavalo || "-")}${a.placaCarreta ? " / " + escapeHtml(a.placaCarreta) : ""}<br>
-              Motorista: ${escapeHtml(a.motorista || "-")}
-              ${a.observacoes ? `<br>Obs.: ${escapeHtml(a.observacoes)}` : ""}
-            </div>
-            <div style="margin-top:12px; display:flex; gap:8px;">
-              <button class="btn-acao btn-aprovar" data-id="${a.id}" data-data="${a.dataAgendada}" data-hora="${a.horaInicio}">Aprovar</button>
-              <button class="btn-acao btn-recusar" data-id="${a.id}" data-data="${a.dataAgendada}" data-hora="${a.horaInicio}">Recusar</button>
-            </div>
+          const processoNome = mapProcessos[b.tipoProcessoId] || b.tipoProcessoId;
+
+          tr.innerHTML = `
+            <td><strong>${formatarData(b.dataAgendada)}</strong><br><small>${b.horaInicio}</small></td>
+            <td>${escapeHtml(b.empresa)}</td>
+            <td>${escapeHtml(processoNome)}</td>
+            <td>Cavalo: ${escapeHtml(b.placaCavalo)}<br><small>Motorista: ${escapeHtml(b.motorista)}</small></td>
+            <td><small>${formatarDataHoraTimestamp(b.criadoEm)}</small></td>
+            <td>
+              <button class="btn-acao-aprovar btn-sucesso" data-id="${d.id}" style="padding:4px 8px; font-size:0.8rem; margin-right:4px;">Aprovar</button>
+              <button class="btn-acao-recusar btn-erro" data-id="${d.id}" style="padding:4px 8px; font-size:0.8rem;">Recusar</button>
+            </td>
           `;
-          container.appendChild(card);
+          tbody.appendChild(tr);
         });
 
-        // Eventos dos botões
-        container.querySelectorAll(".btn-aprovar").forEach(btn => {
-          btn.addEventListener("click", () => alterarStatusAgendamento(btn.dataset.id, "Aprovado", btn.dataset.data, btn.dataset.hora));
+        // Vincula eventos dos botões de aprovar/recusar
+        tbody.querySelectorAll(".btn-acao-aprovar").forEach(b => {
+          b.addEventListener("click", () => responderSolicitacao(b.dataset.id, "Aprovado"));
         });
-        container.querySelectorAll(".btn-recusar").forEach(btn => {
-          btn.addEventListener("click", () => alterarStatusAgendamento(btn.dataset.id, "Recusado", btn.dataset.data, btn.dataset.hora));
+        tbody.querySelectorAll(".btn-acao-recusar").forEach(b => {
+          b.addEventListener("click", () => responderSolicitacao(b.dataset.id, "Recusado"));
         });
 
       } catch (err) {
-        console.error("Erro ao carregar solicitações:", err);
-        container.innerHTML = '<div class="estado-vazio">Erro ao carregar solicitações pendentes.</div>';
+        console.error("Erro ao carregar pendentes:", err);
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--erro);">${formatarErroFirestore(err.message)}</td></tr>`;
       }
     }
 
-    /* ===================================================================
-       ALTERAR STATUS COM TRANSAÇÃO E LIBERAÇÃO DE VAGA
-       =================================================================== */
-    const ACAO_AUDITORIA_POR_STATUS = { Aprovado: "Aprovou", Recusado: "Recusou", Expirado: "Expirou", Cancelado: "Cancelou" };
+    async function responderSolicitacao(bookingId, novoStatus) {
+      const confirmou = await mostrarConfirmacao(`Deseja realmente alterar o status deste agendamento para "${novoStatus}"?`);
+      if (!confirmou) return;
 
-    async function registrarAuditLog(bookingId, acao) {
-      if (!acao) return; // ex: reversão pra "Pendente" não tem ação de auditoria definida
       try {
-        await addDoc(collection(db, "auditLogs"), {
-          bookingId,
-          usuarioId: usuarioAtual.uid,
-          acao,
-          dataHora: serverTimestamp()
-        });
-      } catch (err) {
-        console.error("Erro ao registrar log de auditoria:", err);
-      }
-    }
-
-    // Núcleo silencioso (sem alert/reload) — reaproveitado tanto pelos
-    // botões da UI (Aprovar/Recusar) quanto pelas rotinas de manutenção
-    // automáticas (expiração, liberação de vaga de cancelamento).
-    async function aplicarNovoStatusAgendamento(bookingId, novoStatus, dataAgendada, horaInicio) {
-      const bookingRef = doc(db, "bookings", bookingId);
-
-      // Recusado, Cancelado (pela Logística/rotina) ou Expirado liberam a vaga
-      if (novoStatus === "Recusado" || novoStatus === "Cancelado" || novoStatus === "Expirado") {
-        const slotId = `${dataAgendada}_${(horaInicio || "").replace(":", "-")}`;
-        const slotRef = doc(db, "timeSlots", slotId);
-
-        await runTransaction(db, async (transaction) => {
-          const bookingSnap = await transaction.get(bookingRef);
-          const slotSnap = await transaction.get(slotRef);
-
-          if (!bookingSnap.exists()) {
-            throw new Error("Agendamento não encontrado.");
-          }
-
-          const statusAtual = bookingSnap.data().status;
-
-          // Só libera a vaga se o agendamento não estava previamente cancelado/recusado
-          if (statusAtual !== "Recusado" && statusAtual !== "Cancelado" && slotSnap.exists()) {
-            const ocupadosAtuais = slotSnap.data().ocupados || 0;
-            const novosOcupados = Math.max(0, ocupadosAtuais - 1);
-
-            transaction.update(slotRef, { ocupados: novosOcupados });
-          }
-
-          transaction.update(bookingRef, {
-            status: novoStatus,
-            atualizadoEm: serverTimestamp(),
-            atualizadoPor: usuarioAtual.uid,
-            vagaLiberada: true
-          });
-        });
-      } else {
-        // Para Aprovação ou Reversão
-        await updateDoc(bookingRef, {
+        await updateDoc(doc(db, "bookings", bookingId), {
           status: novoStatus,
           atualizadoEm: serverTimestamp(),
-          atualizadoPor: usuarioAtual.uid
+          atualizadoPor: usuarioLogado.uid
         });
-      }
 
-      await registrarAuditLog(bookingId, ACAO_AUDITORIA_POR_STATUS[novoStatus]);
-    }
+        await addDoc(collection(db, "auditLogs"), {
+          bookingId,
+          usuarioId: usuarioLogado.uid,
+          acao: novoStatus === "Aprovado" ? "Aprovou" : "Recusou",
+          dataHora: serverTimestamp()
+        });
 
-    async function alterarStatusAgendamento(bookingId, novoStatus, dataAgendada, horaInicio) {
-      try {
-        await aplicarNovoStatusAgendamento(bookingId, novoStatus, dataAgendada, horaInicio);
-        await mostrarAlerta(`Agendamento ${novoStatus.toLowerCase()} com sucesso!`, { titulo: "Status atualizado", tipo: "sucesso" });
+        await mostrarAlerta(`Solicitação ${novoStatus.toLowerCase()} com sucesso!`, { tipo: "sucesso" });
         carregarSolicitacoesPendentes();
+        carregarResumoPainel();
       } catch (err) {
-        console.error("Erro ao alterar status:", err);
-        await mostrarAlerta("Erro ao alterar o status do agendamento: " + (err.message || "Tente novamente."), { titulo: "Erro", tipo: "erro" });
+        console.error("Erro ao responder solicitação:", err);
+        await mostrarAlerta("Não foi possível processar a alteração.", { tipo: "erro" });
       }
     }
 
-    /* ===================================================================
-       ROTINAS DE MANUTENÇÃO (rodam uma vez ao abrir o painel)
-
-       O README prevê um Cloudflare Worker com Cron pra expiração
-       automática, mas ele ainda não existe. Enquanto isso, estas duas
-       rotinas fazem o trabalho "sob demanda": rodam sempre que alguém
-       de Logística/Admin abre o painel, o que cobre bem o caso de uso
-       real (o painel costuma ficar aberto/sendo revisitado durante o
-       expediente). Limitação: se ninguém abrir o painel por um longo
-       período, agendamentos vencidos ou cancelamentos da Transportadora
-       não são processados até a próxima visita — um Worker com Cron
-       real resolveria isso de vez.
-       =================================================================== */
-    const TOLERANCIA_EXPIRACAO_MIN = 60; // minutos de tolerância após o horário reservado antes de considerar "vencido"
-    // As duas varreduras abaixo usam limit(200) como proteção contra
-    // custo de leitura descontrolado se o número de Pendentes/Cancelados
-    // não processados crescer muito. Em operação normal (ninguém deixa
-    // acumular centenas de agendamentos pendentes/cancelados) isso nunca
-    // chega perto do limite; se acontecer, é sinal de que vale a pena
-    // migrar pro Worker com Cron real do README.
-
-    async function executarRotinasDeManutencao() {
-      try {
-        const [qtdExpirados, qtdLiberados] = await Promise.all([
-          expirarAgendamentosVencidos(),
-          liberarVagasCanceladasPelaTransportadora()
-        ]);
-        if (qtdExpirados > 0 || qtdLiberados > 0) {
-          console.info(`Manutenção: ${qtdExpirados} agendamento(s) expirado(s), ${qtdLiberados} vaga(s) liberada(s) de cancelamentos.`);
-        }
-      } catch (err) {
-        console.error("Erro nas rotinas de manutenção:", err);
-      }
-    }
-
-    // Marca como "Expirado" (e libera a vaga) qualquer agendamento ainda
-    // Pendente cujo horário já passou há mais que a tolerância definida.
-    async function expirarAgendamentosVencidos() {
-      const agora = new Date();
-      const hojeStr = dataDeHojeStr();
-      const minutosAgora = agora.getHours() * 60 + agora.getMinutes();
-
-      const snap = await getDocs(query(collection(db, "bookings"), where("status", "==", "Pendente"), limit(200)));
-
-      let processados = 0;
-      for (const docSnap of snap.docs) {
-        const b = docSnap.data();
-        if (!b.dataAgendada || !b.horaInicio) continue;
-
-        const venceu = b.dataAgendada < hojeStr
-          || (b.dataAgendada === hojeStr && (horaParaMinutos(b.horaInicio) + TOLERANCIA_EXPIRACAO_MIN) <= minutosAgora);
-
-        if (!venceu) continue;
-
-        try {
-          await aplicarNovoStatusAgendamento(docSnap.id, "Expirado", b.dataAgendada, b.horaInicio);
-          processados++;
-        } catch (err) {
-          console.error(`Erro ao expirar agendamento ${docSnap.id}:`, err);
-        }
-      }
-      return processados;
-    }
-
-    // Um agendamento cancelado pela própria Transportadora só marca o
-    // status (ela não tem permissão de mexer em timeSlots — ver
-    // firestore.rules). Esta rotina termina o trabalho: libera a vaga de
-    // fato para quem tiver vagaLiberada ainda false/ausente.
-    async function liberarVagasCanceladasPelaTransportadora() {
-      const snap = await getDocs(query(collection(db, "bookings"), where("status", "==", "Cancelado"), limit(200)));
-
-      let processados = 0;
-      for (const docSnap of snap.docs) {
-        const b = docSnap.data();
-        if (b.vagaLiberada === true) continue; // já foi liberada (ex: cancelamento feito pela própria Logística)
-        if (!b.dataAgendada || !b.horaInicio) continue;
-
-        const slotId = `${b.dataAgendada}_${b.horaInicio.replace(":", "-")}`;
-        const slotRef = doc(db, "timeSlots", slotId);
-
-        try {
-          await runTransaction(db, async (transaction) => {
-            const bookingRef = doc(db, "bookings", docSnap.id);
-            const bookingSnap = await transaction.get(bookingRef);
-            const slotSnap = await transaction.get(slotRef);
-
-            if (!bookingSnap.exists() || bookingSnap.data().status !== "Cancelado" || bookingSnap.data().vagaLiberada === true) {
-              return; // outra sessão já processou, ou o estado mudou entretanto
-            }
-
-            if (slotSnap.exists()) {
-              const ocupadosAtuais = slotSnap.data().ocupados || 0;
-              transaction.update(slotRef, { ocupados: Math.max(0, ocupadosAtuais - 1) });
-            }
-
-            transaction.update(bookingRef, {
-              vagaLiberada: true,
-              atualizadoEm: serverTimestamp(),
-              atualizadoPor: usuarioAtual.uid
-            });
-          });
-          processados++;
-        } catch (err) {
-          console.error(`Erro ao liberar vaga do cancelamento ${docSnap.id}:`, err);
-        }
-      }
-      return processados;
-    }
-
-    /* ===================================================================
-       2. ABA: AGENDAMENTOS DE HOJE (TEMPO REAL)
-       =================================================================== */
     async function carregarAgendamentosHoje() {
-      const container = document.getElementById("lista-hoje");
-      if (!container) return;
-      container.innerHTML = '<div class="estado-vazio">Carregando agendamentos de hoje...</div>';
+      const tbody = document.getElementById("tbody-hoje");
+      const hojeStr = new Date().toISOString().split("T")[0];
 
-      const hoje = dataDeHojeStr();
-      const tipos = await obterTiposProcessoMap();
-
-      const q = query(
-        collection(db, "bookings"),
-        where("dataAgendada", "==", hoje)
-      );
-
-      if (unsubscribeHoje) unsubscribeHoje();
-
-      unsubscribeHoje = onSnapshot(q, (snap) => {
-        if (snap.empty) {
-          container.innerHTML = '<div class="estado-vazio">Nenhum agendamento para a data de hoje.</div>';
-          return;
-        }
-
-        const lista = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        lista.sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
-
-        container.innerHTML = "";
-        lista.forEach(a => {
-          const id = a.id;
-          const card = document.createElement("div");
-          card.className = "item-agendamento";
-          card.innerHTML = `
-            <div class="linha-topo">
-              <span class="data-hora">🕒 ${escapeHtml(a.horaInicio || "-")}</span>
-              <span class="badge ${classeStatus(a.status)}">${escapeHtml(a.status)}</span>
-            </div>
-            <div class="detalhes">
-              Empresa: <strong>${escapeHtml(a.empresa || "-")}</strong><br>
-              Processo: <strong>${escapeHtml(tipos[a.tipoProcessoId] || "-")}</strong><br>
-              Placas: ${escapeHtml(a.placaCavalo || "-")}${a.placaCarreta ? " / " + escapeHtml(a.placaCarreta) : ""}<br>
-              Motorista: ${escapeHtml(a.motorista || "-")}
-            </div>
-            ${a.status === "Aprovado" ? `
-              <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--cinza-borda); display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
-                <div>
-                  <label style="display:block; font-size:0.72rem; color:var(--texto-suave); margin-bottom:4px;">Entrada no pátio</label>
-                  <input type="time" class="input-entrada-patio" data-id="${id}" value="${a.horaEntrada || ""}" style="padding:6px 8px; border:1px solid var(--cinza-borda); border-radius:4px;">
-                </div>
-                <div>
-                  <label style="display:block; font-size:0.72rem; color:var(--texto-suave); margin-bottom:4px;">Saída do pátio</label>
-                  <input type="time" class="input-saida-patio" data-id="${id}" value="${a.horaSaida || ""}" style="padding:6px 8px; border:1px solid var(--cinza-borda); border-radius:4px;">
-                </div>
-                <button class="btn-acao btn-salvar-usuario btn-salvar-permanencia" data-id="${id}">Salvar horário</button>
-              </div>
-            ` : ""}
-          `;
-          container.appendChild(card);
-        });
-
-        container.querySelectorAll(".btn-salvar-permanencia").forEach(btn => {
-          btn.addEventListener("click", () => salvarPermanenciaPatio(btn.dataset.id, container, btn));
-        });
-      }, (err) => {
-        console.error("Erro no Listener de hoje:", err);
-        container.innerHTML = '<div class="estado-vazio">Erro ao sincronizar agendamentos de hoje.</div>';
-      });
-    }
-
-    // Registra a hora de entrada/saída real do veículo no pátio para um
-    // agendamento aprovado. Alimenta o cálculo de "tempo médio de
-    // permanência" na aba de Métricas. Requer os campos horaEntrada/
-    // horaSaida liberados nas Firestore Rules para Logística/Admin.
-    async function salvarPermanenciaPatio(bookingId, container, btn) {
-      const inputEntrada = container.querySelector(`.input-entrada-patio[data-id="${bookingId}"]`);
-      const inputSaida = container.querySelector(`.input-saida-patio[data-id="${bookingId}"]`);
-      const horaEntrada = inputEntrada?.value || "";
-      const horaSaida = inputSaida?.value || "";
-
-      if (horaEntrada && horaSaida && horaSaida <= horaEntrada) {
-        await mostrarAlerta("A hora de saída deve ser depois da hora de entrada.", { titulo: "Horário inválido", tipo: "erro" });
-        return;
-      }
-
-      btn.disabled = true;
-      const textoOriginal = btn.textContent;
-      btn.textContent = "Salvando...";
-      try {
-        const dados = { atualizadoEm: serverTimestamp(), atualizadoPor: usuarioAtual.uid };
-        if (horaEntrada) dados.horaEntrada = horaEntrada;
-        if (horaSaida) dados.horaSaida = horaSaida;
-        await updateDoc(doc(db, "bookings", bookingId), dados);
-      } catch (err) {
-        console.error("Erro ao salvar permanência:", err);
-        await mostrarAlerta("Erro ao salvar o horário de entrada/saída.", { titulo: "Erro", tipo: "erro" });
-      } finally {
-        btn.disabled = false;
-        btn.textContent = textoOriginal;
-      }
-    }
-
-    /* ===================================================================
-       3. ABA: TODOS OS AGENDAMENTOS (com filtro por data + paginação)
-
-       Usa paginação por cursor (limit + startAfter) em vez de trazer a
-       coleção inteira do dia de uma vez: útil para dias com centenas de
-       agendamentos. Requer um índice composto (dataAgendada ASC,
-       horaInicio ASC) — ver firestore.indexes.json.
-       =================================================================== */
-    const TAMANHO_PAGINA_TODOS = 20;
-    const inputFiltroDataGeral = document.getElementById("filtroDataGeral");
-    const btnCarregarMaisTodos = document.getElementById("btn-carregar-mais-todos");
-    let ultimoDocTodos = null;
-    let dataFiltroTodosAtual = null;
-
-    inputFiltroDataGeral?.addEventListener("change", () => carregarTodosAgendamentos({ reiniciar: true }));
-    btnCarregarMaisTodos?.addEventListener("click", () => carregarTodosAgendamentos({ reiniciar: false }));
-
-    async function carregarTodosAgendamentos({ reiniciar = true } = {}) {
-      const container = document.getElementById("lista-todos");
-      if (!container) return;
-
-      const dataFiltro = inputFiltroDataGeral?.value || "";
-
-      if (!dataFiltro) {
-        container.innerHTML = '<div class="estado-vazio">Selecione uma data para filtrar.</div>';
-        btnCarregarMaisTodos.style.display = "none";
-        return;
-      }
-
-      // Trocou de data: reinicia o cursor de paginação
-      if (reiniciar || dataFiltro !== dataFiltroTodosAtual) {
-        ultimoDocTodos = null;
-        dataFiltroTodosAtual = dataFiltro;
-        container.innerHTML = '<div class="estado-vazio">Carregando histórico...</div>';
-      } else {
-        btnCarregarMaisTodos.disabled = true;
-        btnCarregarMaisTodos.textContent = "Carregando...";
-      }
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Carregando agendamentos...</td></tr>';
 
       try {
-        const tipos = await obterTiposProcessoMap();
-
-        const clausulas = [
+        const q = query(
           collection(db, "bookings"),
-          where("dataAgendada", "==", dataFiltro),
-          orderBy("horaInicio"),
-          limit(TAMANHO_PAGINA_TODOS)
-        ];
-        if (ultimoDocTodos) clausulas.splice(3, 0, startAfter(ultimoDocTodos));
-
-        const q = query(...clausulas);
+          where("dataAgendada", "==", hojeStr),
+          orderBy("horaInicio", "asc")
+        );
         const snap = await getDocs(q);
 
-        if (snap.empty && !ultimoDocTodos) {
-          container.innerHTML = '<div class="estado-vazio">Nenhum agendamento encontrado para esta data.</div>';
-          btnCarregarMaisTodos.style.display = "none";
+        if (snap.empty) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--texto-suave);">Nenhum agendamento para hoje.</td></tr>';
           return;
         }
 
-        if (reiniciar || !ultimoDocTodos) container.innerHTML = "";
+        tbody.innerHTML = "";
+        snap.docs.forEach(d => {
+          const b = d.data();
+          const tr = document.createElement("tr");
+          const processoNome = mapProcessos[b.tipoProcessoId] || b.tipoProcessoId;
 
-        snap.docs.forEach(docSnap => {
-          const a = docSnap.data();
-          const card = document.createElement("div");
-          card.className = "item-agendamento";
-          card.innerHTML = `
-            <div class="linha-topo">
-              <span class="data-hora">📅 ${formatarData(a.dataAgendada)} às ${escapeHtml(a.horaInicio || "-")}</span>
-              <span class="badge ${classeStatus(a.status)}">${escapeHtml(a.status)}</span>
-            </div>
-            <div class="detalhes">
-              Empresa: <strong>${escapeHtml(a.empresa || "-")}</strong><br>
-              Processo: <strong>${escapeHtml(tipos[a.tipoProcessoId] || "-")}</strong><br>
-              Placas: ${escapeHtml(a.placaCavalo || "-")}${a.placaCarreta ? " / " + escapeHtml(a.placaCarreta) : ""}<br>
-              Motorista: ${escapeHtml(a.motorista || "-")}
-              ${a.observacoes ? `<br>Obs.: ${escapeHtml(a.observacoes)}` : ""}
-            </div>
+          tr.innerHTML = `
+            <td><strong>${b.horaInicio}</strong></td>
+            <td>${escapeHtml(b.empresa)} ${b.tipoAgendamento === "Operacional" ? '<span class="tag-operacional" title="Agendado diretamente pela Logística">Op</span>' : ''}</td>
+            <td>${escapeHtml(processoNome)}</td>
+            <td>${escapeHtml(b.placaCavalo)} ${b.placaCarreta ? '/ ' + escapeHtml(b.placaCarreta) : ''}</td>
+            <td>${escapeHtml(b.motorista)}</td>
+            <td><span class="status-badge status-${classeStatus(b.status)}">${b.status}</span></td>
+            <td>--</td>
           `;
-          container.appendChild(card);
+          tbody.appendChild(tr);
         });
-
-        ultimoDocTodos = snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : ultimoDocTodos;
-
-        // Só mostra "Carregar mais" se a página veio cheia (indício de que pode haver mais)
-        btnCarregarMaisTodos.style.display = snap.docs.length === TAMANHO_PAGINA_TODOS ? "inline-flex" : "none";
 
       } catch (err) {
-        console.error("Erro ao carregar todos os agendamentos:", err);
-        if (reiniciar || !ultimoDocTodos) {
-          container.innerHTML = `<div class="estado-vazio">Erro ao carregar histórico.<br><span style="font-size:0.78rem;">${formatarErroFirestore(err.message)}</span></div>`;
-        } else {
-          await mostrarAlerta("Erro ao carregar mais agendamentos: " + (err.message || ""), { titulo: "Erro", tipo: "erro" });
-        }
-      } finally {
-        btnCarregarMaisTodos.disabled = false;
-        btnCarregarMaisTodos.textContent = "Carregar mais";
+        console.error("Erro ao carregar agendamentos de hoje:", err);
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--erro);">${formatarErroFirestore(err.message)}</td></tr>`;
       }
     }
 
-    /* ===================================================================
-       PAINEL DO DIA — Visão do Pátio (tira de dias + linha do tempo)
+    async function carregarTodosAgendamentos() {
+      const tbody = document.getElementById("tbody-todos");
+      const dataInicio = document.getElementById("filtro-data-inicio").value;
+      const dataFim = document.getElementById("filtro-data-fim").value;
+      const statusFiltro = document.getElementById("filtro-status").value;
 
-       Objetivo: dar uma leitura visual rápida de ocupação por horário
-       (o que já está reservado x o que ainda tem vaga), tanto para hoje
-       quanto para os próximos dias, sem precisar abrir várias abas.
-       Reaproveita buscarSlotsVirtuaisDoDia (Regra + Exceção + Manual) e
-       cruza com os bookings do dia para listar quem está em cada horário.
-       =================================================================== */
-    let painelDataSelecionada = null;
-
-    function inicializarPainelDia() {
-      if (!painelDataSelecionada) painelDataSelecionada = dataDeHojeStr();
-      const inputData = document.getElementById("painelDataEscolhida");
-      if (inputData) inputData.value = painelDataSelecionada;
-      carregarTiraDias();
-      carregarLinhaTempoPainel(painelDataSelecionada);
-    }
-
-    document.getElementById("painelDataEscolhida")?.addEventListener("change", (e) => {
-      if (!e.target.value) return;
-      painelDataSelecionada = e.target.value;
-      atualizarSelecaoTiraDias();
-      carregarLinhaTempoPainel(painelDataSelecionada);
-    });
-
-    function proximosDiasStr(qtd) {
-      const dias = [];
-      const hoje = new Date();
-      for (let i = 0; i < qtd; i++) {
-        const d = new Date(hoje);
-        d.setDate(hoje.getDate() + i);
-        dias.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
-      }
-      return dias;
-    }
-
-    function diaSemanaLocal(dataStr) {
-      const [ano, mes, dia] = dataStr.split("-").map(Number);
-      return new Date(ano, mes - 1, dia).getDay();
-    }
-
-    // Classifica o nível de ocupação para colorir chips/faixas (verde/laranja/vermelho/cinza)
-    function classificarNivel(ocupados, capacidade) {
-      if (!capacidade || capacidade <= 0) return "fechado";
-      if (ocupados >= capacidade) return "cheio";
-      if (ocupados / capacidade >= 0.49) return "parcial";
-      return "livre";
-    }
-
-    async function carregarTiraDias() {
-      const tira = document.getElementById("tira-dias");
-      if (!tira) return;
-      const dias = proximosDiasStr(7);
-
-      tira.innerHTML = dias.map(d => `
-        <button type="button" class="chip-dia" data-data="${d}">
-          <div class="chip-dia-semana">${NOMES_DIAS[diaSemanaLocal(d)]}</div>
-          <div class="chip-dia-numero">${d.split("-")[2]}</div>
-          <div class="chip-dia-badge nivel-vazio" id="badge-dia-${d}">···</div>
-        </button>
-      `).join("");
-
-      atualizarSelecaoTiraDias();
-
-      tira.querySelectorAll(".chip-dia").forEach(chip => {
-        chip.addEventListener("click", () => {
-          painelDataSelecionada = chip.dataset.data;
-          const inputData = document.getElementById("painelDataEscolhida");
-          if (inputData) inputData.value = painelDataSelecionada;
-          atualizarSelecaoTiraDias();
-          carregarLinhaTempoPainel(painelDataSelecionada);
-        });
-      });
-
-      // Ocupação de cada chip é calculada em paralelo (não bloqueia a lista principal)
-      dias.forEach(async (d) => {
-        try {
-          const slots = await buscarSlotsVirtuaisDoDia(db, d, { incluirFechados: false });
-          const badge = document.getElementById(`badge-dia-${d}`);
-          if (!badge) return;
-          if (slots.length === 0) {
-            badge.textContent = "Fechado";
-            badge.className = "chip-dia-badge nivel-vazio";
-            return;
-          }
-          const capacidade = slots.reduce((s, x) => s + x.capacidadeMax, 0);
-          const ocupados = slots.reduce((s, x) => s + x.ocupados, 0);
-          const taxa = capacidade > 0 ? ocupados / capacidade : 0;
-          badge.textContent = `${Math.round(taxa * 100)}%`;
-          badge.className = `chip-dia-badge nivel-${classificarNivel(ocupados, capacidade)}`;
-        } catch (err) {
-          console.error("Erro ao calcular ocupação do dia", d, err);
-        }
-      });
-    }
-
-    function atualizarSelecaoTiraDias() {
-      document.querySelectorAll(".chip-dia").forEach(chip => {
-        chip.classList.toggle("selecionado", chip.dataset.data === painelDataSelecionada);
-      });
-    }
-
-    function formatarDataLonga(dataStr) {
-      const [ano, mes, dia] = dataStr.split("-");
-      return `${NOMES_DIAS[diaSemanaLocal(dataStr)]}, ${dia}/${mes}/${ano}`;
-    }
-
-    // Guarda quais faixas de horário estão abertas (expandidas) para
-    // preservar esse estado entre re-renderizações automáticas do
-    // listener em tempo real (senão o acordeão fecharia sozinho toda
-    // vez que um novo agendamento chegasse).
-    const faixasAbertasPainel = new Set();
-
-    function carregarLinhaTempoPainel(dataStr) {
-      const container = document.getElementById("painel-linha-tempo");
-      const titulo = document.getElementById("painel-data-titulo");
-      if (!container) return;
-
-      if (titulo) titulo.textContent = formatarDataLonga(dataStr);
-      container.innerHTML = '<div class="estado-vazio">Carregando horários...</div>';
-      faixasAbertasPainel.clear();
-
-      if (unsubscribePainel) {
-        unsubscribePainel();
-        unsubscribePainel = null;
-      }
-
-      // Listener em tempo real: qualquer novo agendamento, aprovação,
-      // recusa ou cancelamento na data selecionada atualiza a tela na
-      // hora, sem precisar dar F5.
-      const qBookingsDia = query(collection(db, "bookings"), where("dataAgendada", "==", dataStr));
-
-      unsubscribePainel = onSnapshot(qBookingsDia, async (snapBookings) => {
-        // Só re-renderiza se ainda estivermos olhando para esta mesma data
-        // (evita corrida se o usuário já trocou de data enquanto isso).
-        if (dataStr !== painelDataSelecionada) return;
-        try {
-          const slots = await buscarSlotsVirtuaisDoDia(db, dataStr, { incluirFechados: true });
-          renderizarLinhaTempoPainel(slots, snapBookings, container);
-        } catch (err) {
-          console.error("Erro ao carregar painel do dia:", err);
-          container.innerHTML = `<div class="estado-vazio">Erro ao carregar o painel.<br><span style="font-size:0.78rem;">${formatarErroFirestore(err.message)}</span></div>`;
-        }
-      }, (err) => {
-        console.error("Erro no listener do painel do dia:", err);
-        container.innerHTML = '<div class="estado-vazio">Erro ao sincronizar o painel do dia em tempo real.</div>';
-      });
-    }
-
-    function renderizarLinhaTempoPainel(slots, snapBookings, container) {
-      // Recusado/Cancelado já liberaram a vaga (ver alterarStatusAgendamento),
-      // então não entram na lista — Expirado ainda ocupa, então continua aparecendo.
-      const bookingsPorHora = {};
-      snapBookings.docs.forEach(d => {
-        const b = d.data();
-        if (b.status === "Recusado" || b.status === "Cancelado") return;
-        const hora = b.horaInicio || "-";
-        if (!bookingsPorHora[hora]) bookingsPorHora[hora] = [];
-        bookingsPorHora[hora].push(b);
-      });
-
-      if (slots.length === 0) {
-        container.innerHTML = '<div class="estado-vazio">Pátio fechado nesta data (sem Regra Padrão nem Exceção configurada para este dia da semana).</div>';
-        return;
-      }
-
-      container.innerHTML = "";
-      slots.forEach(s => {
-        const reservas = bookingsPorHora[s.horaInicio] || [];
-        const nivel = s.fechado ? "fechado" : classificarNivel(s.ocupados, s.capacidadeMax);
-        const taxa = s.capacidadeMax > 0 ? Math.min(100, (s.ocupados / s.capacidadeMax) * 100) : 0;
-        const vagasLivres = Math.max(0, s.capacidadeMax - s.ocupados);
-
-        const faixa = document.createElement("div");
-        faixa.className = `faixa-horario nivel-${nivel}${faixasAbertasPainel.has(s.horaInicio) ? " aberta" : ""}`;
-        faixa.innerHTML = `
-          <button type="button" class="faixa-horario-cabecalho">
-            <span class="faixa-horario-hora">${escapeHtml(s.horaInicio)}–${escapeHtml(s.horaFim)}</span>
-            <span class="faixa-horario-barra"><span class="faixa-horario-barra-preenchida" style="width:${taxa}%;"></span></span>
-            <span class="faixa-horario-contagem">${s.fechado ? "Fechado" : `${s.ocupados}/${s.capacidadeMax}`}</span>
-            <span class="faixa-horario-seta">▶</span>
-          </button>
-          <div class="faixa-horario-corpo">
-            ${s.fechado
-              ? "Horário fechado manualmente para esta data."
-              : (reservas.length
-                  ? reservas.map(b => `
-                      <div class="reserva-mini">
-                        <strong>${escapeHtml(b.empresa || "-")}</strong> — ${escapeHtml(b.placaCavalo || "-")}${b.placaCarreta ? " / " + escapeHtml(b.placaCarreta) : ""}<br>
-                        Motorista: ${escapeHtml(b.motorista || "-")}
-                        <span class="badge ${classeStatus(b.status)}" style="margin-left:6px;">${escapeHtml(b.status)}</span>
-                      </div>
-                    `).join("")
-                  : `${vagasLivres} vaga(s) livre(s) — nenhuma reserva neste horário ainda.`)
-            }
-          </div>
-        `;
-        faixa.querySelector(".faixa-horario-cabecalho").addEventListener("click", () => {
-          faixa.classList.toggle("aberta");
-          if (faixa.classList.contains("aberta")) {
-            faixasAbertasPainel.add(s.horaInicio);
-          } else {
-            faixasAbertasPainel.delete(s.horaInicio);
-          }
-        });
-        container.appendChild(faixa);
-      });
-    }
-
-    /* ===================================================================
-       4. ABA: MÉTRICAS OPERACIONAIS
-
-       Indicadores calculados a partir de dados já existentes no período
-       (sem tabela de agregação separada — ok para o volume esperado de
-       um pátio; se o histórico crescer muito, considerar pré-agregar via
-       Cloudflare Worker/Cron).
-
-       - Taxa de ocupação (geral, por dia e por horário): soma de
-         `ocupados` / soma de `capacidadeMax` nos documentos de
-         `timeSlots` dentro do período. Só entram no cálculo horários que
-         já têm documento em timeSlots (criado na primeira reserva ou por
-         ajuste manual da Logística) — horários sem nenhuma reserva no
-         período não têm como ser contados aqui.
-       - Transportadoras mais frequentes: contagem de agendamentos
-         Aprovados por empresa, no período.
-       - Tempo médio de permanência: média de (horaSaida - horaEntrada)
-         dos agendamentos que tiveram esse registro preenchido na aba
-         "Agendamentos de Hoje". Campo novo — só existirá para
-         agendamentos registrados a partir de agora.
-       =================================================================== */
-    const LIMITE_DIAS_METRICAS = 31; // trava simples para não fazer range query enorme sem índice/paginação
-
-    function inicializarMetricas() {
-      const inputInicio = document.getElementById("metricasDataInicio");
-      const inputFim = document.getElementById("metricasDataFim");
-      if (!inputInicio || !inputFim) return;
-
-      if (!inputInicio.value || !inputFim.value) {
-        const hoje = new Date();
-        const seteDiasAtras = new Date();
-        seteDiasAtras.setDate(hoje.getDate() - 6);
-        inputFim.value = dataDeHojeStr();
-        inputInicio.value = `${seteDiasAtras.getFullYear()}-${String(seteDiasAtras.getMonth() + 1).padStart(2, "0")}-${String(seteDiasAtras.getDate()).padStart(2, "0")}`;
-        calcularMetricas();
-      }
-    }
-
-    document.getElementById("btn-calcular-metricas")?.addEventListener("click", calcularMetricas);
-
-    async function calcularMetricas() {
-      const erroBox = document.getElementById("metricas-erro");
-      const resultado = document.getElementById("metricas-resultado");
-      const dataInicio = document.getElementById("metricasDataInicio")?.value || "";
-      const dataFim = document.getElementById("metricasDataFim")?.value || "";
-      erroBox.textContent = "";
-
-      if (!dataInicio || !dataFim) {
-        erroBox.textContent = "Selecione as duas datas do período.";
-        return;
-      }
-      if (dataFim < dataInicio) {
-        erroBox.textContent = "A data final deve ser igual ou depois da data inicial.";
-        return;
-      }
-      const diffDias = (new Date(dataFim) - new Date(dataInicio)) / 86400000;
-      if (diffDias > LIMITE_DIAS_METRICAS) {
-        erroBox.textContent = `Selecione um período de no máximo ${LIMITE_DIAS_METRICAS} dias.`;
-        return;
-      }
-
-      resultado.innerHTML = '<div class="estado-vazio">Calculando métricas...</div>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Buscando agendamentos...</td></tr>';
 
       try {
-        // --- Ocupação: todos os timeSlots com "data" dentro do período ---
-        const qSlots = query(
-          collection(db, "timeSlots"),
-          where("data", ">=", dataInicio),
-          where("data", "<=", dataFim)
-        );
-        const snapSlots = await getDocs(qSlots);
-
-        let somaOcupados = 0;
-        let somaCapacidade = 0;
-        const porHora = {}; // "08:00" -> { ocupados, capacidade }
-        const porDia = {};  // "2026-08-10" -> { ocupados, capacidade }
-
-        snapSlots.docs.forEach(d => {
-          const s = d.data();
-          const ocupados = s.ocupados || 0;
-          const capacidade = s.capacidadeMax || 0;
-          somaOcupados += ocupados;
-          somaCapacidade += capacidade;
-
-          if (!porHora[s.horaInicio]) porHora[s.horaInicio] = { ocupados: 0, capacidade: 0 };
-          porHora[s.horaInicio].ocupados += ocupados;
-          porHora[s.horaInicio].capacidade += capacidade;
-
-          if (!porDia[s.data]) porDia[s.data] = { ocupados: 0, capacidade: 0 };
-          porDia[s.data].ocupados += ocupados;
-          porDia[s.data].capacidade += capacidade;
-        });
-
-        const taxaGeral = somaCapacidade > 0 ? (somaOcupados / somaCapacidade) * 100 : null;
-
-        const horariosOrdenados = Object.keys(porHora)
-          .map(hora => ({ hora, ...porHora[hora], taxa: porHora[hora].capacidade > 0 ? (porHora[hora].ocupados / porHora[hora].capacidade) * 100 : 0 }))
-          .sort((a, b) => b.taxa - a.taxa)
-          .slice(0, 6);
-
-        const diasOrdenados = Object.keys(porDia)
-          .map(data => ({ data, ...porDia[data], taxa: porDia[data].capacidade > 0 ? (porDia[data].ocupados / porDia[data].capacidade) * 100 : 0 }))
-          .sort((a, b) => a.data.localeCompare(b.data));
-
-        // --- Transportadoras mais frequentes + tempo médio de permanência: bookings do período ---
-        const qBookings = query(
+        let q = query(
           collection(db, "bookings"),
           where("dataAgendada", ">=", dataInicio),
-          where("dataAgendada", "<=", dataFim)
+          where("dataAgendada", "<=", dataFim),
+          orderBy("dataAgendada", "asc"),
+          orderBy("horaInicio", "asc")
         );
-        const snapBookings = await getDocs(qBookings);
 
-        const contagemEmpresas = {};
-        let somaMinutosPermanencia = 0;
-        let qtdComPermanencia = 0;
-
-        snapBookings.docs.forEach(d => {
-          const b = d.data();
-          if (b.status === "Aprovado") {
-            const chave = b.empresa || "—";
-            contagemEmpresas[chave] = (contagemEmpresas[chave] || 0) + 1;
-          }
-          if (b.horaEntrada && b.horaSaida) {
-            const minutos = horaParaMinutos(b.horaSaida) - horaParaMinutos(b.horaEntrada);
-            if (minutos > 0) {
-              somaMinutosPermanencia += minutos;
-              qtdComPermanencia++;
-            }
-          }
-        });
-
-        const topEmpresas = Object.keys(contagemEmpresas)
-          .map(nome => ({ nome, qtd: contagemEmpresas[nome] }))
-          .sort((a, b) => b.qtd - a.qtd)
-          .slice(0, 5);
-
-        const permanenciaMediaMin = qtdComPermanencia > 0 ? Math.round(somaMinutosPermanencia / qtdComPermanencia) : null;
-
-        renderizarMetricas({
-          taxaGeral, somaOcupados, somaCapacidade,
-          horariosOrdenados, diasOrdenados,
-          topEmpresas, permanenciaMediaMin, qtdComPermanencia
-        });
-
-      } catch (err) {
-        console.error("Erro ao calcular métricas:", err);
-        resultado.innerHTML = "";
-        erroBox.textContent = "Erro ao calcular as métricas do período.";
-      }
-    }
-
-    function formatarMinutos(min) {
-      const h = Math.floor(min / 60);
-      const m = min % 60;
-      return h > 0 ? `${h}h${String(m).padStart(2, "0")}min` : `${m}min`;
-    }
-
-    function renderizarMetricas(dados) {
-      const resultado = document.getElementById("metricas-resultado");
-      const { taxaGeral, somaOcupados, somaCapacidade, horariosOrdenados, topEmpresas, permanenciaMediaMin, qtdComPermanencia } = dados;
-
-      const cartaoOcupacao = `
-        <div class="item-agendamento">
-          <div class="linha-topo"><span class="data-hora">📊 Taxa de Ocupação do Período</span></div>
-          <div class="detalhes">
-            ${taxaGeral !== null
-              ? `<strong style="font-size:1.3rem; color:var(--azul);">${taxaGeral.toFixed(1)}%</strong> (${somaOcupados} de ${somaCapacidade} vagas ocupadas)`
-              : "Sem horários registrados no período para calcular ocupação."}
-          </div>
-          ${horariosOrdenados.length ? `
-            <div class="detalhes" style="margin-top:10px;">
-              <strong>Horários com maior ocupação:</strong><br>
-              ${horariosOrdenados.map(h => `${escapeHtml(h.hora)} — ${h.taxa.toFixed(0)}% (${h.ocupados}/${h.capacidade})`).join("<br>")}
-            </div>
-          ` : ""}
-        </div>
-      `;
-
-      const cartaoEmpresas = `
-        <div class="item-agendamento">
-          <div class="linha-topo"><span class="data-hora">🏆 Transportadoras Mais Frequentes</span></div>
-          <div class="detalhes">
-            ${topEmpresas.length
-              ? topEmpresas.map((e, i) => `${i + 1}. <strong>${escapeHtml(e.nome)}</strong> — ${e.qtd} agendamento(s) aprovado(s)`).join("<br>")
-              : "Nenhum agendamento aprovado no período."}
-          </div>
-        </div>
-      `;
-
-      const cartaoPermanencia = `
-        <div class="item-agendamento">
-          <div class="linha-topo"><span class="data-hora">⏱️ Tempo Médio de Permanência no Pátio</span></div>
-          <div class="detalhes">
-            ${permanenciaMediaMin !== null
-              ? `<strong style="font-size:1.3rem; color:var(--azul);">${formatarMinutos(permanenciaMediaMin)}</strong> (baseado em ${qtdComPermanencia} registro(s) de entrada/saída)`
-              : `Ainda não há registros de entrada/saída no período. Registre a hora de entrada e saída do veículo na aba "Agendamentos de Hoje" (aparece nos agendamentos com status Aprovado) para alimentar esta métrica.`}
-          </div>
-        </div>
-      `;
-
-      resultado.innerHTML = `<div class="lista-agendamentos">${cartaoOcupacao}${cartaoEmpresas}${cartaoPermanencia}</div>`;
-    }
-
-    /* ===================================================================
-       0. LIMITE DE SEGURANÇA POR HORÁRIO (config/capacidadeGlobal)
-
-       Teto de veículos/hora que as Rules aceitam quando uma Transportadora
-       cria uma vaga automaticamente (primeira reserva de um horário).
-       Não substitui a Regra Padrão/Exceções — é só uma trava contra
-       valores absurdos vindos de um cliente adulterado.
-       =================================================================== */
-    const LIMITE_CAPACIDADE_PADRAO = 10; // mesmo fallback usado nas Firestore Rules se o doc não existir
-
-    async function carregarLimiteCapacidade() {
-      const input = document.getElementById("limiteCapacidadeInput");
-      const erroBox = document.getElementById("limite-capacidade-error");
-      if (!input) return;
-      erroBox.textContent = "";
-
-      try {
-        const snap = await getDoc(doc(db, "config", "capacidadeGlobal"));
-        input.value = snap.exists() ? snap.data().maximoPorHora : LIMITE_CAPACIDADE_PADRAO;
-      } catch (err) {
-        console.error("Erro ao carregar limite de capacidade:", err);
-        erroBox.innerHTML = formatarErroFirestore(err.message) || "Erro ao carregar o limite atual.";
-      }
-    }
-
-    document.getElementById("form-limite-capacidade")?.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const input = document.getElementById("limiteCapacidadeInput");
-      const erroBox = document.getElementById("limite-capacidade-error");
-      erroBox.textContent = "";
-
-      const valor = Number(input.value);
-      if (!valor || valor < 1 || valor > 100) {
-        erroBox.textContent = "Informe um valor entre 1 e 100.";
-        return;
-      }
-
-      const btn = e.target.querySelector("button[type=submit]");
-      btn.disabled = true;
-      btn.textContent = "Salvando...";
-      try {
-        await setDoc(doc(db, "config", "capacidadeGlobal"), { maximoPorHora: valor });
-        await mostrarAlerta("Limite de segurança atualizado!", { titulo: "Limite atualizado", tipo: "sucesso" });
-      } catch (err) {
-        console.error("Erro ao salvar limite de capacidade:", err);
-        erroBox.innerHTML = formatarErroFirestore(err.message) || "Erro ao salvar o limite.";
-      } finally {
-        btn.disabled = false;
-        btn.textContent = "Salvar Limite";
-      }
-    });
-
-    /* ===================================================================
-       GESTÃO DE HORÁRIOS E VAGAS
-       =================================================================== */
-
-    // --- 3.1 Criar Regra Recorrente / Padrão Semanal ---
-    const formRegraSlot = document.getElementById("form-regra-slot");
-    formRegraSlot?.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const erroBox = document.getElementById("regra-error");
-      erroBox.textContent = "";
-
-      const dias = Array.from(document.querySelectorAll('input[name="diasSemana"]:checked')).map(el => Number(el.value));
-      const horaInicio = document.getElementById("regraHoraInicio").value;
-      const horaFim = document.getElementById("regraHoraFim").value;
-      const capacidade = Number(document.getElementById("regraCapacidade").value);
-
-      if (dias.length === 0) {
-        erroBox.textContent = "Selecione ao menos um dia da semana.";
-        return;
-      }
-      if (!horaInicio || !horaFim) {
-        erroBox.textContent = "Informe o horário de início e fim.";
-        return;
-      }
-      if (!capacidade || capacidade < 1) {
-        erroBox.textContent = "Informe uma quantidade válida de veículos por hora.";
-        return;
-      }
-
-      const btn = formRegraSlot.querySelector("button[type=submit]");
-      btn.disabled = true;
-      btn.textContent = "Salvando...";
-
-      try {
-        await addDoc(collection(db, "timeSlotRules"), {
-          diasSemana: dias,
-          horaInicio,
-          horaFim,
-          capacidadePorHora: capacidade,
-          ativo: true,
-          criadoEm: serverTimestamp()
-        });
-
-        formRegraSlot.reset();
-        document.querySelectorAll('input[name="diasSemana"]').forEach(el => {
-          el.checked = ["1", "2", "3", "4", "5"].includes(el.value);
-        });
-        document.getElementById("regraHoraInicio").value = "06:00";
-        document.getElementById("regraHoraFim").value = "00:00";
-        document.getElementById("regraCapacidade").value = "2";
-
-        carregarRegrasRecorrentes();
-      } catch (err) {
-        console.error(err);
-        erroBox.textContent = "Erro ao salvar a regra recorrente.";
-      } finally {
-        btn.disabled = false;
-        btn.textContent = "Salvar Regra Recorrente";
-      }
-    });
-
-    const NOMES_DIAS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-
-    async function carregarRegrasRecorrentes() {
-      const container = document.getElementById("lista-regras");
-      if (!container) return;
-      container.innerHTML = '<div class="estado-vazio">Carregando regras...</div>';
-
-      try {
-        const snap = await getDocs(collection(db, "timeSlotRules"));
-
-        if (snap.empty) {
-          container.innerHTML = '<div class="estado-vazio">Nenhuma regra recorrente cadastrada.</div>';
-          return;
-        }
-
-        const regras = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        regras.sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
-
-        container.innerHTML = "";
-        regras.forEach(r => {
-          const diasTexto = (r.diasSemana || []).slice().sort().map(d => NOMES_DIAS[d]).join(", ");
-          const card = document.createElement("div");
-          card.className = "item-agendamento";
-          card.innerHTML = `
-            <div class="linha-topo">
-              <span class="data-hora">${escapeHtml(diasTexto)} · ${escapeHtml(r.horaInicio)} às ${escapeHtml(r.horaFim)}</span>
-              <span class="badge ${r.ativo ? "aprovado" : "recusado"}">${r.ativo ? "Ativa" : "Inativa"}</span>
-            </div>
-            <div class="detalhes">Capacidade: <strong>${r.capacidadePorHora} veículo(s)/hora</strong></div>
-            <div style="margin-top:12px; display:flex; gap:8px;">
-              <button class="btn-acao ${r.ativo ? "btn-recusar" : "btn-aprovar"} btn-toggle-regra" data-id="${r.id}" data-ativo="${r.ativo}">
-                ${r.ativo ? "Desativar" : "Ativar"}
-              </button>
-              <button class="btn-acao btn-desativar btn-excluir-regra" data-id="${r.id}">Excluir</button>
-            </div>
-          `;
-          container.appendChild(card);
-        });
-
-        container.querySelectorAll(".btn-toggle-regra").forEach(btn => {
-          btn.addEventListener("click", async () => {
-            const ativo = btn.dataset.ativo === "true";
-            btn.disabled = true;
-            try {
-              await updateDoc(doc(db, "timeSlotRules", btn.dataset.id), { ativo: !ativo });
-              carregarRegrasRecorrentes();
-            } catch (err) {
-              console.error(err);
-              await mostrarAlerta("Erro ao alterar status da regra.", { titulo: "Erro", tipo: "erro" });
-              btn.disabled = false;
-            }
-          });
-        });
-
-        container.querySelectorAll(".btn-excluir-regra").forEach(btn => {
-          btn.addEventListener("click", async () => {
-            const confirmado = await mostrarConfirm("Excluir esta regra recorrente? Vagas já geradas no calendário não serão removidas automaticamente.", { titulo: "Excluir regra", perigo: true, textoConfirmar: "Excluir" });
-            if (!confirmado) return;
-            btn.disabled = true;
-            try {
-              await deleteDoc(doc(db, "timeSlotRules", btn.dataset.id));
-              carregarRegrasRecorrentes();
-            } catch (err) {
-              console.error(err);
-              await mostrarAlerta("Erro ao excluir a regra.", { titulo: "Erro", tipo: "erro" });
-              btn.disabled = false;
-            }
-          });
-        });
-
-      } catch (err) {
-        console.error(err);
-        container.innerHTML = '<div class="estado-vazio">Erro ao carregar regras recorrentes.</div>';
-      }
-    }
-
-    // --- 3.2 Exceções à Regra Padrão (recorrentes, por dia da semana) ---
-    const formExcecaoSlot = document.getElementById("form-excecao-slot");
-    formExcecaoSlot?.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const erroBox = document.getElementById("excecao-error");
-      erroBox.textContent = "";
-
-      const dias = Array.from(document.querySelectorAll('input[name="excDiasSemana"]:checked')).map(el => Number(el.value));
-      const horaInicio = document.getElementById("excHoraInicio").value;
-      const horaFim = document.getElementById("excHoraFim").value;
-      const capacidade = Number(document.getElementById("excCapacidade").value);
-
-      if (dias.length === 0) {
-        erroBox.textContent = "Selecione ao menos um dia da semana.";
-        return;
-      }
-      if (!horaInicio || !horaFim) {
-        erroBox.textContent = "Informe o horário de início e fim.";
-        return;
-      }
-      if (capacidade < 0) {
-        erroBox.textContent = "Informe uma capacidade válida (0 ou mais).";
-        return;
-      }
-
-      const btn = formExcecaoSlot.querySelector("button[type=submit]");
-      btn.disabled = true;
-      btn.textContent = "Salvando...";
-
-      try {
-        await addDoc(collection(db, "timeSlotExceptions"), {
-          diasSemana: dias,
-          horaInicio,
-          horaFim,
-          capacidadePorHora: capacidade,
-          ativo: true,
-          criadoEm: serverTimestamp()
-        });
-
-        formExcecaoSlot.reset();
-        document.querySelectorAll('input[name="excDiasSemana"]').forEach(el => {
-          el.checked = el.value === "0";
-        });
-        document.getElementById("excHoraInicio").value = "00:00";
-        document.getElementById("excHoraFim").value = "23:59";
-        document.getElementById("excCapacidade").value = "0";
-
-        carregarExcecoes();
-      } catch (err) {
-        console.error(err);
-        erroBox.textContent = "Erro ao salvar a exceção.";
-      } finally {
-        btn.disabled = false;
-        btn.textContent = "Salvar Exceção";
-      }
-    });
-
-    async function carregarExcecoes() {
-      const container = document.getElementById("lista-excecoes");
-      if (!container) return;
-      container.innerHTML = '<div class="estado-vazio">Carregando exceções...</div>';
-
-      try {
-        const snap = await getDocs(collection(db, "timeSlotExceptions"));
-
-        if (snap.empty) {
-          container.innerHTML = '<div class="estado-vazio">Nenhuma exceção cadastrada.</div>';
-          return;
-        }
-
-        const excecoes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        excecoes.sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
-
-        container.innerHTML = "";
-        excecoes.forEach(ex => {
-          const diasTexto = (ex.diasSemana || []).slice().sort().map(d => NOMES_DIAS[d]).join(", ");
-          const semAtendimento = Number(ex.capacidadePorHora) <= 0;
-          const card = document.createElement("div");
-          card.className = "item-agendamento";
-          card.innerHTML = `
-            <div class="linha-topo">
-              <span class="data-hora">${escapeHtml(diasTexto)} · ${escapeHtml(ex.horaInicio)} às ${escapeHtml(ex.horaFim)}</span>
-              <span class="badge ${ex.ativo ? "aprovado" : "recusado"}">${ex.ativo ? "Ativa" : "Inativa"}</span>
-            </div>
-            <div class="detalhes">${semAtendimento ? "Sem atendimento neste intervalo" : `Capacidade: <strong>${ex.capacidadePorHora} veículo(s)/hora</strong>`}</div>
-            <div style="margin-top:12px; display:flex; gap:8px;">
-              <button class="btn-acao ${ex.ativo ? "btn-recusar" : "btn-aprovar"} btn-toggle-excecao" data-id="${ex.id}" data-ativo="${ex.ativo}">
-                ${ex.ativo ? "Desativar" : "Ativar"}
-              </button>
-              <button class="btn-acao btn-desativar btn-excluir-excecao" data-id="${ex.id}">Excluir</button>
-            </div>
-          `;
-          container.appendChild(card);
-        });
-
-        container.querySelectorAll(".btn-toggle-excecao").forEach(btn => {
-          btn.addEventListener("click", async () => {
-            const ativo = btn.dataset.ativo === "true";
-            btn.disabled = true;
-            try {
-              await updateDoc(doc(db, "timeSlotExceptions", btn.dataset.id), { ativo: !ativo });
-              carregarExcecoes();
-            } catch (err) {
-              console.error(err);
-              await mostrarAlerta("Erro ao alterar status da exceção.", { titulo: "Erro", tipo: "erro" });
-              btn.disabled = false;
-            }
-          });
-        });
-
-        container.querySelectorAll(".btn-excluir-excecao").forEach(btn => {
-          btn.addEventListener("click", async () => {
-            const confirmado = await mostrarConfirm("Excluir esta exceção? As datas futuras voltarão a seguir a Regra Padrão.", { titulo: "Excluir exceção", perigo: true, textoConfirmar: "Excluir" });
-            if (!confirmado) return;
-            btn.disabled = true;
-            try {
-              await deleteDoc(doc(db, "timeSlotExceptions", btn.dataset.id));
-              carregarExcecoes();
-            } catch (err) {
-              console.error(err);
-              await mostrarAlerta("Erro ao excluir a exceção.", { titulo: "Erro", tipo: "erro" });
-              btn.disabled = false;
-            }
-          });
-        });
-
-      } catch (err) {
-        console.error(err);
-        container.innerHTML = '<div class="estado-vazio">Erro ao carregar exceções.</div>';
-      }
-    }
-
-    // --- 3.3 Ajuste Manual / Pontual por Data ---
-    // Calcula os horários já combinando Regra Padrão + Exceções + qualquer
-    // ajuste manual já existente para a data escolhida (ver disponibilidade.js).
-    const inputFiltroDataSlot = document.getElementById("filtroDataSlot");
-    inputFiltroDataSlot?.addEventListener("change", () => carregarSlotsDoDia());
-
-    async function carregarSlotsDoDia() {
-      const container = document.getElementById("lista-slots");
-      if (!container) return;
-
-      const dataSelecionada = inputFiltroDataSlot?.value || "";
-      if (!dataSelecionada) {
-        container.innerHTML = '<div class="estado-vazio">Selecione uma data para alterar.</div>';
-        return;
-      }
-
-      container.innerHTML = '<div class="estado-vazio">Carregando horários...</div>';
-
-      try {
-        // incluirFechados=true: mantém visíveis os horários fechados manualmente
-        // nesta data, para que a Logística possa reabri-los se precisar.
-        const slots = await buscarSlotsVirtuaisDoDia(db, dataSelecionada, { incluirFechados: true });
-        renderizarSlotsDoDia(slots, dataSelecionada, container);
-      } catch (err) {
-        console.error(err);
-        container.innerHTML = '<div class="estado-vazio">Erro ao carregar horários.</div>';
-      }
-    }
-
-    const ORIGEM_LABEL = { regra: "Regra Padrão", excecao: "Exceção", manual: "Ajuste Manual" };
-
-    function renderizarSlotsDoDia(slots, dataSelecionada, container) {
-      if (slots.length === 0) {
-        container.innerHTML = '<div class="estado-vazio">Nenhum horário de atendimento configurado para esta data (confira a Regra Padrão e as Exceções).</div>';
-        return;
-      }
-
-      container.innerHTML = "";
-      const algumaDivergencia = slots.some(s => s.divergeDoPadrao);
-      if (algumaDivergencia) {
-        const aviso = document.createElement("div");
-        aviso.className = "aviso-suporte";
-        aviso.style.borderColor = "#f3c98b";
-        aviso.style.background = "#fff8ec";
-        aviso.innerHTML = `⚠️ Um ou mais horários abaixo têm uma vaga já registrada (por reserva ou ajuste manual anterior) com capacidade
-          <strong>diferente</strong> do que a Regra Padrão/Exceção calcula hoje para este dia. Isso acontece quando o horário foi reservado
-          ou ajustado <em>antes</em> de uma mudança recente na Regra Padrão ou numa Exceção — o registro antigo tem prioridade e não é
-          atualizado sozinho. Use "Ajustar para o padrão atual" no(s) horário(s) destacado(s) abaixo se quiser aplicar o novo valor.`;
-        container.appendChild(aviso);
-      }
-
-      slots.forEach(s => {
-        const card = document.createElement("div");
-        card.className = "item-agendamento";
-        card.innerHTML = `
-          <div class="linha-topo">
-            <span class="data-hora">🕒 ${escapeHtml(s.horaInicio)} às ${escapeHtml(s.horaFim)}</span>
-            <span class="badge ${s.fechado ? "recusado" : "aprovado"}">${s.fechado ? "Fechado (manual)" : ORIGEM_LABEL[s.origem] || ""}</span>
-          </div>
-          <div class="detalhes">Ocupação atual: ${s.ocupados} / ${s.capacidadeMax}</div>
-          ${s.divergeDoPadrao ? `
-            <div class="detalhes" style="color:var(--laranja); font-weight:600; margin-top:4px;">
-              ⚠️ Divergente do padrão atual (Regra/Exceção calculam ${s.capacidadePadraoAtual === null ? "sem atendimento" : s.capacidadePadraoAtual + " veículo(s)/hora"} para este horário agora).
-            </div>
-          ` : ""}
-          <div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <input type="number" min="1" class="input-capacidade-slot" data-hora="${s.horaInicio}" value="${s.capacidadeMax}"
-                   style="width:80px; padding:6px 8px; border:1px solid var(--cinza-borda); border-radius:4px;">
-            <button class="btn-acao btn-salvar-slot" data-hora="${s.horaInicio}">Salvar Capacidade</button>
-            <button class="btn-acao ${s.fechado ? "btn-aprovar" : "btn-recusar"} btn-toggle-slot" data-hora="${s.horaInicio}" data-fechado="${s.fechado}" data-capacidade="${s.capacidadeMax}">
-              ${s.fechado ? "Reabrir Nesta Data" : "Fechar Nesta Data"}
-            </button>
-            ${s.temAjusteManual ? `<button class="btn-acao btn-desativar btn-restaurar-slot" data-hora="${s.horaInicio}" ${s.ocupados > 0 ? "disabled title=\"Não é possível restaurar: já há reservas neste horário\"" : ""}>Restaurar Padrão</button>` : ""}
-            ${s.divergeDoPadrao && s.capacidadePadraoAtual !== null ? `<button class="btn-acao btn-aprovar btn-sincronizar-slot" data-hora="${s.horaInicio}" data-padrao="${s.capacidadePadraoAtual}">Ajustar para o padrão atual (${s.capacidadePadraoAtual})</button>` : ""}
-          </div>
-        `;
-        container.appendChild(card);
-      });
-
-      container.querySelectorAll(".btn-salvar-slot").forEach(btn => {
-        btn.addEventListener("click", async () => {
-          const hora = btn.dataset.hora;
-          const input = container.querySelector(`.input-capacidade-slot[data-hora="${hora}"]`);
-          const novaCapacidade = Number(input.value);
-          if (!novaCapacidade || novaCapacidade < 1) {
-            await mostrarAlerta("Informe uma capacidade válida.", { titulo: "Valor inválido", tipo: "erro" });
-            return;
-          }
-          const horaFim = minutosParaHora((horaParaMinutos(hora) + 60) % (24 * 60));
-          btn.disabled = true;
-          try {
-            await setDoc(doc(db, "timeSlots", idSlotHorario(dataSelecionada, hora)), {
-              data: dataSelecionada,
-              horaInicio: hora,
-              horaFim,
-              capacidadeMax: novaCapacidade,
-              ativo: true
-            }, { merge: true });
-            await mostrarAlerta("Capacidade atualizada para este dia!", { titulo: "Capacidade atualizada", tipo: "sucesso" });
-            carregarSlotsDoDia();
-          } catch (err) {
-            console.error(err);
-            await mostrarAlerta("Erro ao atualizar a capacidade.", { titulo: "Erro", tipo: "erro" });
-            btn.disabled = false;
-          }
-        });
-      });
-
-      container.querySelectorAll(".btn-sincronizar-slot").forEach(btn => {
-        btn.addEventListener("click", async () => {
-          const hora = btn.dataset.hora;
-          const padrao = Number(btn.dataset.padrao);
-          const slotAtual = slots.find(s => s.horaInicio === hora);
-
-          if (slotAtual && padrao < slotAtual.ocupados) {
-            await mostrarAlerta(`Não é possível ajustar para ${padrao} veículo(s)/hora: já existem ${slotAtual.ocupados} reserva(s) confirmada(s) neste horário. Ajuste manualmente para um valor igual ou maior que ${slotAtual.ocupados}, se necessário.`, { titulo: "Capacidade insuficiente", tipo: "erro" });
-            return;
-          }
-
-          const confirmado = await mostrarConfirm(`Ajustar a capacidade deste horário para ${padrao} veículo(s)/hora, igual ao que a Regra Padrão/Exceção calcula hoje?`, { titulo: "Ajustar para o padrão atual", textoConfirmar: "Ajustar" });
-          if (!confirmado) return;
-
-          const horaFim = minutosParaHora((horaParaMinutos(hora) + 60) % (24 * 60));
-          btn.disabled = true;
-          try {
-            await setDoc(doc(db, "timeSlots", idSlotHorario(dataSelecionada, hora)), {
-              data: dataSelecionada,
-              horaInicio: hora,
-              horaFim,
-              capacidadeMax: padrao,
-              ativo: true
-            }, { merge: true });
-            carregarSlotsDoDia();
-          } catch (err) {
-            console.error(err);
-            await mostrarAlerta("Erro ao ajustar a capacidade para o padrão atual.", { titulo: "Erro", tipo: "erro" });
-            btn.disabled = false;
-          }
-        });
-      });
-
-      container.querySelectorAll(".btn-toggle-slot").forEach(btn => {
-        btn.addEventListener("click", async () => {
-          const hora = btn.dataset.hora;
-          const fechado = btn.dataset.fechado === "true";
-          const capacidadeAtual = Number(btn.dataset.capacidade) || 1;
-          const horaFim = minutosParaHora((horaParaMinutos(hora) + 60) % (24 * 60));
-          btn.disabled = true;
-          try {
-            await setDoc(doc(db, "timeSlots", idSlotHorario(dataSelecionada, hora)), {
-              data: dataSelecionada,
-              horaInicio: hora,
-              horaFim,
-              capacidadeMax: capacidadeAtual,
-              ativo: fechado
-            }, { merge: true });
-            carregarSlotsDoDia();
-          } catch (err) {
-            console.error(err);
-            await mostrarAlerta("Erro ao alterar o horário.", { titulo: "Erro", tipo: "erro" });
-            btn.disabled = false;
-          }
-        });
-      });
-
-      container.querySelectorAll(".btn-restaurar-slot").forEach(btn => {
-        btn.addEventListener("click", async () => {
-          const confirmado = await mostrarConfirm("Restaurar este horário para o padrão (Regra/Exceção), removendo o ajuste manual desta data?", { titulo: "Restaurar padrão", perigo: true, textoConfirmar: "Restaurar" });
-          if (!confirmado) return;
-          const hora = btn.dataset.hora;
-          btn.disabled = true;
-          try {
-            await deleteDoc(doc(db, "timeSlots", idSlotHorario(dataSelecionada, hora)));
-            carregarSlotsDoDia();
-          } catch (err) {
-            console.error(err);
-            await mostrarAlerta("Erro ao restaurar o horário.", { titulo: "Erro", tipo: "erro" });
-            btn.disabled = false;
-          }
-        });
-      });
-    }
-
-    // --- Adicionar/Forçar um horário específico fora do padrão, só para esta data ---
-    const formSlotManual = document.getElementById("form-slot-manual");
-    formSlotManual?.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const erroBox = document.getElementById("slot-manual-error");
-      erroBox.textContent = "";
-
-      const dataSelecionada = inputFiltroDataSlot?.value || "";
-      if (!dataSelecionada) {
-        erroBox.textContent = "Selecione a data do ajuste acima primeiro.";
-        return;
-      }
-
-      const horaInicio = document.getElementById("manualHoraInicio").value;
-      const capacidade = Number(document.getElementById("manualCapacidade").value);
-
-      if (!horaInicio) {
-        erroBox.textContent = "Informe o horário.";
-        return;
-      }
-      if (!capacidade || capacidade < 1) {
-        erroBox.textContent = "Informe uma capacidade válida.";
-        return;
-      }
-
-      const horaFim = minutosParaHora((horaParaMinutos(horaInicio) + 60) % (24 * 60));
-      const btn = formSlotManual.querySelector("button[type=submit]");
-      btn.disabled = true;
-
-      try {
-        await setDoc(doc(db, "timeSlots", idSlotHorario(dataSelecionada, horaInicio)), {
-          data: dataSelecionada,
-          horaInicio,
-          horaFim,
-          capacidadeMax: capacidade,
-          ativo: true
-        }, { merge: true });
-
-        formSlotManual.reset();
-        document.getElementById("manualCapacidade").value = "1";
-        carregarSlotsDoDia();
-      } catch (err) {
-        console.error(err);
-        erroBox.textContent = "Erro ao adicionar o horário.";
-      } finally {
-        btn.disabled = false;
-      }
-    });
-
-    /* ===================================================================
-       4. ABA: APROVAÇÃO DE USUÁRIOS COLABORADORES
-       =================================================================== */
-    async function carregarUsuariosPendentes() {
-      const container = document.getElementById("lista-pendentes-usuarios");
-      if (!container) return;
-      container.innerHTML = '<div class="estado-vazio">Buscando cadastros pendentes...</div>';
-
-      try {
-        const q = query(collection(db, "users"), where("status", "==", "pendente_aprovacao"));
         const snap = await getDocs(q);
 
         if (snap.empty) {
-          container.innerHTML = '<div class="estado-vazio">Nenhum colaborador aguardando aprovação.</div>';
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--texto-suave);">Nenhum registro encontrado para o período informado.</td></tr>';
           return;
         }
 
-        container.innerHTML = "";
-        snap.docs.forEach(docSnap => {
-          const u = docSnap.data();
-          const id = docSnap.id;
+        tbody.innerHTML = "";
+        snap.docs.forEach(d => {
+          const b = d.data();
+          if (statusFiltro && b.status !== statusFiltro) return;
 
-          const card = document.createElement("div");
-          card.className = "item-agendamento";
-          card.innerHTML = `
-            <div class="linha-topo">
-              <span class="data-hora">👤 ${escapeHtml(u.nome || "-")} (${escapeHtml(u.email || "-")})</span>
-              <span class="badge pendente">Pendente</span>
-            </div>
-            <div class="detalhes" style="margin-top:8px;">
-              Empresa / Setor: ${escapeHtml(u.empresa || "Interno")}
-            </div>
-            <div style="margin-top:12px; display:flex; gap:8px; align-items:center;">
-              <select id="sel-tipo-${id}" class="campo-select" style="max-width:180px;">
-                <option value="2">Logística</option>
-                <option value="3">Administrador</option>
-              </select>
-              <button class="btn-acao btn-aprovar btn-aprovar-user" data-id="${id}">Aprovar</button>
-              <button class="btn-acao btn-recusar btn-recusar-user" data-id="${id}">Recusar</button>
-            </div>
+          const tr = document.createElement("tr");
+          const processoNome = mapProcessos[b.tipoProcessoId] || b.tipoProcessoId;
+
+          tr.innerHTML = `
+            <td><strong>${formatarData(b.dataAgendada)}</strong><br><small>${b.horaInicio}</small></td>
+            <td>${escapeHtml(b.empresa)}</td>
+            <td>${escapeHtml(processoNome)}</td>
+            <td>${escapeHtml(b.placaCavalo)} ${b.placaCarreta ? '/ ' + escapeHtml(b.placaCarreta) : ''}</td>
+            <td>${escapeHtml(b.motorista)}</td>
+            <td><span class="status-badge status-${classeStatus(b.status)}">${b.status}</span></td>
+            <td>--</td>
           `;
-          container.appendChild(card);
-        });
-
-        container.querySelectorAll(".btn-aprovar-user").forEach(btn => {
-          btn.addEventListener("click", () => {
-            const id = btn.dataset.id;
-            const tipoSelect = document.getElementById(`sel-tipo-${id}`);
-            aprovarUsuario(id, Number(tipoSelect.value));
-          });
-        });
-
-        container.querySelectorAll(".btn-recusar-user").forEach(btn => {
-          btn.addEventListener("click", () => recusarUsuario(btn.dataset.id));
+          tbody.appendChild(tr);
         });
 
       } catch (err) {
-        console.error("Erro ao carregar usuários pendentes:", err);
-        container.innerHTML = '<div class="estado-vazio">Erro ao carregar lista de usuários.</div>';
+        console.error("Erro ao carregar histórico:", err);
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--erro);">${formatarErroFirestore(err.message)}</td></tr>`;
       }
     }
 
-    async function aprovarUsuario(userId, tipo) {
-      try {
-        await updateDoc(doc(db, "users", userId), {
-          tipo,
-          status: "aprovado",
-          aprovadoEm: serverTimestamp(),
-          aprovadoPor: usuarioAtual.uid
-        });
-        await mostrarAlerta("Usuário aprovado com sucesso!", { titulo: "Usuário aprovado", tipo: "sucesso" });
-        carregarUsuariosPendentes();
-      } catch (err) {
-        console.error(err);
-        await mostrarAlerta("Erro ao aprovar usuário.", { titulo: "Erro", tipo: "erro" });
-      }
-    }
-
-    async function recusarUsuario(userId) {
-      const confirmado = await mostrarConfirm("Tem certeza que deseja recusar este usuário?", { titulo: "Recusar cadastro", perigo: true, textoConfirmar: "Recusar" });
-      if (!confirmado) return;
-      try {
-        await updateDoc(doc(db, "users", userId), {
-          status: "recusado",
-          atualizadoEm: serverTimestamp(),
-          atualizadoPor: usuarioAtual.uid
-        });
-        await mostrarAlerta("Cadastro recusado.", { titulo: "Cadastro recusado", tipo: "sucesso" });
-        carregarUsuariosPendentes();
-      } catch (err) {
-        console.error(err);
-        await mostrarAlerta("Erro ao recusar usuário.", { titulo: "Erro", tipo: "erro" });
-      }
-    }
+    document.getElementById("btn-filtrar-todos")?.addEventListener("click", carregarTodosAgendamentos);
 
     /* ===================================================================
-       5. ABA: TIPOS DE PROCESSO
-       =================================================================== */
-    const formProcesso = document.getElementById("form-processo");
-    formProcesso?.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const inputNome = document.getElementById("nomeProcesso");
-      const erroBox = document.getElementById("processo-error");
-      const nome = inputNome.value.trim();
-
-      if (!nome) return;
-      erroBox.textContent = "";
-
-      try {
-        await addDoc(collection(db, "processTypes"), {
-          nome,
-          ativo: true,
-          criadoEm: serverTimestamp()
-        });
-        inputNome.value = "";
-        tiposProcessoCache = null;
-        carregarTiposProcesso();
-      } catch (err) {
-        console.error(err);
-        erroBox.textContent = "Erro ao cadastrar tipo de processo.";
-      }
-    });
-
-    async function carregarTiposProcesso() {
-      const container = document.getElementById("lista-processos");
-      if (!container) return;
-      container.innerHTML = '<div class="estado-vazio">Carregando tipos de processo...</div>';
-
-      try {
-        const snap = await getDocs(collection(db, "processTypes"));
-        if (snap.empty) {
-          container.innerHTML = '<div class="estado-vazio">Nenhum tipo de processo cadastrado.</div>';
-          return;
-        }
-
-        container.innerHTML = "";
-        snap.docs.forEach(docSnap => {
-          const p = docSnap.data();
-          const id = docSnap.id;
-
-          const card = document.createElement("div");
-          card.className = "item-agendamento";
-          card.innerHTML = `
-            <div class="linha-topo">
-              <span class="data-hora">${escapeHtml(p.nome)}</span>
-              <button class="btn-acao ${p.ativo ? "btn-recusar" : "btn-aprovar"} btn-toggle-processo" data-id="${id}" data-ativo="${p.ativo}">
-                ${p.ativo ? "Desativar" : "Ativar"}
-              </button>
-            </div>
-          `;
-          container.appendChild(card);
-        });
-
-        container.querySelectorAll(".btn-toggle-processo").forEach(btn => {
-          btn.addEventListener("click", async () => {
-            const id = btn.dataset.id;
-            const ativo = btn.dataset.ativo === "true";
-            btn.disabled = true;
-
-            try {
-              await updateDoc(doc(db, "processTypes", id), { ativo: !ativo });
-              tiposProcessoCache = null;
-              carregarTiposProcesso();
-            } catch (err) {
-              console.error(err);
-              await mostrarAlerta("Erro ao alterar status do processo.", { titulo: "Erro", tipo: "erro" });
-              btn.disabled = false;
-            }
-          });
-        });
-
-      } catch (err) {
-        console.error(err);
-        container.innerHTML = '<div class="estado-vazio">Erro ao carregar tipos de processo.</div>';
-      }
-    }
-
-    /* ===================================================================
-       UTILITÁRIOS
+       UTILITÁRIOS DE FORMATAÇÃO E RECURSOS
        =================================================================== */
     async function obterTiposProcessoMap() {
-      if (tiposProcessoCache) return tiposProcessoCache;
-      const mapa = {};
+      const map = {};
       try {
         const snap = await getDocs(collection(db, "processTypes"));
-        snap.docs.forEach(d => { mapa[d.id] = d.data().nome; });
-        tiposProcessoCache = mapa;
+        snap.docs.forEach(d => { map[d.id] = d.data().nome; });
       } catch (err) {
-        console.error(err);
+        console.error("Erro ao buscar tipos de processo:", err);
       }
-      return mapa;
-    }
-
-    function dataDeHojeStr() {
-      const agora = new Date();
-      const ano = agora.getFullYear();
-      const mes = String(agora.getMonth() + 1).padStart(2, "0");
-      const dia = String(agora.getDate()).padStart(2, "0");
-      return `${ano}-${mes}-${dia}`;
+      return map;
     }
 
     function formatarData(dataStr) {
       if (!dataStr) return "-";
       const [ano, mes, dia] = dataStr.split("-");
       return `${dia}/${mes}/${ano}`;
+    }
+
+    function formatarDataHoraTimestamp(ts) {
+      if (!ts) return "-";
+      const date = ts.toDate ? ts.toDate() : new Date(ts);
+      return date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
     }
 
     function classeStatus(status) {
@@ -2150,20 +789,30 @@
         .replace(/'/g, "&#039;");
     }
 
-    // Se a mensagem de erro do Firestore contiver o link para criação
-    // automática de índice composto (erro clássico "failed-precondition:
-    // The query requires an index..."), transforma em link clicável em
-    // vez de mostrar só o texto cru — acelera bastante o diagnóstico.
     function formatarErroFirestore(msg) {
       if (!msg) return "";
       const match = String(msg).match(/https:\/\/console\.firebase\.google\.com\S*/);
       if (match) {
         const url = match[0].replace(/[).,]+$/, "");
         const antes = escapeHtml(msg.slice(0, msg.indexOf(match[0])));
-        return `${antes}<a href="${url}" target="_blank" rel="noopener" style="color:var(--azul); font-weight:600;">Clique aqui para criar o índice automaticamente</a>`;
+        return `${antes} <a href="${url}" target="_blank" style="color:var(--azul-principal); text-decoration:underline;">Criar Índice Firestore</a>`;
       }
       return escapeHtml(msg);
     }
   </script>
+
+  <style>
+    /* Estilo auxiliar para tag de agendamento operacional direto */
+    .tag-operacional {
+      background-color: var(--azul-escuro, #0f2942);
+      color: #fff;
+      font-size: 0.65rem;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-weight: bold;
+      margin-left: 4px;
+      vertical-align: middle;
+    }
+  </style>
 </body>
 </html>
