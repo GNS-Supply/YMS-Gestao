@@ -793,8 +793,8 @@ export function calcularKPIs(bookingsFiltrados) {
 
   comCheckIn.forEach(b => {
     const p = b.checkIn.pontualidade;
-    if (p === PONTUALIDADE.NO_HORARIO) noHorario++;
-    else if (p === PONTUALIDADE.ANTECIPADO) antecipado++;
+    if (p === PONTUALIDADE.PONTUAL) noHorario++;
+    else if (p === PONTUALIDADE.ADIANTADO) antecipado++;
     else if (p === PONTUALIDADE.ATRASADO) atrasado++;
   });
 
