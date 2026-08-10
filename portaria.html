@@ -48,6 +48,16 @@
       align-items: center;
       justify-content: center;
       z-index: 1000;
+      /* BUGFIX: style.css define, na regra global .modal-overlay,
+         opacity:0 e pointer-events:none — só revertidos pela classe
+         .aberto (usada em admin/cadastro/transportadora). Esta página
+         usa outro esquema (.oculto), e nunca adiciona .aberto, então
+         sem estas duas linhas os 3 modais (check-in, check-out,
+         encaixe) ficavam tecnicamente visíveis no layout porém com
+         opacidade 0 e sem clique — pareciam simplesmente "não abrir".
+         */
+      opacity: 1;
+      pointer-events: auto;
     }
     .modal-overlay.oculto { display: none; }
     .modal-card {
@@ -458,7 +468,13 @@
        =================================================================== */
     function vincularEventosAcao() {
       // Eventos Check-in
-      document.querySelectorAll(".btn-checkin").forEach(btn => {
+      // OBS: escopado a #tbody-portaria de propósito — os botões de
+      // submit dentro dos modais ("Confirmar Check-in"/"Confirmar
+      // Check-out") reaproveitam as mesmas classes .btn-checkin/
+      // .btn-checkout só para herdar a cor, e um seletor global aqui
+      // colaria neles (sem data-id) o mesmo listener de "abrir modal",
+      // duplicando a cada recarga da tabela.
+      document.querySelectorAll("#tbody-portaria .btn-checkin").forEach(btn => {
         btn.addEventListener("click", () => {
           const id = btn.getAttribute("data-id");
           const booking = agendamentosHoje.find(b => b.id === id);
@@ -479,7 +495,7 @@
       });
 
       // Eventos Check-out
-      document.querySelectorAll(".btn-checkout").forEach(btn => {
+      document.querySelectorAll("#tbody-portaria .btn-checkout").forEach(btn => {
         btn.addEventListener("click", () => {
           const id = btn.getAttribute("data-id");
           const booking = agendamentosHoje.find(b => b.id === id);
@@ -500,7 +516,7 @@
       });
 
       // Eventos No-Show
-      document.querySelectorAll(".btn-noshow").forEach(btn => {
+      document.querySelectorAll("#tbody-portaria .btn-noshow").forEach(btn => {
         btn.addEventListener("click", async () => {
           const id = btn.getAttribute("data-id");
           const booking = agendamentosHoje.find(b => b.id === id);
