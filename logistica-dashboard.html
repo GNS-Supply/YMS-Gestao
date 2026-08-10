@@ -391,6 +391,7 @@
                 <th>Capacidade Máxima</th>
                 <th>Ocupados Atual</th>
                 <th>Status</th>
+                <th>Ações</th>
               </tr>
             </thead>
             <tbody id="tbody-vagas"></tbody>
@@ -410,10 +411,11 @@
       doc,
       getDocs,
       updateDoc,
+      setDoc,
+      deleteDoc,
       addDoc,
       query,
       where,
-      orderBy,
       serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
@@ -421,7 +423,8 @@
       obterHorariosDisponiveis,
       criarAgendamentoOperacional,
       filtrarBookings,
-      calcularKPIs
+      calcularKPIs,
+      idSlotHorario
     } from "./patioCore.js";
 
     let usuarioLogado = null;
@@ -744,7 +747,13 @@
       tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Buscando pendentes...</td></tr>';
 
       try {
-        const q = query(collection(db, "bookings"), where("status", "==", "Pendente"), orderBy("dataAgendada", "asc"));
+        // Sem orderBy() de propósito: combinar where("status") com
+        // orderBy("dataAgendada") exige um índice composto no Firestore
+        // que nunca chegou a ser criado no banco — a consulta falhava
+        // silenciosamente e caía no catch abaixo. Buscando só por
+        // igualdade (que usa o índice automático de campo único, sempre
+        // disponível) e ordenando no cliente evita essa dependência.
+        const q = query(collection(db, "bookings"), where("status", "==", "Pendente"));
         const snap = await getDocs(q);
 
         if (snap.empty) {
@@ -752,7 +761,15 @@
           return;
         }
 
-        tbody.innerHTML = snap.docs.map(d => {
+        const docsOrdenados = snap.docs.slice().sort((docA, docB) => {
+          const a = docA.data();
+          const b = docB.data();
+          const cmpData = (a.dataAgendada || "").localeCompare(b.dataAgendada || "");
+          if (cmpData !== 0) return cmpData;
+          return (a.horaInicio || "").localeCompare(b.horaInicio || "");
+        });
+
+        tbody.innerHTML = docsOrdenados.map(d => {
           const b = d.data();
           return `
             <tr>
@@ -769,6 +786,7 @@
           `;
         }).join("");
       } catch (err) {
+        console.error("Erro ao buscar solicitações pendentes:", err);
         tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Erro ao buscar solicitações.</td></tr>';
       }
     }
@@ -900,6 +918,185 @@
     }
 
     document.getElementById("btn-filtrar-kpis").addEventListener("click", atualizarPainelKPIs);
+
+    /* ===================================================================
+       ETAPA 5: GESTÃO DE VAGAS (AJUSTE MANUAL DE CAPACIDADE POR DIA)
+
+       Antes desta etapa o botão "Buscar Vagas" existia só no HTML, sem
+       nenhum handler — não fazia nada ao ser clicado. Esta seção
+       implementa a busca (reaproveitando obterHorariosDisponiveis, o
+       mesmo motor usado no painel do dia e no formulário de agendamento
+       operacional, com incluirFechados:true para também listar horários
+       fechados manualmente) e as ações de edição:
+
+         - Salvar: atualiza a capacidadeMax do horário para aquela data.
+         - Fechar / Reabrir: alterna o campo `ativo` do ajuste manual.
+         - Restaurar Padrão: apaga o ajuste manual (documento em
+           timeSlots), voltando a valer a Regra Padrão/Exceção vigente.
+           Só é oferecido quando não há nenhuma reserva usando a vaga
+           (ocupados === 0), mesma trava que existe nas Firestore Rules
+           (allow delete: if souLogisticaOuAdmin() && resource.data.ocupados == 0).
+
+       Todas as escritas usam setDoc(..., {merge:true}) com o documento
+       inteiro (não apenas o campo alterado), porque a validação das
+       Rules (`camposValidos`) confere o estado final do documento como
+       um todo — não faz sentido gravar um campo isolado se o doc ainda
+       não existir (horário nunca ajustado manualmente antes).
+       =================================================================== */
+    document.getElementById("btn-carregar-vagas").addEventListener("click", carregarVagas);
+
+    async function carregarVagas() {
+      const dataStr = document.getElementById("vagas-data").value;
+      const container = document.getElementById("container-vagas-grid");
+      const tbody = document.getElementById("tbody-vagas");
+
+      if (!dataStr) {
+        alert("Selecione uma data para buscar as vagas.");
+        return;
+      }
+
+      container.style.display = "block";
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Carregando vagas...</td></tr>';
+
+      try {
+        const slots = await obterHorariosDisponiveis(db, dataStr, { incluirFechados: true });
+
+        if (slots.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#888;">Nenhum horário de atendimento configurado (Regra Padrão/Exceção) para esta data.</td></tr>';
+          return;
+        }
+
+        const origemLabel = { regra: "Regra Padrão", excecao: "Exceção", manual: "Ajuste Manual" };
+
+        tbody.innerHTML = slots.map(slot => {
+          const statusTexto = slot.fechado
+            ? "🔒 Fechado manualmente"
+            : (slot.ocupados >= slot.capacidadeMax ? "🔴 Esgotado" : "🟢 Com vagas");
+
+          const podeRestaurar = slot.temAjusteManual && slot.ocupados === 0;
+
+          return `
+            <tr data-hora="${slot.horaInicio}">
+              <td data-label="Horário">
+                <b>${slot.horaInicio} às ${slot.horaFim}</b><br>
+                <small style="color:#888;">${origemLabel[slot.origem] || slot.origem}${slot.divergeDoPadrao ? " ⚠️ diverge do padrão atual" : ""}</small>
+              </td>
+              <td data-label="Capacidade Máxima">
+                <input type="number" min="1" step="1" class="input-capacidade-vaga" value="${slot.capacidadeMax}" style="width:80px; padding:6px; border:1px solid var(--cinza-borda,#ccc); border-radius:4px;">
+              </td>
+              <td data-label="Ocupados Atual">${slot.ocupados}</td>
+              <td data-label="Status">${statusTexto}</td>
+              <td data-label="Ações">
+                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                  <button type="button" class="btn-acao btn-salvar-vaga" style="background:var(--azul,#1a5f9e); color:#fff;">Salvar</button>
+                  <button type="button" class="btn-acao btn-toggle-vaga" style="background:${slot.fechado ? "#28a745" : "#dc3545"}; color:#fff;">
+                    ${slot.fechado ? "Reabrir" : "Fechar"}
+                  </button>
+                  ${podeRestaurar ? `<button type="button" class="btn-acao btn-restaurar-vaga" style="background:#fff; color:#333; border:1px solid var(--cinza-borda,#ccc);">Restaurar Padrão</button>` : ""}
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join("");
+
+        vincularEventosVagas(dataStr, slots);
+      } catch (err) {
+        console.error("Erro ao carregar vagas:", err);
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">Erro ao carregar as vagas desta data.</td></tr>';
+      }
+    }
+
+    function vincularEventosVagas(dataStr, slots) {
+      document.querySelectorAll(".btn-salvar-vaga").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const tr = btn.closest("tr");
+          const horaInicio = tr.dataset.hora;
+          const slot = slots.find(s => s.horaInicio === horaInicio);
+          const novaCapacidade = parseInt(tr.querySelector(".input-capacidade-vaga").value, 10);
+
+          if (!novaCapacidade || novaCapacidade < 1) {
+            alert("Informe uma capacidade válida (mínimo 1).");
+            return;
+          }
+          if (novaCapacidade < slot.ocupados) {
+            alert(`A capacidade não pode ser menor que a ocupação atual (${slot.ocupados} já reservado(s) neste horário).`);
+            return;
+          }
+
+          btn.disabled = true;
+          btn.textContent = "Salvando...";
+          try {
+            await salvarAjusteVaga(dataStr, slot, { capacidadeMax: novaCapacidade, ativo: !slot.fechado });
+            await carregarVagas();
+          } catch (err) {
+            console.error("Erro ao salvar capacidade da vaga:", err);
+            alert("Erro ao salvar a capacidade: " + err.message);
+            btn.disabled = false;
+            btn.textContent = "Salvar";
+          }
+        });
+      });
+
+      document.querySelectorAll(".btn-toggle-vaga").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const tr = btn.closest("tr");
+          const horaInicio = tr.dataset.hora;
+          const slot = slots.find(s => s.horaInicio === horaInicio);
+          const novoAtivo = !!slot.fechado; // estava fechado -> reabre (true) | estava aberto -> fecha (false)
+          const acaoTexto = slot.fechado ? "reabrir" : "fechar";
+
+          if (!confirm(`Confirma ${acaoTexto} o horário ${slot.horaInicio} às ${slot.horaFim} apenas para o dia ${formatarData(dataStr)}?`)) return;
+
+          btn.disabled = true;
+          try {
+            await salvarAjusteVaga(dataStr, slot, { capacidadeMax: slot.capacidadeMax, ativo: novoAtivo });
+            await carregarVagas();
+          } catch (err) {
+            console.error("Erro ao fechar/reabrir vaga:", err);
+            alert("Erro ao atualizar o horário: " + err.message);
+            btn.disabled = false;
+          }
+        });
+      });
+
+      document.querySelectorAll(".btn-restaurar-vaga").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const tr = btn.closest("tr");
+          const horaInicio = tr.dataset.hora;
+
+          if (!confirm(`Restaurar o horário ${horaInicio} para o padrão (Regra/Exceção)? Isso remove o ajuste manual feito para este dia.`)) return;
+
+          btn.disabled = true;
+          try {
+            const slotId = idSlotHorario(dataStr, horaInicio);
+            await deleteDoc(doc(db, "timeSlots", slotId));
+            await carregarVagas();
+          } catch (err) {
+            console.error("Erro ao restaurar padrão da vaga:", err);
+            alert("Erro ao restaurar o padrão: " + err.message);
+            btn.disabled = false;
+          }
+        });
+      });
+    }
+
+    // Grava (cria ou atualiza) o ajuste manual do horário em timeSlots.
+    // Usa o documento inteiro com merge:true — necessário porque a
+    // primeira vez que um horário é ajustado manualmente, o documento
+    // ainda não existe (só existia "virtualmente", calculado pela
+    // Regra/Exceção), e as Rules exigem todos os campos válidos no
+    // resultado final da escrita (camposValidos), não só o campo alterado.
+    async function salvarAjusteVaga(dataStr, slot, { capacidadeMax, ativo }) {
+      const slotId = idSlotHorario(dataStr, slot.horaInicio);
+      await setDoc(doc(db, "timeSlots", slotId), {
+        data: dataStr,
+        horaInicio: slot.horaInicio,
+        horaFim: slot.horaFim,
+        capacidadeMax,
+        ativo,
+        ocupados: slot.ocupados
+      }, { merge: true });
+    }
 
     /* ===================================================================
        UTILITÁRIOS

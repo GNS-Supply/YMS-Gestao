@@ -269,7 +269,6 @@
       updateDoc,
       query,
       where,
-      orderBy,
       serverTimestamp,
       Timestamp
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
@@ -339,12 +338,18 @@
       try {
         const q = query(
           collection(db, "bookings"),
-          where("dataAgendada", "==", dataHoje),
-          orderBy("horaInicio", "asc")
+          where("dataAgendada", "==", dataHoje)
         );
 
         const snap = await getDocs(q);
-        agendamentosHoje = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        // Ordenado no cliente (em vez de orderBy() no Firestore) para não
+        // depender de um índice composto (dataAgendada + horaInicio) — a
+        // consulta assim funciona com o índice automático de campo único
+        // que o Firestore já cria sozinho, sem precisar de deploy manual
+        // de índice.
+        agendamentosHoje = snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
 
         atualizarContadores();
         renderizarTabela();

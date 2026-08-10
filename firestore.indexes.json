@@ -7,14 +7,6 @@
         { "fieldPath": "dataAgendada", "order": "ASCENDING" },
         { "fieldPath": "horaInicio", "order": "ASCENDING" }
       ]
-    },
-    {
-      "collectionGroup": "bookings",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "dataAgendada", "order": "ASCENDING" }
-      ]
     }
   ],
   "fieldOverrides": []
