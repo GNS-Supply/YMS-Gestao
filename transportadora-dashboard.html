@@ -217,6 +217,28 @@
     // Horários (slots) atualmente exibidos para a data escolhida
     let slotsDoDia = [];
 
+    /* ===================================================================
+       DATA/HORA ATUAL (fuso LOCAL do navegador — NÃO usar toISOString()
+       aqui, pois ele converte para UTC e gera datas erradas à noite em
+       fusos negativos como o do Brasil, ex: 23h de 10/08 em UTC-3 já
+       virou "2026-08-11" em UTC, bloqueando o próprio dia 10 no min do
+       input e nos cálculos de horário já passado abaixo).
+       =================================================================== */
+    function dataDeHojeStr() {
+      const agora = new Date();
+      const ano = agora.getFullYear();
+      const mes = String(agora.getMonth() + 1).padStart(2, "0");
+      const dia = String(agora.getDate()).padStart(2, "0");
+      return `${ano}-${mes}-${dia}`;
+    }
+
+    function horaAtualStr() {
+      const agora = new Date();
+      const h = String(agora.getHours()).padStart(2, "0");
+      const m = String(agora.getMinutes()).padStart(2, "0");
+      return `${h}:${m}`;
+    }
+
     // ---------------- Elementos do DOM ----------------
     const form = document.getElementById("form-agendamento");
     const selectTipoProcesso = document.getElementById("tipoProcesso");
@@ -275,9 +297,9 @@
     configurarMascaraPlaca(inputPlacaCavalo);
     configurarMascaraPlaca(inputPlacaCarreta);
 
-    // Não deixa escolher datas retroativas
+    // Não deixa escolher datas retroativas (fuso local, ver dataDeHojeStr)
     if (inputData) {
-      inputData.min = new Date().toISOString().split("T")[0];
+      inputData.min = dataDeHojeStr();
     }
 
     document.getElementById("btn-logout")?.addEventListener("click", logout);
@@ -359,8 +381,18 @@
         // pela Logística para esta data não aparecem aqui.
         slotsDoDia = await buscarSlotsVirtuaisDoDia(db, dataSelecionada);
 
+        // Se a data escolhida é HOJE, remove da lista qualquer horário cujo
+        // início já passou (ou está em andamento) — não faz sentido oferecer
+        // uma janela às 07:00 se já são 08:50, por exemplo.
+        if (dataSelecionada === dataDeHojeStr()) {
+          const horaAtual = horaAtualStr();
+          slotsDoDia = slotsDoDia.filter(s => s.horaInicio > horaAtual);
+        }
+
         if (slotsDoDia.length === 0) {
-          slotsMsg.textContent = "Nenhum horário de atendimento configurado para esta data.";
+          slotsMsg.textContent = dataSelecionada === dataDeHojeStr()
+            ? "Não há mais horários disponíveis hoje. Selecione outra data."
+            : "Nenhum horário de atendimento configurado para esta data.";
           return;
         }
 
@@ -426,6 +458,13 @@
 
       if (!horaInicio) {
         erroBox.textContent = "Por favor, selecione um horário disponível no grid acima.";
+        return;
+      }
+
+      // Trava de segurança: se o usuário demorou para confirmar e o horário
+      // selecionado já passou nesse meio tempo (data = hoje), bloqueia o envio.
+      if (dataAgendada === dataDeHojeStr() && horaInicio <= horaAtualStr()) {
+        erroBox.textContent = "Este horário já passou. Selecione uma data/horário novamente.";
         return;
       }
 

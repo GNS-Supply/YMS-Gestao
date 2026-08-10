@@ -448,6 +448,8 @@
 
     // Listener em tempo real da aba "Agendamentos de Hoje"
     let unsubscribeHoje = null;
+    // Listener em tempo real da aba "Painel do Dia" (linha do tempo da data selecionada)
+    let unsubscribePainel = null;
 
     document.getElementById("btn-logout")?.addEventListener("click", logout);
 
@@ -464,10 +466,14 @@
       document.querySelector(`.tab-btn[data-tab="${tab}"]`)?.classList.add("ativo");
       document.getElementById(`tab-${tab}`)?.classList.add("ativo");
 
-      // Mantém o listener em tempo real apenas na aba "hoje"
+      // Mantém os listeners em tempo real apenas nas abas onde são usados
       if (tab !== "hoje" && unsubscribeHoje) {
         unsubscribeHoje();
         unsubscribeHoje = null;
+      }
+      if (tab !== "painel" && unsubscribePainel) {
+        unsubscribePainel();
+        unsubscribePainel = null;
       }
 
       if (tab === "painel") inicializarPainelDia();
@@ -997,7 +1003,7 @@
     function classificarNivel(ocupados, capacidade) {
       if (!capacidade || capacidade <= 0) return "fechado";
       if (ocupados >= capacidade) return "cheio";
-      if (ocupados / capacidade >= 0.7) return "parcial";
+      if (ocupados / capacidade >= 0.49) return "parcial";
       return "livre";
     }
 
@@ -1059,77 +1065,106 @@
       return `${NOMES_DIAS[diaSemanaLocal(dataStr)]}, ${dia}/${mes}/${ano}`;
     }
 
-    async function carregarLinhaTempoPainel(dataStr) {
+    // Guarda quais faixas de horário estão abertas (expandidas) para
+    // preservar esse estado entre re-renderizações automáticas do
+    // listener em tempo real (senão o acordeão fecharia sozinho toda
+    // vez que um novo agendamento chegasse).
+    const faixasAbertasPainel = new Set();
+
+    function carregarLinhaTempoPainel(dataStr) {
       const container = document.getElementById("painel-linha-tempo");
       const titulo = document.getElementById("painel-data-titulo");
       if (!container) return;
 
       if (titulo) titulo.textContent = formatarDataLonga(dataStr);
       container.innerHTML = '<div class="estado-vazio">Carregando horários...</div>';
+      faixasAbertasPainel.clear();
 
-      try {
-        const [slots, snapBookings] = await Promise.all([
-          buscarSlotsVirtuaisDoDia(db, dataStr, { incluirFechados: true }),
-          getDocs(query(collection(db, "bookings"), where("dataAgendada", "==", dataStr)))
-        ]);
-
-        // Recusado/Cancelado já liberaram a vaga (ver alterarStatusAgendamento),
-        // então não entram na lista — Expirado ainda ocupa, então continua aparecendo.
-        const bookingsPorHora = {};
-        snapBookings.docs.forEach(d => {
-          const b = d.data();
-          if (b.status === "Recusado" || b.status === "Cancelado") return;
-          const hora = b.horaInicio || "-";
-          if (!bookingsPorHora[hora]) bookingsPorHora[hora] = [];
-          bookingsPorHora[hora].push(b);
-        });
-
-        if (slots.length === 0) {
-          container.innerHTML = '<div class="estado-vazio">Pátio fechado nesta data (sem Regra Padrão nem Exceção configurada para este dia da semana).</div>';
-          return;
-        }
-
-        container.innerHTML = "";
-        slots.forEach(s => {
-          const reservas = bookingsPorHora[s.horaInicio] || [];
-          const nivel = s.fechado ? "fechado" : classificarNivel(s.ocupados, s.capacidadeMax);
-          const taxa = s.capacidadeMax > 0 ? Math.min(100, (s.ocupados / s.capacidadeMax) * 100) : 0;
-          const vagasLivres = Math.max(0, s.capacidadeMax - s.ocupados);
-
-          const faixa = document.createElement("div");
-          faixa.className = `faixa-horario nivel-${nivel}`;
-          faixa.innerHTML = `
-            <button type="button" class="faixa-horario-cabecalho">
-              <span class="faixa-horario-hora">${escapeHtml(s.horaInicio)}–${escapeHtml(s.horaFim)}</span>
-              <span class="faixa-horario-barra"><span class="faixa-horario-barra-preenchida" style="width:${taxa}%;"></span></span>
-              <span class="faixa-horario-contagem">${s.fechado ? "Fechado" : `${s.ocupados}/${s.capacidadeMax}`}</span>
-              <span class="faixa-horario-seta">▶</span>
-            </button>
-            <div class="faixa-horario-corpo">
-              ${s.fechado
-                ? "Horário fechado manualmente para esta data."
-                : (reservas.length
-                    ? reservas.map(b => `
-                        <div class="reserva-mini">
-                          <strong>${escapeHtml(b.empresa || "-")}</strong> — ${escapeHtml(b.placaCavalo || "-")}${b.placaCarreta ? " / " + escapeHtml(b.placaCarreta) : ""}<br>
-                          Motorista: ${escapeHtml(b.motorista || "-")}
-                          <span class="badge ${classeStatus(b.status)}" style="margin-left:6px;">${escapeHtml(b.status)}</span>
-                        </div>
-                      `).join("")
-                    : `${vagasLivres} vaga(s) livre(s) — nenhuma reserva neste horário ainda.`)
-              }
-            </div>
-          `;
-          faixa.querySelector(".faixa-horario-cabecalho").addEventListener("click", () => {
-            faixa.classList.toggle("aberta");
-          });
-          container.appendChild(faixa);
-        });
-
-      } catch (err) {
-        console.error("Erro ao carregar painel do dia:", err);
-        container.innerHTML = `<div class="estado-vazio">Erro ao carregar o painel.<br><span style="font-size:0.78rem;">${formatarErroFirestore(err.message)}</span></div>`;
+      if (unsubscribePainel) {
+        unsubscribePainel();
+        unsubscribePainel = null;
       }
+
+      // Listener em tempo real: qualquer novo agendamento, aprovação,
+      // recusa ou cancelamento na data selecionada atualiza a tela na
+      // hora, sem precisar dar F5.
+      const qBookingsDia = query(collection(db, "bookings"), where("dataAgendada", "==", dataStr));
+
+      unsubscribePainel = onSnapshot(qBookingsDia, async (snapBookings) => {
+        // Só re-renderiza se ainda estivermos olhando para esta mesma data
+        // (evita corrida se o usuário já trocou de data enquanto isso).
+        if (dataStr !== painelDataSelecionada) return;
+        try {
+          const slots = await buscarSlotsVirtuaisDoDia(db, dataStr, { incluirFechados: true });
+          renderizarLinhaTempoPainel(slots, snapBookings, container);
+        } catch (err) {
+          console.error("Erro ao carregar painel do dia:", err);
+          container.innerHTML = `<div class="estado-vazio">Erro ao carregar o painel.<br><span style="font-size:0.78rem;">${formatarErroFirestore(err.message)}</span></div>`;
+        }
+      }, (err) => {
+        console.error("Erro no listener do painel do dia:", err);
+        container.innerHTML = '<div class="estado-vazio">Erro ao sincronizar o painel do dia em tempo real.</div>';
+      });
+    }
+
+    function renderizarLinhaTempoPainel(slots, snapBookings, container) {
+      // Recusado/Cancelado já liberaram a vaga (ver alterarStatusAgendamento),
+      // então não entram na lista — Expirado ainda ocupa, então continua aparecendo.
+      const bookingsPorHora = {};
+      snapBookings.docs.forEach(d => {
+        const b = d.data();
+        if (b.status === "Recusado" || b.status === "Cancelado") return;
+        const hora = b.horaInicio || "-";
+        if (!bookingsPorHora[hora]) bookingsPorHora[hora] = [];
+        bookingsPorHora[hora].push(b);
+      });
+
+      if (slots.length === 0) {
+        container.innerHTML = '<div class="estado-vazio">Pátio fechado nesta data (sem Regra Padrão nem Exceção configurada para este dia da semana).</div>';
+        return;
+      }
+
+      container.innerHTML = "";
+      slots.forEach(s => {
+        const reservas = bookingsPorHora[s.horaInicio] || [];
+        const nivel = s.fechado ? "fechado" : classificarNivel(s.ocupados, s.capacidadeMax);
+        const taxa = s.capacidadeMax > 0 ? Math.min(100, (s.ocupados / s.capacidadeMax) * 100) : 0;
+        const vagasLivres = Math.max(0, s.capacidadeMax - s.ocupados);
+
+        const faixa = document.createElement("div");
+        faixa.className = `faixa-horario nivel-${nivel}${faixasAbertasPainel.has(s.horaInicio) ? " aberta" : ""}`;
+        faixa.innerHTML = `
+          <button type="button" class="faixa-horario-cabecalho">
+            <span class="faixa-horario-hora">${escapeHtml(s.horaInicio)}–${escapeHtml(s.horaFim)}</span>
+            <span class="faixa-horario-barra"><span class="faixa-horario-barra-preenchida" style="width:${taxa}%;"></span></span>
+            <span class="faixa-horario-contagem">${s.fechado ? "Fechado" : `${s.ocupados}/${s.capacidadeMax}`}</span>
+            <span class="faixa-horario-seta">▶</span>
+          </button>
+          <div class="faixa-horario-corpo">
+            ${s.fechado
+              ? "Horário fechado manualmente para esta data."
+              : (reservas.length
+                  ? reservas.map(b => `
+                      <div class="reserva-mini">
+                        <strong>${escapeHtml(b.empresa || "-")}</strong> — ${escapeHtml(b.placaCavalo || "-")}${b.placaCarreta ? " / " + escapeHtml(b.placaCarreta) : ""}<br>
+                        Motorista: ${escapeHtml(b.motorista || "-")}
+                        <span class="badge ${classeStatus(b.status)}" style="margin-left:6px;">${escapeHtml(b.status)}</span>
+                      </div>
+                    `).join("")
+                  : `${vagasLivres} vaga(s) livre(s) — nenhuma reserva neste horário ainda.`)
+            }
+          </div>
+        `;
+        faixa.querySelector(".faixa-horario-cabecalho").addEventListener("click", () => {
+          faixa.classList.toggle("aberta");
+          if (faixa.classList.contains("aberta")) {
+            faixasAbertasPainel.add(s.horaInicio);
+          } else {
+            faixasAbertasPainel.delete(s.horaInicio);
+          }
+        });
+        container.appendChild(faixa);
+      });
     }
 
     /* ===================================================================
