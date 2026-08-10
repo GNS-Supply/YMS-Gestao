@@ -142,7 +142,11 @@ export function deveLiberarVaga(statusAtual, novoStatus) {
 
 export const TIPO_AGENDAMENTO = {
   ANTECIPADO: "Antecipado",
-  PORTARIA: "Portaria/Encaixe"
+  PORTARIA: "Portaria/Encaixe",
+  // Agendamento criado diretamente pela Logística/Admin (ver
+  // agendamentoOperacional.js), já nascendo como "Aprovado" — não passa
+  // pelo fluxo de solicitação/aprovação da Transportadora.
+  OPERACIONAL: "Operacional"
 };
 
 export const TODOS_TIPOS_AGENDAMENTO = Object.values(TIPO_AGENDAMENTO);
