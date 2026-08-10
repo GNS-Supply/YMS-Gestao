@@ -65,6 +65,16 @@
       padding: 10px;
       border-bottom: 1px solid #eee;
     }
+    .tag-operacional {
+      background-color: #0f2942;
+      color: #fff;
+      font-size: 0.65rem;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-weight: bold;
+      margin-left: 4px;
+      vertical-align: middle;
+    }
   </style>
 </head>
 <body>
@@ -83,28 +93,41 @@
   <div class="container">
 
     <div class="tabs">
-      <button class="tab-btn ativo" data-tab="painel">Painel do Dia</button>
-      <button class="tab-btn" data-tab="solicitacoes">Solicitações Pendentes</button>
-      <button class="tab-btn" data-tab="hoje">Agendamentos de Hoje</button>
-      <button class="tab-btn" data-tab="todos">Todos os Agendamentos</button>
-
-      <button class="tab-btn" data-tab="novo-operacional" style="background: rgba(40,167,69,0.1); color: #28a745; font-weight: 600;">
-        ➕ Novo Agendamento
-      </button>
-
-      <button class="tab-btn" data-tab="kpis" style="background: rgba(0,123,255,0.1); color: #007bff; font-weight: 600;">
-        📊 KPIs / Indicadores
-      </button>
-
-      <button class="tab-btn" data-tab="vagas">⚙️ Regras de Vagas</button>
+      <button class="tab-btn ativo" data-tab="painel">📅 Painel do Dia</button>
+      <button class="tab-btn" data-tab="solicitacoes">⏳ Solicitações Pendentes</button>
+      <button class="tab-btn" data-tab="hoje">📋 Agendamentos de Hoje</button>
+      <button class="tab-btn" data-tab="todos">🔍 Todos os Agendamentos</button>
+      <button class="tab-btn" data-tab="novo-operacional" style="background: rgba(40,167,69,0.1); color: #28a745; font-weight: 600;">➕ Novo Agendamento</button>
+      <button class="tab-btn" data-tab="kpis" style="background: rgba(0,123,255,0.1); color: #007bff; font-weight: 600;">📊 KPIs / Indicadores</button>
+      <button class="tab-btn" data-tab="vagas">⚙️ Gestão de Vagas</button>
     </div>
 
     <div class="tab-conteudo ativo" id="tab-painel">
       <div class="card">
-        <h3>Visão Geral Operacional do Dia</h3>
-        <p style="font-size: 0.85rem; color: #666;">Acompanhamento rápido das janelas e ocupação atual do pátio.</p>
-        <div id="painel-resumo-dia" style="margin-top: 15px;">
-          <p style="color: #888;">Carregando dados do dia...</p>
+        <h3>Visão Geral de Ocupação do Pátio</h3>
+        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
+          Selecione a data para visualizar a ocupação e os veículos agendados hora por hora.
+        </p>
+
+        <div class="tira-dias" id="tira-dias-container">
+          </div>
+
+        <div class="legenda-ocupacao" style="margin-top: 16px;">
+          <span><span class="ponto ponto-livre"></span> Vagas Livres</span>
+          <span><span class="ponto ponto-parcial"></span> Parcialmente Ocupado</span>
+          <span><span class="ponto ponto-cheio"></span> Horário Esgotado</span>
+          <span><span class="ponto ponto-fechado"></span> Horário Fechado</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+          <h4 id="titulo-data-selecionada">Horários para Hoje</h4>
+          <input type="date" id="picker-data-painel" style="padding:6px 10px; border-radius:6px; border:1px solid #ccc; font-size:0.9rem;">
+        </div>
+
+        <div class="linha-tempo" id="linha-tempo-container">
+          <p style="text-align:center; color:#888; padding:20px;">Carregando horários do pátio...</p>
         </div>
       </div>
     </div>
@@ -112,17 +135,45 @@
     <div class="tab-conteudo" id="tab-solicitacoes">
       <div class="card">
         <h3>Solicitações Aguardando Aprovação</h3>
-        <div id="lista-solicitacoes" style="margin-top: 15px;">
-          <p style="color: #888;">Nenhuma solicitação pendente no momento.</p>
+        <div style="overflow-x:auto;">
+          <table class="tabela-padrao">
+            <thead>
+              <tr>
+                <th>Data / Horário</th>
+                <th>Transportadora</th>
+                <th>Processo</th>
+                <th>Veículo / Motorista</th>
+                <th>Solicitado em</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-solicitacoes">
+              <tr><td colspan="6" style="text-align:center;">Carregando solicitações...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
 
     <div class="tab-conteudo" id="tab-hoje">
       <div class="card">
-        <h3>Lista de Agendamentos de Hoje</h3>
-        <div id="lista-hoje" style="margin-top: 15px;">
-          <p style="color: #888;">Carregando agendamentos de hoje...</p>
+        <h3>Programação do Dia</h3>
+        <div style="overflow-x:auto;">
+          <table class="tabela-padrao">
+            <thead>
+              <tr>
+                <th>Horário</th>
+                <th>Transportadora</th>
+                <th>Processo</th>
+                <th>Placas</th>
+                <th>Motorista</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-hoje">
+              <tr><td colspan="6" style="text-align:center;">Carregando agendamentos...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -130,78 +181,116 @@
     <div class="tab-conteudo" id="tab-todos">
       <div class="card">
         <h3>Histórico Geral de Agendamentos</h3>
-        <div id="lista-todos" style="margin-top: 15px;">
-          <p style="color: #888;">Carregando histórico completo...</p>
+        
+        <div style="display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
+          <div style="flex:1; min-width:160px;">
+            <label style="font-size:0.8rem; font-weight:600;">Data Início</label>
+            <input type="date" id="filtro-data-inicio" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc;">
+          </div>
+          <div style="flex:1; min-width:160px;">
+            <label style="font-size:0.8rem; font-weight:600;">Data Fim</label>
+            <input type="date" id="filtro-data-fim" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc;">
+          </div>
+          <div style="flex:1; min-width:160px;">
+            <label style="font-size:0.8rem; font-weight:600;">Status</label>
+            <select id="filtro-status" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc;">
+              <option value="">Todos</option>
+              <option value="Pendente">Pendente</option>
+              <option value="Aprovado">Aprovado</option>
+              <option value="Em Pátio">Em Pátio</option>
+              <option value="Concluído">Concluído</option>
+              <option value="No-Show">No-Show</option>
+              <option value="Recusado">Recusado</option>
+              <option value="Cancelado">Cancelado</option>
+            </select>
+          </div>
+          <div style="align-self:flex-end;">
+            <button id="btn-filtrar-todos" class="btn-primario" style="padding:9px 16px;">Filtrar</button>
+          </div>
+        </div>
+
+        <div style="overflow-x:auto;">
+          <table class="tabela-padrao">
+            <thead>
+              <tr>
+                <th>Data / Horário</th>
+                <th>Transportadora</th>
+                <th>Processo</th>
+                <th>Placas</th>
+                <th>Motorista</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-todos">
+              <tr><td colspan="6" style="text-align:center;">Selecione o período para buscar...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
 
     <div class="tab-conteudo" id="tab-novo-operacional">
       <div class="card">
-        <h3>➕ Novo Agendamento Direto (Operacional / Logística)</h3>
-        <p style="font-size: 0.85rem; color: #666; margin-bottom: 20px;">
-          Registre agendamentos diretamente sem necessidade de aprovação posterior.
+        <h3>➕ Novo Agendamento Direto (Operacional)</h3>
+        <p style="font-size:0.85rem; color:#666; margin-bottom:16px;">
+          Crie um agendamento direto para atender emergências ou encaixes. Este registro nascerá automaticamente como <strong>Aprovado</strong>.
         </p>
 
         <form id="form-agendamento-operacional">
           <div class="campo">
-            <label for="op-tipo-empresa">Tipo de Parceiro / Transportadora</label>
-            <select id="op-tipo-empresa" required>
-              <option value="cadastrada">Empresa Parceira Cadastrada no Sistema</option>
-              <option value="avulso">Parceiro Avulso / Pontual (Sem cadastro)</option>
+            <label for="op-transportadora-select">Transportadora Parceira</label>
+            <select id="op-transportadora-select" required>
+              <option value="">Carregando transportadoras...</option>
             </select>
           </div>
 
-          <div class="campo" id="wrap-select-empresa">
-            <label for="op-select-empresa">Selecione a Empresa Cadastrada</label>
-            <select id="op-select-empresa">
-              <option value="">Carregando empresas...</option>
-            </select>
+          <div class="campo" id="wrap-op-empresa-externa" style="display:none;">
+            <label for="op-empresa-externa">Nome da Empresa / Parceiro Externo</label>
+            <input type="text" id="op-empresa-externa" placeholder="Ex: Transportes Silva LTDA">
           </div>
 
-          <div class="campo" id="wrap-input-empresa" style="display: none;">
-            <label for="op-input-empresa">Nome do Parceiro / Transportadora Avulsa</label>
-            <input type="text" id="op-input-empresa" placeholder="Ex: Transportadora XYZ Ltda">
-          </div>
-
-          <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-            <div class="campo" style="flex: 1; min-width: 180px;">
-              <label for="op-tipo-processo">Tipo de Processo</label>
-              <select id="op-tipo-processo" required>
-                <option value="">Carregando tipos...</option>
-              </select>
-            </div>
-            <div class="campo" style="flex: 1; min-width: 150px;">
-              <label for="op-data">Data Agendada</label>
+          <div style="display:flex; gap:15px; flex-wrap:wrap;">
+            <div class="campo" style="flex:1; min-width:180px;">
+              <label for="op-data">Data da Carga/Descarga</label>
               <input type="date" id="op-data" required>
             </div>
-            <div class="campo" style="flex: 1; min-width: 120px;">
-              <label for="op-hora">Horário de Início</label>
-              <input type="time" id="op-hora" required step="1800">
-            </div>
-          </div>
-
-          <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-            <div class="campo" style="flex: 1; min-width: 140px;">
-              <label for="op-placa-cavalo">Placa do Cavalo</label>
-              <input type="text" id="op-placa-cavalo" required style="text-transform: uppercase;" maxlength="8">
-            </div>
-            <div class="campo" style="flex: 1; min-width: 140px;">
-              <label for="op-placa-carreta">Placa da Carreta</label>
-              <input type="text" id="op-placa-carreta" style="text-transform: uppercase;" maxlength="8">
-            </div>
-            <div class="campo" style="flex: 2; min-width: 200px;">
-              <label for="op-motorista">Nome do Motorista</label>
-              <input type="text" id="op-motorista" required>
+            <div class="campo" style="flex:1; min-width:180px;">
+              <label for="op-horario">Horário / Janela Disponível</label>
+              <select id="op-horario" required disabled>
+                <option value="">Selecione primeiro a data...</option>
+              </select>
             </div>
           </div>
 
           <div class="campo">
-            <label for="op-observacoes">Observações Operacionais (Opcional)</label>
+            <label for="op-processo">Tipo de Processo</label>
+            <select id="op-processo" required>
+              <option value="">Selecione o tipo de processo...</option>
+            </select>
+          </div>
+
+          <div style="display:flex; gap:15px; flex-wrap:wrap;">
+            <div class="campo" style="flex:1; min-width:140px;">
+              <label for="op-placa-cavalo">Placa Cavalo</label>
+              <input type="text" id="op-placa-cavalo" required style="text-transform:uppercase;">
+            </div>
+            <div class="campo" style="flex:1; min-width:140px;">
+              <label for="op-placa-carreta">Placa Carreta (opcional)</label>
+              <input type="text" id="op-placa-carreta" style="text-transform:uppercase;">
+            </div>
+          </div>
+
+          <div class="campo">
+            <label for="op-motorista">Nome do Motorista</label>
+            <input type="text" id="op-motorista" required>
+          </div>
+
+          <div class="campo">
+            <label for="op-observacoes">Observações (opcional)</label>
             <textarea id="op-observacoes" rows="2"></textarea>
           </div>
 
-          <button type="submit" class="btn-primario" id="btn-salvar-operacional">Confirmar Agendamento Direto</button>
+          <button type="submit" id="btn-salvar-operacional" class="btn-primario" style="margin-top:10px;">Salvar Agendamento Direto</button>
         </form>
       </div>
     </div>
@@ -210,7 +299,7 @@
       <div class="card" style="margin-bottom: 20px;">
         <h3>📊 Painel Operacional de Indicadores e KPIs</h3>
         <p style="font-size: 0.85rem; color: #666; margin-bottom: 16px;">
-          Consolidado quantitativo para avaliação de desempenho de frete e pátio por transportadora e período.
+          Consolidado quantitativo de desempenho do pátio e pontualidade das transportadoras.
         </p>
 
         <div style="display: flex; gap: 15px; flex-wrap: wrap; background: #f8f9fa; padding: 15px; border-radius: 8px; align-items: flex-end;">
@@ -233,37 +322,31 @@
       </div>
 
       <div class="kpi-card-grid">
-        
         <div class="kpi-card kpi-dwell">
           <div class="kpi-titulo">Permanência Média (Dwell Time)</div>
           <div class="kpi-valor" id="kpi-card-dwell">--</div>
           <div class="kpi-sub" id="kpi-card-dwell-sub">0 veículos concluídos</div>
         </div>
-
         <div class="kpi-card kpi-pontualidade">
           <div class="kpi-titulo">Taxa de Pontualidade</div>
           <div class="kpi-valor" id="kpi-card-pontualidade">0.0%</div>
           <div class="kpi-sub" id="kpi-card-pontualidade-sub">No Horário</div>
         </div>
-
         <div class="kpi-card kpi-noshow">
           <div class="kpi-titulo">Taxa de No-Show</div>
           <div class="kpi-valor" id="kpi-card-noshow">0.0%</div>
           <div class="kpi-sub" id="kpi-card-noshow-sub">0 de 0 agendados</div>
         </div>
-
         <div class="kpi-card kpi-previo">
           <div class="kpi-titulo">Agendamentos Prévios</div>
           <div class="kpi-valor" id="kpi-card-previo">0.0%</div>
           <div class="kpi-sub" id="kpi-card-previo-sub">0% Encaixes de Portaria</div>
         </div>
-
         <div class="kpi-card kpi-divergencia">
           <div class="kpi-titulo">Divergências de Cadastro</div>
           <div class="kpi-valor" id="kpi-card-divergencias">0</div>
           <div class="kpi-sub">Alterações no Check-in</div>
         </div>
-
       </div>
 
       <div class="card">
@@ -277,26 +360,10 @@
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>🟢 Chegadas No Horário</td>
-              <td id="kpi-qtd-nohorario">0</td>
-              <td id="kpi-pct-nohorario">0.0%</td>
-            </tr>
-            <tr>
-              <td>🔵 Chegadas Antecipadas</td>
-              <td id="kpi-qtd-antecipado">0</td>
-              <td id="kpi-pct-antecipado">0.0%</td>
-            </tr>
-            <tr>
-              <td>🔴 Chegadas Com Atraso</td>
-              <td id="kpi-qtd-atrasado">0</td>
-              <td id="kpi-pct-atrasado">0.0%</td>
-            </tr>
-            <tr>
-              <td>⚡ Entradas por Encaixe (Portaria Expresso)</td>
-              <td id="kpi-qtd-encaixes">0</td>
-              <td id="kpi-pct-encaixes">0.0%</td>
-            </tr>
+            <tr><td>🟢 Chegadas No Horário</td><td id="kpi-qtd-nohorario">0</td><td id="kpi-pct-nohorario">0.0%</td></tr>
+            <tr><td>🔵 Chegadas Antecipadas</td><td id="kpi-qtd-antecipado">0</td><td id="kpi-pct-antecipado">0.0%</td></tr>
+            <tr><td>🔴 Chegadas Com Atraso</td><td id="kpi-qtd-atrasado">0</td><td id="kpi-pct-atrasado">0.0%</td></tr>
+            <tr><td>⚡ Entradas por Encaixe (Portaria Expresso)</td><td id="kpi-qtd-encaixes">0</td><td id="kpi-pct-encaixes">0.0%</td></tr>
           </tbody>
         </table>
       </div>
@@ -304,8 +371,28 @@
 
     <div class="tab-conteudo" id="tab-vagas">
       <div class="card">
-        <h3>Configuração de Regras e Capacidade de Pátio</h3>
-        <p style="font-size: 0.85rem; color: #666;">Gerencie a capacidade padrão de veículos por janela de horário.</p>
+        <h3>Configuração Manual de Capacidade de Pátio</h3>
+        <p style="font-size:0.85rem; color:#666; margin-bottom:16px;">Ajuste manualmente o número máximo de caminhões por horário em datas específicas.</p>
+        <div style="display:flex; gap:10px; margin-bottom:16px; align-items:flex-end;">
+          <div class="campo" style="margin:0;">
+            <label>Data para Ajuste</label>
+            <input type="date" id="vagas-data">
+          </div>
+          <button id="btn-carregar-vagas" class="btn-primario" style="padding:9px 16px;">Buscar Vagas</button>
+        </div>
+        <div id="container-vagas-grid" style="display:none; overflow-x:auto;">
+          <table class="tabela-padrao">
+            <thead>
+              <tr>
+                <th>Horário</th>
+                <th>Capacidade Máxima</th>
+                <th>Ocupados Atual</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-vagas"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -317,177 +404,450 @@
     import { signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
     import {
       collection,
-      getDocs,
       doc,
-      getDoc,
+      getDocs,
+      updateDoc,
+      addDoc,
       query,
       where,
-      orderBy
+      orderBy,
+      serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
+    import { obterHorariosDisponiveis } from "./disponibilidade.js";
     import { criarAgendamentoOperacional } from "./agendamentoOperacional.js";
     import { filtrarBookings, calcularKPIs } from "./kpiMetrics.js";
 
     let usuarioLogado = null;
+    let mapProcessos = {};
+    let listaTransportadoras = [];
     let todosBookingsGerais = [];
+    let dataSelecionadaPainel = new Date().toISOString().split("T")[0];
 
-    // Proteger acesso: tipos 2 (Logística) e 3 (Admin)
+    // Proteção de acesso (Tipo 2 = Logística, 3 = Admin)
     protegerPagina([2, 3], async (user, dadosUser) => {
       usuarioLogado = { uid: user.uid, ...dadosUser };
       document.getElementById("user-nome").textContent = dadosUser.nome || user.email;
-      document.getElementById("user-tipo").textContent = dadosUser.tipo === 3 ? "Administrador" : "Logística";
+      document.getElementById("user-tipo").textContent = dadosUser.tipo === 3 ? "Administrador Master" : "Operador Logística";
 
-      inicializarDatasFiltroKPIs();
-      await Promise.all([
-        carregarTudo(),
-        carregarFormOperacional()
-      ]);
+      const hojeIso = new Date().toISOString().split("T")[0];
+      document.getElementById("picker-data-painel").value = hojeIso;
+      document.getElementById("op-data").value = hojeIso;
+      document.getElementById("vagas-data").value = hojeIso;
+      document.getElementById("filtro-data-inicio").value = hojeIso;
+      document.getElementById("filtro-data-fim").value = hojeIso;
+      document.getElementById("kpi-data-inicio").value = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0];
+      document.getElementById("kpi-data-fim").value = hojeIso;
+
+      mapProcessos = await obterTiposProcessoMap();
+      preencherSelectProcessos();
+      await carregarTransportadoras();
+      
+      inicializarAbas();
+      await carregarDadosGerais();
+      
+      renderizarTiraDias();
+      carregarPainelDoDia(hojeIso);
+      carregarSolicitacoesPendentes();
+      carregarAgendamentosHoje();
+      inicializarFormularioOperacional();
     });
 
-    // Logout
     document.getElementById("btn-logout").addEventListener("click", () => signOut(auth));
 
-    // NAVEGAÇÃO ENTRE ABAS
-    const tabBtns = document.querySelectorAll(".tab-btn");
-    const tabConteudos = document.querySelectorAll(".tab-conteudo");
-
-    tabBtns.forEach(btn => {
-      btn.addEventListener("click", () => {
-        const target = btn.dataset.tab;
-
-        tabBtns.forEach(b => b.classList.remove("ativo"));
-        tabConteudos.forEach(c => c.classList.remove("ativo"));
-
-        btn.classList.add("ativo");
-        document.getElementById(`tab-${target}`).classList.add("ativo");
-
-        if (target === "kpis") {
-          atualizarPainelKPIs();
-        }
-      });
-    });
-
     /* ===================================================================
-       CARREGAMENTO GERAL DE AGENDAMENTOS
+       GERENCIAMENTO DE ABAS
        =================================================================== */
-    async function carregarTudo() {
+    function inicializarAbas() {
+      const btns = document.querySelectorAll(".tab-btn");
+      const conteudos = document.querySelectorAll(".tab-conteudo");
+
+      btns.forEach(btn => {
+        btn.addEventListener("click", () => {
+          const target = btn.dataset.tab;
+          btns.forEach(b => b.classList.remove("ativo"));
+          conteudos.forEach(c => c.classList.remove("ativo"));
+
+          btn.classList.add("ativo");
+          document.getElementById(`tab-${target}`).classList.add("ativo");
+
+          if (target === "painel") carregarPainelDoDia(dataSelecionadaPainel);
+          if (target === "solicitacoes") carregarSolicitacoesPendentes();
+          if (target === "hoje") carregarAgendamentosHoje();
+          if (target === "novo-operacional") atualizarHorariosOperacionais();
+          if (target === "todos") carregarTodosAgendamentos();
+          if (target === "kpis") atualizarPainelKPIs();
+        });
+      });
+    }
+
+    async function carregarDadosGerais() {
       try {
         const snap = await getDocs(collection(db, "bookings"));
         todosBookingsGerais = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
         preencherSelectEmpresasKPIs(todosBookingsGerais);
-        atualizarPainelKPIs();
       } catch (err) {
-        console.error("Erro ao carregar agendamentos:", err);
+        console.error("Erro ao carregar banco de agendamentos:", err);
       }
     }
 
     /* ===================================================================
-       ETAPA 2A: LÓGICA DO AGENDAMENTO OPERACIONAL
+       RESTAURAÇÃO DO PAINEL DO DIA (TIRA DE DIAS + HORA A HORA)
        =================================================================== */
-    const opTipoEmpresa = document.getElementById("op-tipo-empresa");
-    const wrapSelectEmpresa = document.getElementById("wrap-select-empresa");
-    const wrapInputEmpresa = document.getElementById("wrap-input-empresa");
+    function renderizarTiraDias() {
+      const container = document.getElementById("tira-dias-container");
+      container.innerHTML = "";
 
-    opTipoEmpresa?.addEventListener("change", () => {
-      if (opTipoEmpresa.value === "cadastrada") {
-        wrapSelectEmpresa.style.display = "block";
-        wrapInputEmpresa.style.display = "none";
-      } else {
-        wrapSelectEmpresa.style.display = "none";
-        wrapInputEmpresa.style.display = "block";
-      }
-    });
+      const diasSemana = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+      const hoje = new Date();
 
-    async function carregarFormOperacional() {
-      // Define data padrão para hoje
-      const hoje = new Date().toISOString().split("T")[0];
-      document.getElementById("op-data").value = hoje;
+      for (let i = 0; i < 7; i++) {
+        const d = new Date();
+        d.setDate(hoje.getDate() + i);
 
-      // Carregar empresas cadastradas
-      try {
-        const qUsers = query(collection(db, "users"), where("tipo", "==", 1), where("status", "==", "aprovado"));
-        const snapUsers = await getDocs(qUsers);
-        const selectEmp = document.getElementById("op-select-empresa");
-        selectEmp.innerHTML = '<option value="">Selecione uma empresa...</option>';
-        snapUsers.docs.forEach(d => {
-          const u = d.data();
-          selectEmp.innerHTML += `<option value="${d.id}" data-nome="${escapeHtml(u.empresa || u.nome)}">${escapeHtml(u.empresa || u.nome)}</option>`;
+        const dataIso = d.toISOString().split("T")[0];
+        const diaSemanaStr = diasSemana[d.getDay()];
+        const diaNum = String(d.getDate()).padStart(2, "0");
+
+        const chip = document.createElement("button");
+        chip.className = `chip-dia ${dataIso === dataSelecionadaPainel ? 'selecionado' : ''}`;
+        chip.dataset.data = dataIso;
+
+        chip.innerHTML = `
+          <div class="chip-dia-semana">${diaSemanaStr}</div>
+          <div class="chip-dia-numero">${diaNum}</div>
+        `;
+
+        chip.addEventListener("click", () => {
+          document.querySelectorAll(".chip-dia").forEach(c => c.classList.remove("selecionado"));
+          chip.classList.add("selecionado");
+          document.getElementById("picker-data-painel").value = dataIso;
+          carregarPainelDoDia(dataIso);
         });
-      } catch (e) {
-        console.error("Erro ao carregar parceiros cadastrados:", e);
-      }
 
-      // Carregar tipos de processo
-      try {
-        const snapProc = await getDocs(collection(db, "processTypes"));
-        const selectProc = document.getElementById("op-tipo-processo");
-        selectProc.innerHTML = '<option value="">Selecione o tipo...</option>';
-        snapProc.docs.forEach(d => {
-          selectProc.innerHTML += `<option value="${d.id}">${escapeHtml(d.data().nome)}</option>`;
-        });
-      } catch (e) {
-        console.error("Erro ao carregar tipos de processo:", e);
+        container.appendChild(chip);
       }
     }
 
-    document.getElementById("form-agendamento-operacional")?.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const btn = document.getElementById("btn-salvar-operacional");
-      btn.disabled = true;
-      btn.textContent = "Gravando Agendamento...";
+    document.getElementById("picker-data-painel").addEventListener("change", (e) => {
+      const dataIso = e.target.value;
+      if (!dataIso) return;
+      
+      document.querySelectorAll(".chip-dia").forEach(c => {
+        if (c.dataset.data === dataIso) c.classList.add("selecionado");
+        else c.classList.remove("selecionado");
+      });
+
+      carregarPainelDoDia(dataIso);
+    });
+
+    async function carregarPainelDoDia(dataIso) {
+      dataSelecionadaPainel = dataIso;
+      const container = document.getElementById("linha-tempo-container");
+      const titulo = document.getElementById("titulo-data-selecionada");
+
+      const [ano, mes, dia] = dataIso.split("-");
+      titulo.textContent = `Horários e Ocupação do Pátio (${dia}/${mes}/${ano})`;
+      container.innerHTML = '<p style="text-align:center; color:#888; padding:20px;">Calculando horários e reservas...</p>';
 
       try {
-        const tipoEmp = opTipoEmpresa.value;
-        let usuarioId = null;
-        let empresaNome = "";
+        const slots = await obterHorariosDisponiveis(db, dataIso);
+        const agendamentosDia = todosBookingsGerais.filter(b => b.dataAgendada === dataIso && ["Aprovado", "Em Pátio", "Concluído", "Pendente"].includes(b.status));
 
-        if (tipoEmp === "cadastrada") {
-          const sel = document.getElementById("op-select-empresa");
-          usuarioId = sel.value;
-          empresaNome = sel.options[sel.selectedIndex]?.dataset?.nome || "";
-          if (!usuarioId) throw new Error("Selecione uma empresa cadastrada.");
-        } else {
-          empresaNome = document.getElementById("op-input-empresa").value.trim();
-          if (!empresaNome) throw new Error("Informe o nome do parceiro avulso.");
+        if (slots.length === 0) {
+          container.innerHTML = '<p style="text-align:center; color:#888; padding:20px;">Nenhum atendimento configurado para esta data.</p>';
+          return;
         }
 
-        const dadosPayload = {
-          usuarioId,
-          empresa: empresaNome,
-          tipoProcessoId: document.getElementById("op-tipo-processo").value,
-          dataAgendada: document.getElementById("op-data").value,
-          horaInicio: document.getElementById("op-hora").value,
-          placaCavalo: document.getElementById("op-placa-cavalo").value.toUpperCase(),
-          placaCarreta: document.getElementById("op-placa-carreta").value.toUpperCase(),
-          motorista: document.getElementById("op-motorista").value.trim(),
-          observacoes: document.getElementById("op-observacoes").value
-        };
+        container.innerHTML = "";
 
-        await criarAgendamentoOperacional(dadosPayload, usuarioLogado);
-        alert("Agendamento operacional criado com sucesso!");
-        document.getElementById("form-agendamento-operacional").reset();
-        carregarTudo();
+        slots.forEach(slot => {
+          const reservasHorario = agendamentosDia.filter(b => b.horaInicio === slot.horaInicio);
+          const ocupados = reservasHorario.length;
+          const max = slot.capacidadeMax;
+
+          let nivelClasse = "nivel-livre";
+          if (slot.fechado) nivelClasse = "nivel-fechado";
+          else if (ocupados >= max) nivelClasse = "nivel-cheio";
+          else if (ocupados > 0) nivelClasse = "nivel-parcial";
+
+          const pct = max > 0 ? Math.min(100, Math.round((ocupados / max) * 100)) : 100;
+
+          const faixa = document.createElement("div");
+          faixa.className = `faixa-horario ${nivelClasse}`;
+
+          faixa.innerHTML = `
+            <button class="faixa-horario-cabecalho" type="button">
+              <span class="faixa-horario-hora">${slot.horaInicio} às ${slot.horaFim}</span>
+              <div class="faixa-horario-barra">
+                <div class="faixa-horario-barra-preenchida" style="width: ${pct}%;"></div>
+              </div>
+              <span class="faixa-horario-contagem">${ocupados} / ${max} vgs</span>
+              <span class="faixa-horario-seta">▶</span>
+            </button>
+            <div class="faixa-horario-corpo">
+              ${gerarListaReservasHorarioHTML(reservasHorario)}
+            </div>
+          `;
+
+          faixa.querySelector(".faixa-horario-cabecalho").addEventListener("click", () => {
+            faixa.classList.toggle("aberta");
+          });
+
+          container.appendChild(faixa);
+        });
+
       } catch (err) {
-        console.error("Erro ao salvar agendamento direto:", err);
-        alert(`Erro ao criar agendamento: ${err.message}`);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = "Confirmar Agendamento Direto";
+        console.error("Erro ao carregar painel do dia:", err);
+        container.innerHTML = '<p style="text-align:center; color:red; padding:20px;">Erro ao carregar horários do pátio.</p>';
       }
-    });
-
-    /* ===================================================================
-       ETAPA 4: LÓGICA DO PAINEL DE KPIS E INDICADORES
-       =================================================================== */
-    function inicializarDatasFiltroKPIs() {
-      const hoje = new Date();
-      const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-
-      document.getElementById("kpi-data-inicio").value = primeiroDia.toISOString().split("T")[0];
-      document.getElementById("kpi-data-fim").value = hoje.toISOString().split("T")[0];
     }
 
+    function gerarListaReservasHorarioHTML(reservas) {
+      if (reservas.length === 0) {
+        return '<p style="color:#888; font-size:0.85rem; margin:0;">Nenhum veículo agendado neste horário.</p>';
+      }
+
+      return reservas.map(b => `
+        <div class="reserva-mini">
+          <strong>${escapeHtml(b.empresa)}</strong> ${b.tipoAgendamento === "Operacional" ? '<span class="tag-operacional">Op</span>' : ''}<br>
+          <small>
+            Processo: ${escapeHtml(mapProcessos[b.tipoProcessoId] || b.tipoProcessoId)} | 
+            Placa: <b>${escapeHtml(b.placaCavalo)}</b> | 
+            Motorista: ${escapeHtml(b.motorista)} | 
+            Status: <b>${escapeHtml(b.status)}</b>
+          </small>
+        </div>
+      `).join("");
+    }
+
+    /* ===================================================================
+       ETAPA 2B: NOVO AGENDAMENTO OPERACIONAL DIRETO
+       =================================================================== */
+    async function carregarTransportadoras() {
+      const select = document.getElementById("op-transportadora-select");
+      select.innerHTML = '<option value="">Carregando...</option>';
+
+      try {
+        const q = query(collection(db, "users"), where("tipo", "==", 1), where("status", "==", "aprovado"));
+        const snap = await getDocs(q);
+
+        listaTransportadoras = snap.docs.map(d => ({ id: d.id, empresa: d.data().empresa || d.data().nome }));
+        listaTransportadoras.sort((a, b) => a.empresa.localeCompare(b.empresa));
+
+        select.innerHTML = '<option value="">Selecione a transportadora...</option>';
+        listaTransportadoras.forEach(t => {
+          select.innerHTML += `<option value="${t.id}">${escapeHtml(t.empresa)}</option>`;
+        });
+        select.innerHTML += '<option value="__OUTRA__">➕ Outra / Empresa Externa (Digitar)</option>';
+      } catch (err) {
+        console.error("Erro ao carregar transportadoras:", err);
+      }
+    }
+
+    function inicializarFormularioOperacional() {
+      const selectTransp = document.getElementById("op-transportadora-select");
+      const wrapExterna = document.getElementById("wrap-op-empresa-externa");
+      const inputExterna = document.getElementById("op-empresa-externa");
+      const inputData = document.getElementById("op-data");
+      const form = document.getElementById("form-agendamento-operacional");
+
+      selectTransp.addEventListener("change", () => {
+        if (selectTransp.value === "__OUTRA__") {
+          wrapExterna.style.display = "block";
+          inputExterna.required = true;
+        } else {
+          wrapExterna.style.display = "none";
+          inputExterna.required = false;
+        }
+      });
+
+      inputData.addEventListener("change", atualizarHorariosOperacionais);
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const btnSalvar = document.getElementById("btn-salvar-operacional");
+        
+        let usuarioId = selectTransp.value === "__OUTRA__" ? null : selectTransp.value;
+        let empresa = selectTransp.value === "__OUTRA__" 
+          ? inputExterna.value.trim() 
+          : listaTransportadoras.find(t => t.id === usuarioId)?.empresa || "";
+
+        btnSalvar.disabled = true;
+        btnSalvar.textContent = "Gravando...";
+
+        try {
+          await criarAgendamentoOperacional({
+            usuarioId,
+            empresa,
+            dataAgendada: inputData.value,
+            horaInicio: document.getElementById("op-horario").value,
+            tipoProcessoId: document.getElementById("op-processo").value,
+            placaCavalo: document.getElementById("op-placa-cavalo").value.trim().toUpperCase(),
+            placaCarreta: document.getElementById("op-placa-carreta").value.trim().toUpperCase(),
+            motorista: document.getElementById("op-motorista").value.trim(),
+            observacoes: document.getElementById("op-observacoes").value.trim(),
+            usuarioLogado
+          });
+
+          alert("Agendamento Operacional criado com sucesso!");
+          form.reset();
+          await carregarDadosGerais();
+          carregarPainelDoDia(dataSelecionadaPainel);
+        } catch (err) {
+          alert(`Erro ao agendar: ${err.message}`);
+        } finally {
+          btnSalvar.disabled = false;
+          btnSalvar.textContent = "Salvar Agendamento Direto";
+        }
+      });
+    }
+
+    async function atualizarHorariosOperacionais() {
+      const selectHorario = document.getElementById("op-horario");
+      const dataStr = document.getElementById("op-data").value;
+
+      if (!dataStr) return;
+      selectHorario.disabled = true;
+      selectHorario.innerHTML = '<option value="">Carregando vagas...</option>';
+
+      try {
+        const slots = await obterHorariosDisponiveis(db, dataStr);
+        selectHorario.innerHTML = "";
+
+        slots.forEach(s => {
+          const opt = document.createElement("option");
+          opt.value = s.horaInicio;
+          opt.textContent = `${s.horaInicio} às ${s.horaFim} — (${s.vagasRestantes} vagas)`;
+          selectHorario.appendChild(opt);
+        });
+
+        selectHorario.disabled = false;
+      } catch (err) {
+        selectHorario.innerHTML = '<option value="">Erro ao buscar vagas</option>';
+      }
+    }
+
+    /* ===================================================================
+       CONSULTAS E AÇÕES
+       =================================================================== */
+    async function carregarSolicitacoesPendentes() {
+      const tbody = document.getElementById("tbody-solicitacoes");
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Buscando pendentes...</td></tr>';
+
+      try {
+        const q = query(collection(db, "bookings"), where("status", "==", "Pendente"), orderBy("dataAgendada", "asc"));
+        const snap = await getDocs(q);
+
+        if (snap.empty) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#888;">Nenhuma solicitação pendente.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = snap.docs.map(d => {
+          const b = d.data();
+          return `
+            <tr>
+              <td><b>${formatarData(b.dataAgendada)}</b><br><small>${b.horaInicio}</small></td>
+              <td>${escapeHtml(b.empresa)}</td>
+              <td>${escapeHtml(mapProcessos[b.tipoProcessoId] || b.tipoProcessoId)}</td>
+              <td>Cavalo: ${escapeHtml(b.placaCavalo)}<br><small>Motorista: ${escapeHtml(b.motorista)}</small></td>
+              <td><small>${b.criadoEm ? new Date(b.criadoEm.toDate()).toLocaleString() : '-'}</small></td>
+              <td>
+                <button class="btn-primario" onclick="responderSolicitacao('${d.id}', 'Aprovado')" style="padding:4px 8px; font-size:0.8rem; background:green;">Aprovar</button>
+                <button class="btn-primario" onclick="responderSolicitacao('${d.id}', 'Recusado')" style="padding:4px 8px; font-size:0.8rem; background:red;">Recusar</button>
+              </td>
+            </tr>
+          `;
+        }).join("");
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Erro ao buscar solicitações.</td></tr>';
+      }
+    }
+
+    window.responderSolicitacao = async function(bookingId, novoStatus) {
+      if (!confirm(`Confirmar alteração do agendamento para "${novoStatus}"?`)) return;
+
+      try {
+        await updateDoc(doc(db, "bookings", bookingId), {
+          status: novoStatus,
+          atualizadoEm: serverTimestamp(),
+          atualizadoPor: usuarioLogado.uid
+        });
+
+        await addDoc(collection(db, "auditLogs"), {
+          bookingId,
+          usuarioId: usuarioLogado.uid,
+          acao: novoStatus === "Aprovado" ? "Aprovou" : "Recusou",
+          dataHora: serverTimestamp()
+        });
+
+        await carregarDadosGerais();
+        carregarSolicitacoesPendentes();
+        carregarPainelDoDia(dataSelecionadaPainel);
+      } catch (err) {
+        alert("Erro ao atualizar o agendamento.");
+      }
+    };
+
+    async function carregarAgendamentosHoje() {
+      const tbody = document.getElementById("tbody-hoje");
+      const hojeStr = new Date().toISOString().split("T")[0];
+
+      const filtrados = todosBookingsGerais.filter(b => b.dataAgendada === hojeStr);
+
+      if (filtrados.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#888;">Nenhum agendamento para hoje.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = filtrados.map(b => `
+        <tr>
+          <td><b>${b.horaInicio}</b></td>
+          <td>${escapeHtml(b.empresa)} ${b.tipoAgendamento === "Operacional" ? '<span class="tag-operacional">Op</span>' : ''}</td>
+          <td>${escapeHtml(mapProcessos[b.tipoProcessoId] || b.tipoProcessoId)}</td>
+          <td>${escapeHtml(b.placaCavalo)}</td>
+          <td>${escapeHtml(b.motorista)}</td>
+          <td><b>${escapeHtml(b.status)}</b></td>
+        </tr>
+      `).join("");
+    }
+
+    async function carregarTodosAgendamentos() {
+      const tbody = document.getElementById("tbody-todos");
+      const dataInicio = document.getElementById("filtro-data-inicio").value;
+      const dataFim = document.getElementById("filtro-data-fim").value;
+      const statusFiltro = document.getElementById("filtro-status").value;
+
+      const filtrados = todosBookingsGerais.filter(b => {
+        if (dataInicio && b.dataAgendada < dataInicio) return false;
+        if (dataFim && b.dataAgendada > dataFim) return false;
+        if (statusFiltro && b.status !== statusFiltro) return false;
+        return true;
+      });
+
+      if (filtrados.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#888;">Nenhum agendamento encontrado no período.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = filtrados.map(b => `
+        <tr>
+          <td><b>${formatarData(b.dataAgendada)}</b> (${b.horaInicio})</td>
+          <td>${escapeHtml(b.empresa)}</td>
+          <td>${escapeHtml(mapProcessos[b.tipoProcessoId] || b.tipoProcessoId)}</td>
+          <td>${escapeHtml(b.placaCavalo)}</td>
+          <td>${escapeHtml(b.motorista)}</td>
+          <td><b>${escapeHtml(b.status)}</b></td>
+        </tr>
+      `).join("");
+    }
+
+    document.getElementById("btn-filtrar-todos").addEventListener("click", carregarTodosAgendamentos);
+
+    /* ===================================================================
+       ETAPA 4: LÓGICA DO PAINEL DE KPIS
+       =================================================================== */
     function preencherSelectEmpresasKPIs(bookings) {
       const select = document.getElementById("kpi-empresa");
       const empresasUnicas = [...new Set(bookings.map(b => b.empresa).filter(Boolean))].sort();
@@ -506,7 +866,6 @@
       const filtrados = filtrarBookings(todosBookingsGerais, dataInicio, dataFim, empresa);
       const kpis = calcularKPIs(filtrados);
 
-      // Renderizar Cards Sumarizados
       document.getElementById("kpi-card-dwell").textContent = kpis.dwellTime.formatado;
       document.getElementById("kpi-card-dwell-sub").textContent = `${kpis.dwellTime.totalAtendidos} veículos concluídos`;
 
@@ -519,7 +878,6 @@
 
       document.getElementById("kpi-card-divergencias").textContent = kpis.totalDivergencias;
 
-      // Renderizar Tabela Detalhada
       document.getElementById("kpi-qtd-nohorario").textContent = kpis.pontualidade.noHorario;
       document.getElementById("kpi-pct-nohorario").textContent = `${kpis.pontualidade.pctNoHorario}%`;
 
@@ -533,19 +891,37 @@
       document.getElementById("kpi-pct-encaixes").textContent = `${kpis.modalidade.pctEncaixe}%`;
     }
 
-    document.getElementById("btn-filtrar-kpis")?.addEventListener("click", atualizarPainelKPIs);
+    document.getElementById("btn-filtrar-kpis").addEventListener("click", atualizarPainelKPIs);
 
     /* ===================================================================
        UTILITÁRIOS
        =================================================================== */
+    async function obterTiposProcessoMap() {
+      const map = {};
+      try {
+        const snap = await getDocs(collection(db, "processTypes"));
+        snap.docs.forEach(d => { map[d.id] = d.data().nome; });
+      } catch (err) { console.error(err); }
+      return map;
+    }
+
+    function preencherSelectProcessos() {
+      const select = document.getElementById("op-processo");
+      select.innerHTML = '<option value="">Selecione o tipo...</option>';
+      Object.keys(mapProcessos).forEach(id => {
+        select.innerHTML += `<option value="${id}">${escapeHtml(mapProcessos[id])}</option>`;
+      });
+    }
+
+    function formatarData(dataStr) {
+      if (!dataStr) return "-";
+      const [ano, mes, dia] = dataStr.split("-");
+      return `${dia}/${mes}/${ano}`;
+    }
+
     function escapeHtml(texto) {
       if (!texto) return "";
-      return String(texto)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+      return String(texto).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
     }
   </script>
 </body>
