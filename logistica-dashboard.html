@@ -414,7 +414,7 @@
       serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
-    import { obterHorariosDisponiveis } from "./disponibilidade.js";
+    import { obterHorariosDisponiveis } from "./disponibilidade.js"; // agora exportada corretamente
     import { criarAgendamentoOperacional } from "./agendamentoOperacional.js";
     import { filtrarBookings, calcularKPIs } from "./kpiMetrics.js";
 
@@ -551,7 +551,7 @@
       container.innerHTML = '<p style="text-align:center; color:#888; padding:20px;">Calculando horários e reservas...</p>';
 
       try {
-        const slots = await obterHorariosDisponiveis(db, dataIso);
+        const slots = await obterHorariosDisponiveis(db, dataIso, { incluirFechados: true });
         const agendamentosDia = todosBookingsGerais.filter(b => b.dataAgendada === dataIso && ["Aprovado", "Em Pátio", "Concluído", "Pendente"].includes(b.status));
 
         if (slots.length === 0) {
@@ -712,7 +712,10 @@
       selectHorario.innerHTML = '<option value="">Carregando vagas...</option>';
 
       try {
-        const slots = await obterHorariosDisponiveis(db, dataStr);
+        // incluirFechados:false (padrão) — não faz sentido oferecer, no
+        // formulário de lançamento operacional, um horário que a própria
+        // Logística fechou manualmente para esta data.
+        const slots = await obterHorariosDisponiveis(db, dataStr, { incluirFechados: false });
         selectHorario.innerHTML = "";
 
         slots.forEach(s => {

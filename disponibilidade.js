@@ -167,3 +167,35 @@ export async function buscarSlotsVirtuaisDoDia(db, dataStr, opcoes = {}) {
     };
   });
 }
+
+/**
+ * Wrapper de conveniência sobre `buscarSlotsVirtuaisDoDia` para telas que
+ * precisam apenas saber "quantas vagas restam" por horário (ex: painel de
+ * ocupação da Logística, dropdown de Novo Agendamento Operacional), sem lidar
+ * diretamente com os campos internos (capacidadeMax/ocupados separados).
+ *
+ * Adiciona o campo `vagasRestantes` (nunca negativo) a cada slot retornado
+ * por `buscarSlotsVirtuaisDoDia`, mantendo todos os demais campos originais.
+ *
+ * @param {Firestore} db
+ * @param {string} dataStr - formato "AAAA-MM-DD"
+ * @param {object} [opcoes]
+ *   - incluirFechados (default false): repassado direto para
+ *     `buscarSlotsVirtuaisDoDia`. Use `true` em telas de gestão/painel que
+ *     precisam exibir horários fechados manualmente (com `fechado: true`);
+ *     deixe `false` (padrão) em telas de agendamento, para que horários
+ *     fechados simplesmente não apareçam como opção.
+ * @returns {Promise<Array<{
+ *   horaInicio: string, horaFim: string, capacidadeMax: number,
+ *   ocupados: number, vagasRestantes: number, origem: string, fechado: boolean,
+ *   temAjusteManual: boolean, capacidadePadraoAtual: number|null,
+ *   divergeDoPadrao: boolean
+ * }>>}
+ */
+export async function obterHorariosDisponiveis(db, dataStr, opcoes = {}) {
+  const slots = await buscarSlotsVirtuaisDoDia(db, dataStr, opcoes);
+  return slots.map(slot => ({
+    ...slot,
+    vagasRestantes: Math.max(0, (slot.capacidadeMax || 0) - (slot.ocupados || 0))
+  }));
+}

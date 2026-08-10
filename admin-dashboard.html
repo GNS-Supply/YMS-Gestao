@@ -66,14 +66,10 @@
 
   <script type="module">
     import { auth, db } from "./firebase-config.js";
-    import {
-      onAuthStateChanged,
-      signOut
-    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import { protegerPagina, logout } from "./auth.js";
     import {
       collection,
       doc,
-      getDoc,
       getDocs,
       updateDoc,
       query,
@@ -84,29 +80,10 @@
     let usuarioAtual = null;
     let todosUsuarios = [];
 
-    /* ===================================================================
-       PROTEÇÃO DE PÁGINA (Apenas Admin Master - Tipo 3)
-       =================================================================== */
-    function protegerPagina(tiposPermitidos, callback) {
-      onAuthStateChanged(auth, async (user) => {
-        if (!user) {
-          window.location.href = "index.html";
-          return;
-        }
-        const snap = await getDoc(doc(db, "users", user.uid));
-        if (!snap.exists() || snap.data().status === "pendente_aprovacao" || !tiposPermitidos.includes(snap.data().tipo)) {
-          await signOut(auth);
-          window.location.href = "index.html";
-          return;
-        }
-        callback(user, snap.data());
-      });
-    }
-
-    async function logout() {
-      await signOut(auth);
-      window.location.href = "index.html";
-    }
+    // PROTEÇÃO DE PÁGINA (Apenas Admin Master - Tipo 3): reaproveita a
+    // versão centralizada em auth.js, que exige status === "aprovado"
+    // (a versão antiga, duplicada aqui, só bloqueava "pendente_aprovacao"
+    // e deixava contas "suspenso"/"recusado" logarem normalmente).
 
     /* ===================================================================
        MODAL DE ALERTA CUSTOMIZADO
