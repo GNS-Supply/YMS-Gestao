@@ -857,3 +857,165 @@ export function calcularKPIs(bookingsFiltrados) {
     totalDivergencias
   };
 }
+
+/* #######################################################################
+   PARTE 5 — LIBERAÇÃO DE VAGA AO ENCERRAR UM AGENDAMENTO
+   =================================================================
+   BUG CORRIGIDO NESTA SEÇÃO: até aqui, `timeSlots.ocupados` só era
+   INCREMENTADO (na criação do booking). Recusar, expirar, cancelar ou
+   marcar No-Show trocava o `status` do booking mas nunca decrementava
+   a ocupação — a vaga ficava "presa" para sempre, mesmo sem ninguém
+   usando ela de fato. As duas funções abaixo resolvem isso.
+   ####################################################################### */
+
+/**
+ * Muda o status de um booking, liberando a vaga em `timeSlots`
+ * automaticamente quando a transição for uma das que libera vaga (ver
+ * `deveLiberarVaga`/`STATUS_LIBERA_VAGA`: Recusado, Expirado, Cancelado,
+ * No-Show). Tudo dentro de uma única Firestore Transaction: ou o novo
+ * status do booking E a liberação da vaga são gravados juntos, ou nada
+ * é gravado (evita, por exemplo, recusar um agendamento e a vaga
+ * continuar presa por causa de uma falha no meio do caminho).
+ *
+ * Lê o status atual do booking de dentro da própria transação (não
+ * confia no objeto `booking` passado pelo chamador, que pode estar
+ * desatualizado) — protege contra dois cliques/usuários simultâneos
+ * tentando mudar o mesmo agendamento.
+ *
+ * @param {Firestore} db
+ * @param {{uid:string}} usuarioLogado - Logística/Admin autenticado fazendo a alteração
+ * @param {{id:string}} booking - precisa ao menos do `id`; os demais campos são
+ *   sempre relidos do servidor dentro da transação
+ * @param {string} novoStatus - um dos valores de STATUS
+ * @returns {Promise<{vagaLiberada: boolean}>}
+ */
+export async function mudarStatusBooking(db, usuarioLogado, booking, novoStatus) {
+  if (!usuarioLogado || !usuarioLogado.uid) {
+    throw new Error("Usuário não identificado.");
+  }
+  if (!booking || !booking.id) {
+    throw new Error("Agendamento não informado.");
+  }
+
+  const bookingRef = doc(db, "bookings", booking.id);
+  let vagaFoiLiberada = false;
+
+  await runTransaction(db, async (transaction) => {
+    const bookingSnap = await transaction.get(bookingRef);
+    if (!bookingSnap.exists()) {
+      throw new Error("Agendamento não encontrado (pode já ter sido removido).");
+    }
+    const dadosAtuais = bookingSnap.data();
+    const statusAtual = dadosAtuais.status;
+
+    if (!transicaoValida(statusAtual, novoStatus)) {
+      throw new Error(
+        `Não é possível mudar de "${statusAtual}" para "${novoStatus}" — outra pessoa pode já ter atualizado este agendamento. Atualize a lista e tente novamente.`
+      );
+    }
+
+    const precisaLiberarVaga = deveLiberarVaga(statusAtual, novoStatus) && dadosAtuais.vagaLiberada !== true;
+
+    // Toda leitura precisa acontecer antes de qualquer escrita numa
+    // Firestore Transaction — por isso o get() do timeSlot vem aqui,
+    // antes de montar os writes abaixo.
+    let slotSnap = null;
+    if (precisaLiberarVaga) {
+      const slotRef = doc(db, "timeSlots", idSlotHorario(dadosAtuais.dataAgendada, dadosAtuais.horaInicio));
+      slotSnap = await transaction.get(slotRef);
+    }
+
+    const payloadBooking = {
+      status: novoStatus,
+      atualizadoEm: serverTimestamp(),
+      atualizadoPor: usuarioLogado.uid
+    };
+
+    if (precisaLiberarVaga) {
+      if (slotSnap && slotSnap.exists()) {
+        const slotData = slotSnap.data();
+        const ocupadosAtuais = slotData.ocupados || 0;
+        // Só decrementa se ainda houver o que liberar — nunca deixa
+        // `ocupados` ficar negativo (violaria camposValidos() nas Rules).
+        if (ocupadosAtuais > 0) {
+          transaction.set(slotSnap.ref, { ...slotData, ocupados: ocupadosAtuais - 1 }, { merge: true });
+        }
+      }
+      payloadBooking.vagaLiberada = true;
+      vagaFoiLiberada = true;
+    }
+
+    transaction.update(bookingRef, payloadBooking);
+  });
+
+  return { vagaLiberada: vagaFoiLiberada };
+}
+
+/**
+ * Libera a vaga de UM booking que já está em status terminal que
+ * libera vaga, SEM mudar o status em si (usado só pela varredura de
+ * cancelamentos — o status "Cancelado" já foi gravado antes, pela
+ * própria Transportadora).
+ * @private
+ */
+async function liberarVagaSemMudarStatus(db, usuarioLogado, booking) {
+  const bookingRef = doc(db, "bookings", booking.id);
+  const slotRef = doc(db, "timeSlots", idSlotHorario(booking.dataAgendada, booking.horaInicio));
+
+  await runTransaction(db, async (transaction) => {
+    const bookingSnap = await transaction.get(bookingRef);
+    if (!bookingSnap.exists()) return;
+    if (bookingSnap.data().vagaLiberada === true) return; // já foi liberada (outra aba, outra pessoa)
+
+    const slotSnap = await transaction.get(slotRef);
+
+    if (slotSnap.exists()) {
+      const slotData = slotSnap.data();
+      const ocupadosAtuais = slotData.ocupados || 0;
+      if (ocupadosAtuais > 0) {
+        transaction.set(slotRef, { ...slotData, ocupados: ocupadosAtuais - 1 }, { merge: true });
+      }
+    }
+
+    transaction.update(bookingRef, {
+      vagaLiberada: true,
+      atualizadoEm: serverTimestamp(),
+      atualizadoPor: usuarioLogado.uid
+    });
+  });
+}
+
+/**
+ * Varredura: busca todos os bookings "Cancelado" que ainda não tiveram
+ * a vaga liberada (`vagaLiberada !== true`) — cenário típico é a
+ * própria Transportadora cancelando a reserva dela, o que as Rules só
+ * deixam mudar o `status` (ela nunca decrementa `timeSlots` diretamente,
+ * só Logística/Admin podem, com segurança/atomicidade). Pensada para
+ * rodar automaticamente ao abrir o Painel de Logística.
+ *
+ * @param {Firestore} db
+ * @param {{uid:string}} usuarioLogado - Logística/Admin autenticado
+ * @returns {Promise<number>} quantidade de vagas liberadas nesta varredura
+ */
+export async function liberarVagasCanceladasPelaTransportadora(db, usuarioLogado) {
+  const snap = await getDocs(query(collection(db, "bookings"), where("status", "==", STATUS.CANCELADO)));
+
+  // Sem orderBy() de propósito (mesmo motivo já documentado em outras
+  // consultas deste projeto): igualdade simples usa o índice automático
+  // de campo único, sem depender de índice composto.
+  const pendentesDeLiberacao = snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(b => b.vagaLiberada !== true);
+
+  let totalLiberadas = 0;
+  for (const booking of pendentesDeLiberacao) {
+    try {
+      await liberarVagaSemMudarStatus(db, usuarioLogado, booking);
+      totalLiberadas++;
+    } catch (err) {
+      console.error(`Erro ao liberar vaga do agendamento cancelado ${booking.id}:`, err);
+    }
+  }
+
+  return totalLiberadas;
+}

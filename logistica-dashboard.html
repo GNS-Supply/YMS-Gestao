@@ -424,7 +424,9 @@
       criarAgendamentoOperacional,
       filtrarBookings,
       calcularKPIs,
-      idSlotHorario
+      idSlotHorario,
+      mudarStatusBooking,
+      liberarVagasCanceladasPelaTransportadora
     } from "./patioCore.js";
 
     let usuarioLogado = null;
@@ -451,7 +453,21 @@
       mapProcessos = await obterTiposProcessoMap();
       preencherSelectProcessos();
       await carregarTransportadoras();
-      
+
+      // Varredura de vagas presas por cancelamentos feitos pela própria
+      // Transportadora (ela só pode mudar o status para "Cancelado", nunca
+      // decrementar timeSlots.ocupados — só Logística/Admin fazem isso).
+      // Roda antes de montar o painel do dia para já refletir a vaga
+      // liberada na primeira renderização.
+      try {
+        const totalLiberadas = await liberarVagasCanceladasPelaTransportadora(db, usuarioLogado);
+        if (totalLiberadas > 0) {
+          console.info(`${totalLiberadas} vaga(s) de agendamento(s) cancelado(s) pela Transportadora foram liberadas automaticamente.`);
+        }
+      } catch (err) {
+        console.error("Erro na varredura de liberação de vagas canceladas:", err);
+      }
+
       inicializarAbas();
       await carregarDadosGerais();
       
@@ -795,11 +811,17 @@
       if (!confirm(`Confirmar alteração do agendamento para "${novoStatus}"?`)) return;
 
       try {
-        await updateDoc(doc(db, "bookings", bookingId), {
-          status: novoStatus,
-          atualizadoEm: serverTimestamp(),
-          atualizadoPor: usuarioLogado.uid
-        });
+        // mudarStatusBooking relê o booking direto do servidor (dentro da
+        // própria transação) e, se a transição for para "Recusado", já
+        // libera a vaga em timeSlots.ocupados automaticamente — antes
+        // disso, recusar um agendamento trocava só o status e a vaga
+        // ficava presa para sempre.
+        const { vagaLiberada } = await mudarStatusBooking(
+          db,
+          usuarioLogado,
+          { id: bookingId },
+          novoStatus
+        );
 
         await addDoc(collection(db, "auditLogs"), {
           bookingId,
@@ -811,8 +833,13 @@
         await carregarDadosGerais();
         carregarSolicitacoesPendentes();
         carregarPainelDoDia(dataSelecionadaPainel);
+
+        if (vagaLiberada) {
+          console.info(`Vaga liberada automaticamente ao recusar o agendamento ${bookingId}.`);
+        }
       } catch (err) {
-        alert("Erro ao atualizar o agendamento.");
+        console.error("Erro ao atualizar o agendamento:", err);
+        alert(err.message || "Erro ao atualizar o agendamento.");
       }
     };
 

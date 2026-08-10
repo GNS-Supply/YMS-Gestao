@@ -289,7 +289,8 @@
       PONTUALIDADE,
       calcularPontualidade,
       calcularTempoPermanenciaMinutos,
-      formatarPermanencia
+      formatarPermanencia,
+      mudarStatusBooking
     } from "./patioCore.js";
 
     let usuarioLogado = null;
@@ -613,18 +614,16 @@
        =================================================================== */
     async function registrarNoShow(booking) {
       try {
-        const bookingRef = doc(db, "bookings", booking.id);
-        await updateDoc(bookingRef, {
-          status: STATUS.NO_SHOW,
-          atualizadoEm: serverTimestamp(),
-          atualizadoPor: usuarioLogado.uid
-        });
+        // mudarStatusBooking já libera a vaga em timeSlots.ocupados
+        // automaticamente (No-Show está em STATUS_LIBERA_VAGA) — antes,
+        // marcar No-Show só trocava o status e a vaga ficava presa.
+        await mudarStatusBooking(db, usuarioLogado, booking, STATUS.NO_SHOW);
 
         await registrarAuditLog(booking.id, "No-Show");
         await carregarMovimentacaoDia();
       } catch (err) {
         console.error("Erro ao registrar No-Show:", err);
-        alert("Erro ao registrar No-Show.");
+        alert(err.message || "Erro ao registrar No-Show.");
       }
     }
 
