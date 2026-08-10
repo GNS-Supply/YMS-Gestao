@@ -276,7 +276,7 @@
       TIPO_AGENDAMENTO,
       PONTUALIDADE,
       calcularPontualidade,
-      calcularPermanenciaMinutos,
+      calcularTempoPermanenciaMinutos,
       formatarPermanencia
     } from "./bookingSchema.js";
 
@@ -484,7 +484,7 @@
           const entradaDate = booking.checkIn?.dataHora?.toDate ? booking.checkIn.dataHora.toDate() : new Date();
           document.getElementById("checkout-entrada-timestamp").value = entradaDate.getTime();
 
-          const minutos = calcularPermanenciaMinutos(entradaDate, new Date());
+          const minutos = calcularTempoPermanenciaMinutos(entradaDate, new Date());
           document.getElementById("checkout-permanencia").value = formatarPermanencia(minutos);
 
           abrirModal("modal-checkout");
@@ -559,7 +559,7 @@
 
       const entradaDate = new Date(entradaMs);
       const agora = new Date();
-      const permanenciaMinutos = calcularPermanenciaMinutos(entradaDate, agora);
+      const permanenciaMinutos = calcularTempoPermanenciaMinutos(entradaDate, agora);
 
       try {
         const bookingRef = doc(db, "bookings", id);
