@@ -6,13 +6,63 @@
   <meta name="theme-color" content="#0f2942">
   <title>Agendamento de Pátio - Painel Administrativo</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    /* Estilos para a tabela de gestão de usuários */
+    .tabela-usuarios {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+      font-size: 0.88rem;
+    }
+    .tabela-usuarios th {
+      background: #f4f6f9;
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 2px solid #ddd;
+      color: #333;
+    }
+    .tabela-usuarios td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #eee;
+      vertical-align: middle;
+    }
+    .tabela-usuarios tr:hover {
+      background-color: #f8f9fa;
+    }
+    .badge-status {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge-pendente { background: #fff3cd; color: #856404; }
+    .badge-aprovado { background: #d4edda; color: #155724; }
+    .badge-suspenso { background: #f8d7da; color: #721c24; }
+
+    .select-grid {
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      font-size: 0.85rem;
+    }
+    .input-empresa {
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      font-size: 0.85rem;
+      width: 100%;
+      max-width: 180px;
+    }
+  </style>
 </head>
 <body>
 
   <div class="topbar">
     <div class="marca">⚙️ Painel Administrativo Exclusivo</div>
     <div style="display:flex; align-items:center; gap:12px;">
-      <a href="logistica-dashboard.html" style="color:var(--branco); font-size:0.85rem; opacity:.9; text-decoration:underline;">
+      <a href="logistica-dashboard.html" style="color: #ffffff; font-size:0.85rem; opacity:.9; text-decoration:underline;">
         🚛 Painel de Logística
       </a>
       <span id="user-empresa" style="font-size:0.9rem; opacity:.85;"></span>
@@ -24,27 +74,40 @@
 
     <div class="card">
       <h3>Gestão Completa de Usuários</h3>
-      <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:12px;">
-        Altere o tipo de acesso, ative/suspenda contas e corrija o nome da empresa parceira de qualquer usuário do sistema.
+      <p style="font-size:0.85rem; color: #666; margin-bottom:16px;">
+        Aprove cadastros internos, altere os perfis de acesso, ative/suspenda contas e gerencie as empresas cadastradas no sistema.
       </p>
 
-      <div class="aviso-suporte" id="aviso-pendentes" style="display:none; margin-bottom:16px;"></div>
+      <div class="aviso-suporte" id="aviso-pendentes" style="display: none; margin-bottom: 15px; background: #fff3cd; color: #856404; padding: 10px; border-radius: 6px;">
+        ⚠️ Existem novos cadastros aguardando sua aprovação!
+      </div>
 
-      <div class="tabela-wrapper">
-        <table class="tabela-padrao">
+      <div style="display: flex; gap: 12px; margin-bottom: 15px; flex-wrap: wrap;">
+        <input type="text" id="filtro-busca" placeholder="🔍 Buscar por nome, e-mail ou empresa..." style="flex: 1; min-width: 200px; padding: 8px 12px; border-radius: 6px; border: 1px solid #ccc;">
+        <select id="filtro-status" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #ccc;">
+          <option value="todos">Todos os Status</option>
+          <option value="pendente_aprovacao">Pendentes de Aprovação</option>
+          <option value="aprovado">Aprovados</option>
+          <option value="suspenso">Suspensos</option>
+        </select>
+      </div>
+
+      <div style="overflow-x: auto;">
+        <table class="tabela-usuarios">
           <thead>
             <tr>
-              <th>Nome</th>
-              <th>E-mail</th>
+              <th>Usuário / E-mail</th>
               <th>Vínculo / Empresa</th>
-              <th>Tipo de Acesso</th>
-              <th>Status da Conta</th>
+              <th>Perfil de Acesso</th>
+              <th>Status</th>
               <th>Ações</th>
             </tr>
           </thead>
-          <tbody id="tb-todos-usuarios">
+          <tbody id="tbody-usuarios">
             <tr>
-              <td colspan="6" class="estado-vazio">Carregando usuários...</td>
+              <td colspan="5" style="text-align: center; color: #888; padding: 20px;">
+                Carregando lista de usuários...
+              </td>
             </tr>
           </tbody>
         </table>
@@ -55,239 +118,138 @@
 
   <script type="module">
     import { auth, db } from "./firebase-config.js";
-    import {
-      onAuthStateChanged,
-      signOut
-    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import { protegerPagina } from "./auth.js";
+    import { signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
     import {
       collection,
-      doc,
-      getDoc,
       getDocs,
+      doc,
       updateDoc,
-      query,
-      where,
       serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
-    /* ===================================================================
-       AUTENTICAÇÃO / PROTEÇÃO DE PÁGINA (duplicado de auth.js — apenas Admin Master)
-       =================================================================== */
-    function protegerPagina(tiposPermitidos, callback) {
-      onAuthStateChanged(auth, async (user) => {
-        if (!user) {
-          window.location.href = "index.html";
-          return;
-        }
-        const snap = await getDoc(doc(db, "users", user.uid));
-        if (!snap.exists() || snap.data().status === "pendente_aprovacao" || !tiposPermitidos.includes(snap.data().tipo)) {
-          await signOut(auth);
-          window.location.href = "index.html";
-          return;
-        }
-        callback(user, snap.data());
-      });
-    }
+    let todosUsuarios = [];
 
-    async function logout() {
-      await signOut(auth);
-      window.location.href = "index.html";
-    }
-
-    let usuarioAtual = null;
-    let perfilAtual = null;
-
-    /* ===================================================================
-       POPUP / MODAL CUSTOMIZADO (substitui alert() e confirm() nativos)
-       =================================================================== */
-    function criarModalHost() {
-      if (document.getElementById("modal-overlay")) return;
-      const overlay = document.createElement("div");
-      overlay.id = "modal-overlay";
-      overlay.className = "modal-overlay";
-      overlay.innerHTML = `
-        <div class="modal-caixa" id="modal-caixa" role="alertdialog" aria-modal="true">
-          <div class="modal-icone" id="modal-icone"></div>
-          <div class="modal-titulo" id="modal-titulo"></div>
-          <div class="modal-mensagem" id="modal-mensagem"></div>
-          <div class="modal-botoes" id="modal-botoes"></div>
-        </div>`;
-      document.body.appendChild(overlay);
-    }
-    criarModalHost();
-
-    function mostrarAlerta(mensagem, opcoes = {}) {
-      const { titulo = "Aviso", tipo = "info" } = opcoes;
-      const icones = { sucesso: "✅", erro: "⚠️", info: "ℹ️" };
-      return new Promise((resolve) => {
-        const overlay = document.getElementById("modal-overlay");
-        const caixa = document.getElementById("modal-caixa");
-        caixa.className = `modal-caixa modal-${tipo}`;
-        document.getElementById("modal-icone").textContent = icones[tipo] || icones.info;
-        document.getElementById("modal-titulo").textContent = titulo;
-        document.getElementById("modal-mensagem").textContent = mensagem;
-        document.getElementById("modal-botoes").innerHTML =
-          `<button type="button" class="modal-btn-primario" id="modal-btn-ok">OK</button>`;
-        overlay.classList.add("aberto");
-
-        const btnOk = document.getElementById("modal-btn-ok");
-        function fechar() {
-          overlay.classList.remove("aberto");
-          btnOk.removeEventListener("click", fechar);
-          resolve();
-        }
-        btnOk.addEventListener("click", fechar);
-        btnOk.focus();
-      });
-    }
-
-    function mostrarConfirm(mensagem, opcoes = {}) {
-      const { titulo = "Confirmar ação", textoConfirmar = "Confirmar", textoCancelar = "Cancelar", perigo = false } = opcoes;
-      return new Promise((resolve) => {
-        const overlay = document.getElementById("modal-overlay");
-        const caixa = document.getElementById("modal-caixa");
-        caixa.className = "modal-caixa modal-pergunta";
-        document.getElementById("modal-icone").textContent = perigo ? "⚠️" : "❓";
-        document.getElementById("modal-titulo").textContent = titulo;
-        document.getElementById("modal-mensagem").textContent = mensagem;
-        document.getElementById("modal-botoes").innerHTML = `
-          <button type="button" class="modal-btn-secundario" id="modal-btn-cancelar">${textoCancelar}</button>
-          <button type="button" class="modal-btn-primario ${perigo ? "perigo" : ""}" id="modal-btn-confirmar">${textoConfirmar}</button>
-        `;
-        overlay.classList.add("aberto");
-
-        const btnConfirmar = document.getElementById("modal-btn-confirmar");
-        const btnCancelar = document.getElementById("modal-btn-cancelar");
-        function limpar(resultado) {
-          overlay.classList.remove("aberto");
-          btnConfirmar.removeEventListener("click", onConfirmar);
-          btnCancelar.removeEventListener("click", onCancelar);
-          resolve(resultado);
-        }
-        function onConfirmar() { limpar(true); }
-        function onCancelar() { limpar(false); }
-        btnConfirmar.addEventListener("click", onConfirmar);
-        btnCancelar.addEventListener("click", onCancelar);
-        btnCancelar.focus();
-      });
-    }
-
-    document.getElementById("btn-logout").addEventListener("click", logout);
-
-    // ---------------- Proteção de Página (estrita — apenas Tipo 3, Admin Master) ----------------
-    protegerPagina([3], (user, perfil) => {
-      usuarioAtual = user;
-      perfilAtual = perfil;
-      document.getElementById("user-empresa").textContent = `${perfil.nome || user.email} (Admin)`;
-
-      carregarTodosUsuarios();
-      carregarResumoPendentes();
+    // Proteção de Acesso: Apenas Tipo 3 (Administrador)
+    protegerPagina([3], async (user, dadosUser) => {
+      document.getElementById("user-empresa").textContent = dadosUser.nome || user.email;
+      await carregarUsuarios();
     });
 
+    // Logout
+    document.getElementById("btn-logout").addEventListener("click", () => signOut(auth));
+
     /* ==========================================================================
-       AVISO DE COLABORADORES PENDENTES (atalho para o Painel de Logística)
+       CARREGAR E RENDERIZAR USUÁRIOS
        ========================================================================== */
-    async function carregarResumoPendentes() {
-      const aviso = document.getElementById("aviso-pendentes");
-      if (!aviso) return;
-
+    async function carregarUsuarios() {
       try {
-        const snap = await getDocs(query(collection(db, "users"), where("status", "==", "pendente_aprovacao")));
+        const snap = await getDocs(collection(db, "users"));
+        todosUsuarios = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-        if (snap.empty) {
+        const pendentes = todosUsuarios.filter(u => u.status === "pendente_aprovacao");
+        const aviso = document.getElementById("aviso-pendentes");
+        if (pendentes.length > 0) {
+          aviso.style.display = "block";
+          aviso.textContent = `⚠️ Existem ${pendentes.length} cadastro(s) aguardando aprovação!`;
+        } else {
           aviso.style.display = "none";
-          return;
         }
 
-        aviso.style.display = "block";
-        aviso.innerHTML = `Há <strong>${snap.size}</strong> colaborador(es) aguardando aprovação de acesso.
-          Isso pode ser feito na aba <em>"Aprovação de Usuários"</em> do
-          <a href="logistica-dashboard.html" style="color:var(--azul-escuro); font-weight:600;">Painel de Logística</a>,
-          ou diretamente aqui na tabela abaixo.`;
+        renderizarTabela();
       } catch (err) {
-        console.error("Erro ao verificar colaboradores pendentes:", err);
+        console.error("Erro ao carregar usuários:", err);
+        document.getElementById("tbody-usuarios").innerHTML = `
+          <tr>
+            <td colspan="5" style="text-align: center; color: #d9534f; padding: 20px;">
+              Erro ao carregar lista de usuários. Tente recarregar a página.
+            </td>
+          </tr>
+        `;
       }
     }
 
-    /* ==========================================================================
-       GESTÃO COMPLETA DE USUÁRIOS
-       ========================================================================== */
-    async function carregarTodosUsuarios() {
-      const tbody = document.getElementById("tb-todos-usuarios");
-      tbody.innerHTML = '<tr><td colspan="6" class="estado-vazio">Carregando usuários...</td></tr>';
+    function renderizarTabela() {
+      const termo = document.getElementById("filtro-busca").value.toLowerCase();
+      const statusFiltro = document.getElementById("filtro-status").value;
 
-      try {
-        const snap = await getDocs(collection(db, "users"));
+      const filtrados = todosUsuarios.filter(u => {
+        const bateTexto = (u.nome || "").toLowerCase().includes(termo) ||
+                          (u.email || "").toLowerCase().includes(termo) ||
+                          (u.empresa || "").toLowerCase().includes(termo);
+        const bateStatus = statusFiltro === "todos" || u.status === statusFiltro;
+        return bateTexto && bateStatus;
+      });
 
-        if (snap.empty) {
-          tbody.innerHTML = '<tr><td colspan="6" class="estado-vazio">Nenhum usuário cadastrado.</td></tr>';
-          return;
-        }
-
-        const usuarios = [];
-        snap.forEach(d => usuarios.push({ id: d.id, ...d.data() }));
-        usuarios.sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
-
-        tbody.innerHTML = "";
-        usuarios.forEach(u => {
-          const ehEuMesmo = u.id === usuarioAtual.uid;
-          const tr = document.createElement("tr");
-
-          tr.innerHTML = `
-            <td data-label="Nome">
-              ${escapeHtml(u.nome || "-")}
-              ${ehEuMesmo ? '<br><small style="color:var(--texto-suave);">(sua conta)</small>' : ""}
+      const tbody = document.getElementById("tbody-usuarios");
+      if (filtrados.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" style="text-align: center; color: #888; padding: 20px;">
+              Nenhum usuário encontrado.
             </td>
-            <td data-label="E-mail">${escapeHtml(u.email || "-")}</td>
-            <td data-label="Vínculo / Empresa">
-              <span style="font-size:0.78rem; color:var(--texto-suave);">${u.vinculo === "interno" ? "Colaborador Interno" : "Empresa Parceira"}</span>
-              <input type="text" class="input-empresa" data-id="${u.id}" value="${escapeHtml(u.empresa || "")}"
-                     placeholder="Nome da empresa"
-                     style="margin-top:4px; padding:6px 8px; border:1px solid var(--cinza-borda); border-radius:4px; font-size:0.82rem; width:100%;">
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = filtrados.map(u => {
+        const isPendente = u.status === "pendente_aprovacao";
+        const badgeClasse = isPendente ? "badge-pendente" : (u.status === "aprovado" ? "badge-aprovado" : "badge-suspenso");
+        const statusTexto = isPendente ? "Pendente" : (u.status === "aprovado" ? "Aprovado" : "Suspenso");
+
+        return `
+          <tr id="linha-user-${u.id}">
+            <td>
+              <strong>${escapeHtml(u.nome || "Sem Nome")}</strong><br>
+              <small style="color: #666;">${escapeHtml(u.email)}</small>
             </td>
-            <td data-label="Tipo de Acesso">
-              <select class="select-alterar-tipo" data-id="${u.id}" ${ehEuMesmo ? "disabled" : ""} style="padding:6px; border-radius:4px; font-size:0.85rem;">
-                <option value="1" ${u.tipo === 1 ? "selected" : ""}>Transportadora (1)</option>
-                <option value="2" ${u.tipo === 2 ? "selected" : ""}>Logística (2)</option>
-                <option value="3" ${u.tipo === 3 ? "selected" : ""}>Administrador (3)</option>
+            <td>
+              <input type="text" class="input-empresa" data-id="${u.id}" value="${escapeHtml(u.empresa || "")}" placeholder="Nome da empresa">
+            </td>
+            <td>
+              <select class="select-grid select-alterar-tipo" data-id="${u.id}">
+                <option value="1" ${u.tipo === 1 ? "selected" : ""}>Transportadora</option>
+                <option value="2" ${u.tipo === 2 ? "selected" : ""}>Logística / Operacional</option>
+                <option value="3" ${u.tipo === 3 ? "selected" : ""}>Administrador</option>
               </select>
             </td>
-            <td data-label="Status da Conta">
-              <select class="select-alterar-status" data-id="${u.id}" ${ehEuMesmo ? "disabled" : ""} style="padding:6px; border-radius:4px; font-size:0.85rem;">
-                <option value="aprovado" ${u.status === "aprovado" ? "selected" : ""}>Ativo</option>
-                <option value="suspenso" ${u.status === "suspenso" ? "selected" : ""}>Suspenso</option>
+            <td>
+              <select class="select-grid select-alterar-status" data-id="${u.id}">
+                <option value="aprovado" ${u.status === "aprovado" ? "selected" : ""}>Aprovado</option>
                 <option value="pendente_aprovacao" ${u.status === "pendente_aprovacao" ? "selected" : ""}>Pendente</option>
-                <option value="recusado" ${u.status === "recusado" ? "selected" : ""}>Recusado</option>
+                <option value="suspenso" ${u.status === "suspenso" ? "selected" : ""}>Suspenso</option>
               </select>
             </td>
-            <td data-label="Ações">
-              <button class="btn-acao btn-salvar-usuario" data-id="${u.id}" ${ehEuMesmo ? "disabled" : ""}>
+            <td>
+              <button class="btn-primario btn-salvar-user" data-id="${u.id}" style="padding: 6px 12px; font-size: 0.8rem;">
                 Salvar
               </button>
             </td>
-          `;
-          tbody.appendChild(tr);
-        });
+          </tr>
+        `;
+      }).join("");
 
-        tbody.querySelectorAll(".btn-salvar-usuario").forEach(btn => {
-          btn.addEventListener("click", () => salvarUsuario(btn.dataset.id, tbody, btn));
-        });
-      } catch (err) {
-        console.error(err);
-        tbody.innerHTML = '<tr><td colspan="6" class="estado-vazio">Erro ao carregar lista de usuários.</td></tr>';
-      }
+      // Eventos de clique nos botões "Salvar"
+      document.querySelectorAll(".btn-salvar-user").forEach(btn => {
+        btn.addEventListener("click", () => salvarAlteracoesUsuario(btn.dataset.id));
+      });
     }
 
-    async function salvarUsuario(idUser, tbody, btn) {
-      const selectTipo = tbody.querySelector(`.select-alterar-tipo[data-id="${idUser}"]`);
-      const selectStatus = tbody.querySelector(`.select-alterar-status[data-id="${idUser}"]`);
-      const inputEmpresa = tbody.querySelector(`.input-empresa[data-id="${idUser}"]`);
+    /* ==========================================================================
+       SALVAR ALTERAÇÕES DO USUÁRIO
+       ========================================================================== */
+    async function salvarAlteracoesUsuario(idUser) {
+      const linha = document.getElementById(`linha-user-${idUser}`);
+      const btn = linha.querySelector(".btn-salvar-user");
+      const selectTipo = linha.querySelector(`.select-alterar-tipo[data-id="${idUser}"]`);
+      const selectStatus = linha.querySelector(`.select-alterar-status[data-id="${idUser}"]`);
+      const inputEmpresa = linha.querySelector(`.input-empresa[data-id="${idUser}"]`);
 
       const novoTipo = Number(selectTipo.value);
       const novoStatus = selectStatus.value;
       const novaEmpresa = inputEmpresa.value.trim();
 
-      const linha = btn.closest("tr");
       linha.querySelectorAll("button, select, input").forEach(el => (el.disabled = true));
       btn.textContent = "Salvando...";
 
@@ -299,24 +261,32 @@
           atualizadoEm: serverTimestamp()
         });
 
-        await mostrarAlerta("Usuário atualizado com sucesso!", { titulo: "Usuário atualizado", tipo: "sucesso" });
-        carregarResumoPendentes();
+        alert("Usuário atualizado com sucesso!");
+        await carregarUsuarios();
       } catch (err) {
-        console.error(err);
-        await mostrarAlerta("Erro ao atualizar o usuário.", { titulo: "Erro", tipo: "erro" });
+        console.error("Erro ao atualizar usuário:", err);
+        alert("Erro ao atualizar o usuário. Verifique as permissões.");
       } finally {
         linha.querySelectorAll("button, select, input").forEach(el => (el.disabled = false));
         btn.textContent = "Salvar";
       }
     }
 
+    // Filtros em tempo real
+    document.getElementById("filtro-busca").addEventListener("input", renderizarTabela);
+    document.getElementById("filtro-status").addEventListener("change", renderizarTabela);
+
     /* ==========================================================================
        UTILITÁRIOS
        ========================================================================== */
     function escapeHtml(texto) {
-      const div = document.createElement("div");
-      div.textContent = texto ?? "";
-      return div.innerHTML;
+      if (!texto) return "";
+      return String(texto)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
     }
   </script>
 </body>
