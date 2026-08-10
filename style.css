@@ -41,7 +41,7 @@ body {
   max-width: 380px;
 }
 
-.login-card-larga { max-width: 460px; }
+.login-card-larga { max-width: 520px; }
 
 .login-card .logo {
   text-align: center;
@@ -163,7 +163,7 @@ button.btn-primario:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-toggle-senha:hover { color: var(--azul); }
 .btn-toggle-senha:focus-visible { outline: 2px solid var(--azul); outline-offset: -2px; border-radius: 4px; }
 
-/* ---------- Modal / Popup customizado (substitui alert() e confirm() nativos) ---------- */
+/* ---------- Modal / Popup customizado ---------- */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -184,7 +184,7 @@ button.btn-primario:disabled { opacity: 0.6; cursor: not-allowed; }
   background: var(--branco);
   border-radius: var(--raio);
   box-shadow: 0 14px 40px rgba(0,0,0,0.3);
-  max-width: 380px;
+  max-width: 420px;
   width: 100%;
   padding: 26px 24px;
   transform: translateY(10px) scale(.97);
@@ -247,11 +247,11 @@ button.btn-primario:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .radio-opcao input { width: auto; }
 
-/* ---------- Layout geral dos dashboards ---------- */
+/* ---------- Layout geral dos dashboards (DESKTOP OPTIMIZED) ---------- */
 .topbar {
   background: var(--azul-escuro);
   color: var(--branco);
-  padding: 14px 24px;
+  padding: 14px 28px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -268,14 +268,28 @@ button.btn-primario:disabled { opacity: 0.6; cursor: not-allowed; }
   cursor: pointer;
 }
 
-.container { padding: 24px; max-width: 1200px; margin: 0 auto; }
+/* Container responsivo adaptado para Full HD, 2K, 4K e Ultrawide */
+.container {
+  padding: 24px 28px;
+  width: 96%;
+  max-width: 1440px; /* Expansão em monitores Full HD e 2K */
+  margin: 0 auto;
+  transition: max-width 0.2s ease-in-out;
+}
+
+@media (min-width: 1800px) {
+  .container {
+    max-width: 1720px; /* Aproveitamento amplo em telas grandes e Ultrawide */
+  }
+}
 
 .card {
   background: var(--branco);
   border-radius: var(--raio);
   box-shadow: var(--sombra);
-  padding: 20px;
+  padding: 24px;
   margin-bottom: 20px;
+  width: 100%;
 }
 
 .badge {
@@ -316,19 +330,20 @@ button.btn-primario:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* ---------- Seleção de horário (agendamento) ---------- */
 .slots-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
 }
 
 .slot-opcao {
   border: 1px solid var(--cinza-borda);
   border-radius: 6px;
-  padding: 9px 14px;
+  padding: 10px 14px;
   font-size: 0.9rem;
   cursor: pointer;
   background: var(--branco);
+  text-align: center;
   transition: all .15s;
 }
 
@@ -351,7 +366,7 @@ button.btn-primario:disabled { opacity: 0.6; cursor: not-allowed; }
   border: 1px solid #cfe2ff;
   color: var(--azul-escuro);
   font-size: 0.85rem;
-  padding: 12px 14px;
+  padding: 12px 16px;
   border-radius: 6px;
   margin-bottom: 20px;
 }
@@ -362,7 +377,7 @@ button.btn-primario:disabled { opacity: 0.6; cursor: not-allowed; }
 .item-agendamento {
   border: 1px solid var(--cinza-borda);
   border-radius: 8px;
-  padding: 14px 16px;
+  padding: 16px 20px;
 }
 
 .item-agendamento .linha-topo {
@@ -379,10 +394,10 @@ button.btn-primario:disabled { opacity: 0.6; cursor: not-allowed; }
 .estado-vazio { text-align: center; color: var(--texto-suave); padding: 30px 0; font-size: 0.9rem; }
 
 /* =====================================================================
-   COMPONENTES USADOS NO HTML/JS QUE AINDA NÃO TINHAM ESTILO PRÓPRIO
+   COMPONENTES DE TABELA E BOTÕES DE AÇÃO
    ===================================================================== */
 
-/* ---------- Botões de ação (tabelas e cards de aprovação) ---------- */
+/* ---------- Botões de ação ---------- */
 .btn-acao {
   display: inline-flex;
   align-items: center;
@@ -420,7 +435,7 @@ button.btn-primario:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 .btn-salvar-slot:hover:not(:disabled), .btn-salvar-usuario:hover:not(:disabled) { background: var(--azul-escuro); }
 
-/* ---------- Selects avulsos (aprovação de usuário, tipo de acesso) ---------- */
+/* ---------- Selects avulsos ---------- */
 .campo-select,
 select.select-alterar-tipo,
 select.select-alterar-status {
@@ -433,7 +448,7 @@ select.select-alterar-status {
   color: var(--texto);
 }
 
-/* ---------- Botões de horário (grid de agendamento) ---------- */
+/* ---------- Botões de horário ---------- */
 .btn-slot {
   border: 1px solid var(--cinza-borda);
   border-radius: 8px;
@@ -449,17 +464,21 @@ select.select-alterar-status {
 .btn-slot.selecionado { background: var(--azul); border-color: var(--azul); color: var(--branco); }
 .btn-slot.esgotado { opacity: .45; cursor: not-allowed; }
 
-/* ---------- Tabela padrão (Painel Admin) ---------- */
-.tabela-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* ---------- Tabela Padrão (Full Width e Scroll suave) ---------- */
+.tabela-wrapper { 
+  width: 100%;
+  overflow-x: auto; 
+  -webkit-overflow-scrolling: touch; 
+}
 
-.tabela-padrao { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.tabela-padrao { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
 
 .tabela-padrao th {
   text-align: left;
-  padding: 10px 14px;
+  padding: 12px 16px;
   background: var(--cinza-bg);
   color: var(--texto-suave);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .04em;
@@ -468,7 +487,7 @@ select.select-alterar-status {
 }
 
 .tabela-padrao td {
-  padding: 12px 14px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--cinza-borda);
   vertical-align: middle;
 }
@@ -476,7 +495,7 @@ select.select-alterar-status {
 .tabela-padrao tbody tr:hover { background: #fafbfc; }
 
 /* =====================================================================
-   RESPONSIVIDADE / "APP SHELL" — comportamento de aplicativo mobile
+   RESPONSIVIDADE E COMPORTAMENTO MOBILE (APP SHELL)
    ===================================================================== */
 
 html { -webkit-text-size-adjust: 100%; }
@@ -490,7 +509,6 @@ button, .btn-primario, .btn-acao, .tab-btn, .topbar button, .slot-opcao, .btn-sl
   touch-action: manipulation;
 }
 
-/* Cabeçalho fixo no topo, como o header de um app nativo */
 .topbar {
   position: sticky;
   top: 0;
@@ -500,14 +518,10 @@ button, .btn-primario, .btn-acao, .tab-btn, .topbar button, .slot-opcao, .btn-sl
   padding-right: max(24px, env(safe-area-inset-right));
 }
 
-/* Respiro extra no final da página para não ficar colado na borda
-   inferior de telas com "notch"/gesto (iPhone, Android recentes) */
 .container {
   padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
 }
 
-/* Abas com rolagem horizontal — padrão de app (segmented / scroll tabs),
-   evita quebra feia de linha quando há muitas abas em tela estreita */
 .tabs {
   flex-wrap: nowrap;
   overflow-x: auto;
@@ -528,8 +542,7 @@ button, .btn-primario, .btn-acao, .tab-btn, .topbar button, .slot-opcao, .btn-sl
 }
 
 @media (max-width: 640px) {
-  /* ---------- Espaçamento geral ---------- */
-  .container { padding: 14px; }
+  .container { width: 100%; padding: 14px; }
   .card { padding: 16px; border-radius: 12px; margin-bottom: 14px; }
 
   .topbar {
@@ -551,7 +564,6 @@ button, .btn-primario, .btn-acao, .tab-btn, .topbar button, .slot-opcao, .btn-sl
     white-space: nowrap;
   }
 
-  /* ---------- Abas (padrão bottom-safe scroll tabs) ---------- */
   .tabs {
     margin: 0 -14px 16px;
     padding: 0 14px;
@@ -559,7 +571,6 @@ button, .btn-primario, .btn-acao, .tab-btn, .topbar button, .slot-opcao, .btn-sl
   }
   .tab-btn { padding: 12px 14px; font-size: 0.88rem; }
 
-  /* ---------- Alvo de toque confortável (padrão iOS/Android: 44px) ---------- */
   button, .btn-primario, .btn-acao, .tab-btn,
   .campo input, .campo select, .campo textarea,
   input, select, textarea {
@@ -567,12 +578,10 @@ button, .btn-primario, .btn-acao, .tab-btn, .topbar button, .slot-opcao, .btn-sl
   }
   .btn-acao { padding: 10px 14px; font-size: 0.85rem; }
 
-  /* Evita zoom automático do iOS ao focar campos (fonte < 16px dispara zoom) */
   .campo input, .campo select, .campo textarea, input, select, textarea {
     font-size: 16px;
   }
 
-  /* ---------- Grids de formulário viram coluna única ---------- */
   #form-regra-slot > div[style*="grid-template-columns"],
   #form-excecao-slot > div[style*="grid-template-columns"],
   #form-slot-manual {
@@ -581,19 +590,15 @@ button, .btn-primario, .btn-acao, .tab-btn, .topbar button, .slot-opcao, .btn-sl
   #form-slot-manual { flex-direction: column; align-items: stretch !important; }
   #form-slot-manual .campo { width: 100%; }
 
-  /* ---------- Grid de horários disponíveis (agendamento) ---------- */
-  .slots-grid { gap: 8px; }
+  .slots-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
   .btn-slot, .slot-opcao { flex: 1 1 calc(50% - 8px); }
 
-  /* CTA principal do formulário de agendamento acompanha a rolagem,
-     como o botão de ação fixo dos apps nativos */
   #form-agendamento > button.btn-primario {
     position: sticky;
     bottom: calc(12px + env(safe-area-inset-bottom));
     box-shadow: 0 6px 18px rgba(15, 41, 66, 0.25);
   }
 
-  /* ---------- Login / Cadastro / Recuperar senha em tela cheia ---------- */
   .login-wrap { padding: 0; align-items: stretch; }
   .login-card, .login-card-larga {
     max-width: none;
@@ -607,12 +612,9 @@ button, .btn-primario, .btn-acao, .tab-btn, .topbar button, .slot-opcao, .btn-sl
     padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
   }
 
-  /* ---------- Cards de agendamento/solicitação ---------- */
   .item-agendamento .linha-topo { flex-wrap: wrap; gap: 6px; }
   .item-agendamento { padding: 12px 14px; }
 
-  /* Linhas flex inline (botões de ação, filtros de data) quebram em
-     vez de transbordar horizontalmente na tela estreita */
   .card div[style*="display:flex"],
   .card div[style*="display: flex"],
   .item-agendamento div[style*="display:flex"] {
@@ -623,7 +625,6 @@ button, .btn-primario, .btn-acao, .tab-btn, .topbar button, .slot-opcao, .btn-sl
     flex: 1 1 160px;
   }
 
-  /* ---------- Tabela do Admin vira lista de cartões no celular ---------- */
   .tabela-padrao thead { display: none; }
   .tabela-padrao, .tabela-padrao tbody, .tabela-padrao tr, .tabela-padrao td {
     display: block;
@@ -666,10 +667,10 @@ button, .btn-primario, .btn-acao, .tab-btn, .topbar button, .slot-opcao, .btn-sl
 }
 
 /* =====================================================================
-   PAINEL DO DIA — Visão visual de ocupação (tira de dias + linha do tempo)
+   PAINEL DO DIA — VISÃO DE OCUPAÇÃO
    ===================================================================== */
 
-/* ---------- Tira de dias (próximos 7 dias) ---------- */
+/* ---------- Tira de dias ---------- */
 .tira-dias {
   display: flex;
   gap: 8px;
@@ -727,7 +728,7 @@ button, .btn-primario, .btn-acao, .tab-btn, .topbar button, .slot-opcao, .btn-sl
 }
 .legenda-ocupacao .ponto {
   display: inline-block;
-  width: 10px;
+  width: 100px;
   height: 10px;
   border-radius: 50%;
   margin-right: 5px;
