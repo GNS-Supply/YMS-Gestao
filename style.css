@@ -808,6 +808,33 @@ button, .btn-primario, .btn-acao, .tab-btn, .topbar button, .slot-opcao, .btn-sl
   .faixa-horario-contagem { min-width: 44px; font-size: 0.78rem; }
 }
 
+/* ---------- Seleção de dias da semana (Regras & Exceções) ---------- */
+.campo-dias-semana {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dia-semana-opcao {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--cinza-borda);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--branco);
+  transition: border-color .15s, background .15s;
+}
+.dia-semana-opcao:has(input:checked) {
+  border-color: var(--azul);
+  background: #eaf2fb;
+  color: var(--azul-escuro);
+}
+.dia-semana-opcao input { width: auto; margin: 0; }
+
 /* =====================================================================
    TOAST — notificação não-bloqueante (usada para confirmar ações
    rápidas de sucesso, ex: "Aprovado", "Check-in realizado", sem exigir

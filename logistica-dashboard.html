@@ -102,6 +102,7 @@
       <button class="tab-btn" data-tab="todos">🔍 Todos os Agendamentos</button>
       <button class="tab-btn" data-tab="novo-operacional" style="background: rgba(40,167,69,0.1); color: #28a745; font-weight: 600;">➕ Novo Agendamento</button>
       <button class="tab-btn" data-tab="kpis" style="background: rgba(0,123,255,0.1); color: #007bff; font-weight: 600;">📊 KPIs / Indicadores</button>
+      <button class="tab-btn" data-tab="regras">🗓️ Horários & Exceções</button>
       <button class="tab-btn" data-tab="vagas">⚙️ Gestão de Vagas</button>
     </div>
 
@@ -372,6 +373,116 @@
       </div>
     </div>
 
+    <div class="tab-conteudo" id="tab-regras">
+      <div class="card">
+        <h3>🗓️ Regra Padrão de Atendimento</h3>
+        <p style="font-size:0.85rem; color:#666; margin-bottom:16px;">
+          Define o horário de funcionamento recorrente do pátio e quantos veículos podem ser atendidos por hora, para cada dia da semana. Vale para qualquer data futura que não tenha Exceção ou Ajuste Manual (aba "Gestão de Vagas") sobrescrevendo.
+        </p>
+
+        <form id="form-regra-slot">
+          <div class="campo">
+            <label>Dias da Semana</label>
+            <div class="campo-dias-semana" id="regra-dias-semana"></div>
+          </div>
+          <div style="display:flex; gap:15px; flex-wrap:wrap;">
+            <div class="campo" style="flex:1; min-width:140px;">
+              <label for="regra-hora-inicio">Hora Início</label>
+              <input type="time" id="regra-hora-inicio" required>
+            </div>
+            <div class="campo" style="flex:1; min-width:140px;">
+              <label for="regra-hora-fim">Hora Fim</label>
+              <input type="time" id="regra-hora-fim" required>
+            </div>
+            <div class="campo" style="flex:1; min-width:140px;">
+              <label for="regra-capacidade">Veículos por Hora</label>
+              <input type="number" id="regra-capacidade" min="1" step="1" required>
+            </div>
+          </div>
+          <div class="campo" style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="regra-ativo" checked style="width:auto;">
+            <label for="regra-ativo" style="margin:0;">Regra ativa</label>
+          </div>
+          <input type="hidden" id="regra-editando-id">
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button type="submit" id="btn-salvar-regra" class="btn-primario" style="width:auto; padding:10px 20px;">Adicionar Regra</button>
+            <button type="button" id="btn-cancelar-edicao-regra" class="btn-acao btn-desativar" style="display:none;">Cancelar Edição</button>
+          </div>
+        </form>
+
+        <div style="overflow-x:auto; margin-top:20px;">
+          <table class="tabela-padrao">
+            <thead>
+              <tr>
+                <th>Dias</th>
+                <th>Horário</th>
+                <th>Capacidade/h</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-regras">
+              <tr><td colspan="5" style="text-align:center;">Carregando regras...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>⚠️ Exceções Recorrentes</h3>
+        <p style="font-size:0.85rem; color:#666; margin-bottom:16px;">
+          Sobrescrevem a Regra Padrão nos dias/horários selecionados — use para bloquear um dia inteiro (ex: domingo) ou reduzir a capacidade num intervalo específico (ex: horário de almoço). Capacidade <strong>0</strong> = sem atendimento nesse intervalo/dia.
+        </p>
+
+        <form id="form-excecao-slot">
+          <div class="campo">
+            <label>Dias da Semana</label>
+            <div class="campo-dias-semana" id="excecao-dias-semana"></div>
+          </div>
+          <div style="display:flex; gap:15px; flex-wrap:wrap;">
+            <div class="campo" style="flex:1; min-width:140px;">
+              <label for="excecao-hora-inicio">Hora Início</label>
+              <input type="time" id="excecao-hora-inicio" required>
+            </div>
+            <div class="campo" style="flex:1; min-width:140px;">
+              <label for="excecao-hora-fim">Hora Fim</label>
+              <input type="time" id="excecao-hora-fim" required>
+            </div>
+            <div class="campo" style="flex:1; min-width:140px;">
+              <label for="excecao-capacidade">Veículos por Hora (0 = fechado)</label>
+              <input type="number" id="excecao-capacidade" min="0" step="1" required>
+            </div>
+          </div>
+          <div class="campo" style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="excecao-ativo" checked style="width:auto;">
+            <label for="excecao-ativo" style="margin:0;">Exceção ativa</label>
+          </div>
+          <input type="hidden" id="excecao-editando-id">
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button type="submit" id="btn-salvar-excecao" class="btn-primario" style="width:auto; padding:10px 20px;">Adicionar Exceção</button>
+            <button type="button" id="btn-cancelar-edicao-excecao" class="btn-acao btn-desativar" style="display:none;">Cancelar Edição</button>
+          </div>
+        </form>
+
+        <div style="overflow-x:auto; margin-top:20px;">
+          <table class="tabela-padrao">
+            <thead>
+              <tr>
+                <th>Dias</th>
+                <th>Horário</th>
+                <th>Capacidade/h</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-excecoes">
+              <tr><td colspan="5" style="text-align:center;">Carregando exceções...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <div class="tab-conteudo" id="tab-vagas">
       <div class="card">
         <h3>Configuração Manual de Capacidade de Pátio</h3>
@@ -621,6 +732,7 @@
           if (target === "novo-operacional") atualizarHorariosOperacionais();
           if (target === "todos") carregarTodosAgendamentos();
           if (target === "kpis") atualizarPainelKPIs();
+          if (target === "regras") { carregarRegras(); carregarExcecoes(); }
         });
       });
     }
@@ -1072,6 +1184,351 @@
     }
 
     document.getElementById("btn-filtrar-kpis").addEventListener("click", atualizarPainelKPIs);
+
+    /* ===================================================================
+       REGRA PADRÃO DE ATENDIMENTO + EXCEÇÕES RECORRENTES
+
+       Tela reconstruída: existia antes, mas foi perdida em algum ponto
+       do histórico (o CSS responsivo em style.css ainda referenciava
+       #form-regra-slot/#form-excecao-slot, evidência de que a tela já
+       existiu). O motor de cálculo (buscarSlotsVirtuaisDoDia em
+       patioCore.js) e as Firestore Rules para timeSlotRules/
+       timeSlotExceptions nunca deixaram de existir — só faltava esta
+       interface de cadastro.
+       =================================================================== */
+    const DIAS_SEMANA_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+    function montarCheckboxesDias(containerId) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = DIAS_SEMANA_LABELS.map((label, i) => `
+        <label class="dia-semana-opcao">
+          <input type="checkbox" value="${i}"> ${label}
+        </label>
+      `).join("");
+    }
+    montarCheckboxesDias("regra-dias-semana");
+    montarCheckboxesDias("excecao-dias-semana");
+
+    function lerDiasSelecionados(containerId) {
+      return Array.from(document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`))
+        .map(cb => Number(cb.value))
+        .sort((a, b) => a - b);
+    }
+
+    function marcarDiasSelecionados(containerId, dias) {
+      const set = new Set(dias || []);
+      document.querySelectorAll(`#${containerId} input[type=checkbox]`).forEach(cb => {
+        cb.checked = set.has(Number(cb.value));
+      });
+    }
+
+    // ---------------------- Regra Padrão ----------------------
+
+    async function carregarRegras() {
+      const tbody = document.getElementById("tbody-regras");
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Carregando regras...</td></tr>';
+      try {
+        const snap = await getDocs(collection(db, "timeSlotRules"));
+        const regras = snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
+
+        if (regras.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#888;">Nenhuma regra cadastrada ainda — o pátio não tem horário de atendimento padrão até que uma regra seja criada aqui.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = regras.map(r => `
+          <tr data-id="${r.id}">
+            <td>${(r.diasSemana || []).map(d => DIAS_SEMANA_LABELS[d]).join(", ")}</td>
+            <td>${r.horaInicio} às ${r.horaFim}</td>
+            <td>${r.capacidadePorHora}</td>
+            <td>${r.ativo ? '<span class="badge aprovado">Ativa</span>' : '<span class="badge recusado">Inativa</span>'}</td>
+            <td>
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <button type="button" class="btn-acao btn-editar-regra" style="background:var(--azul,#1a5f9e); color:#fff;">Editar</button>
+                <button type="button" class="btn-acao btn-toggle-regra" style="background:${r.ativo ? "#dc3545" : "#28a745"}; color:#fff;">${r.ativo ? "Desativar" : "Ativar"}</button>
+                <button type="button" class="btn-acao btn-excluir-regra" style="background:#fff; color:#333; border:1px solid var(--cinza-borda,#ccc);">Excluir</button>
+              </div>
+            </td>
+          </tr>
+        `).join("");
+
+        vincularEventosRegras(regras);
+      } catch (err) {
+        console.error("Erro ao carregar regras:", err);
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">Erro ao carregar as regras.</td></tr>';
+      }
+    }
+
+    function vincularEventosRegras(regras) {
+      document.querySelectorAll(".btn-editar-regra").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.closest("tr").dataset.id;
+          const r = regras.find(x => x.id === id);
+          if (!r) return;
+
+          marcarDiasSelecionados("regra-dias-semana", r.diasSemana);
+          document.getElementById("regra-hora-inicio").value = r.horaInicio;
+          document.getElementById("regra-hora-fim").value = r.horaFim;
+          document.getElementById("regra-capacidade").value = r.capacidadePorHora;
+          document.getElementById("regra-ativo").checked = !!r.ativo;
+          document.getElementById("regra-editando-id").value = r.id;
+          document.getElementById("btn-salvar-regra").textContent = "Salvar Alterações";
+          document.getElementById("btn-cancelar-edicao-regra").style.display = "inline-flex";
+          document.getElementById("form-regra-slot").scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      });
+
+      document.querySelectorAll(".btn-toggle-regra").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.closest("tr").dataset.id;
+          const r = regras.find(x => x.id === id);
+          if (!r) return;
+          btn.disabled = true;
+          try {
+            await updateDoc(doc(db, "timeSlotRules", id), { ativo: !r.ativo });
+            mostrarToast(`Regra ${r.ativo ? "desativada" : "ativada"}.`, { tipo: "sucesso" });
+            await carregarRegras();
+          } catch (err) {
+            console.error("Erro ao alterar status da regra:", err);
+            await mostrarAlerta("Erro ao alterar o status da regra: " + err.message, { titulo: "Erro", tipo: "erro" });
+            btn.disabled = false;
+          }
+        });
+      });
+
+      document.querySelectorAll(".btn-excluir-regra").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.closest("tr").dataset.id;
+          const confirmado = await mostrarConfirm(
+            "Excluir esta regra? Datas futuras que dependiam dela deixarão de ter atendimento padrão nesse horário, a menos que outra regra ou exceção cubra o mesmo período.",
+            { titulo: "Excluir regra", perigo: true, textoConfirmar: "Excluir" }
+          );
+          if (!confirmado) return;
+          try {
+            await deleteDoc(doc(db, "timeSlotRules", id));
+            mostrarToast("Regra excluída.", { tipo: "sucesso" });
+            await carregarRegras();
+          } catch (err) {
+            console.error("Erro ao excluir regra:", err);
+            await mostrarAlerta("Erro ao excluir a regra: " + err.message, { titulo: "Erro", tipo: "erro" });
+          }
+        });
+      });
+    }
+
+    function resetarFormularioRegra() {
+      document.getElementById("form-regra-slot").reset();
+      document.getElementById("regra-ativo").checked = true;
+      document.getElementById("regra-editando-id").value = "";
+      marcarDiasSelecionados("regra-dias-semana", []);
+      document.getElementById("btn-salvar-regra").textContent = "Adicionar Regra";
+      document.getElementById("btn-cancelar-edicao-regra").style.display = "none";
+    }
+
+    document.getElementById("btn-cancelar-edicao-regra").addEventListener("click", resetarFormularioRegra);
+
+    document.getElementById("form-regra-slot").addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const diasSemana = lerDiasSelecionados("regra-dias-semana");
+      const horaInicio = document.getElementById("regra-hora-inicio").value;
+      const horaFim = document.getElementById("regra-hora-fim").value;
+      const capacidadePorHora = parseInt(document.getElementById("regra-capacidade").value, 10);
+      const ativo = document.getElementById("regra-ativo").checked;
+      const editandoId = document.getElementById("regra-editando-id").value;
+
+      if (diasSemana.length === 0) {
+        mostrarToast("Selecione ao menos um dia da semana.", { tipo: "erro" });
+        return;
+      }
+      if (!horaInicio || !horaFim) {
+        mostrarToast("Informe a hora de início e fim.", { tipo: "erro" });
+        return;
+      }
+      if (!capacidadePorHora || capacidadePorHora < 1) {
+        mostrarToast("Informe uma capacidade válida (mínimo 1 veículo/hora).", { tipo: "erro" });
+        return;
+      }
+
+      const payload = { diasSemana, horaInicio, horaFim, capacidadePorHora, ativo };
+      const btn = document.getElementById("btn-salvar-regra");
+      btn.disabled = true;
+      btn.textContent = "Salvando...";
+
+      try {
+        if (editandoId) {
+          await updateDoc(doc(db, "timeSlotRules", editandoId), payload);
+          mostrarToast("Regra atualizada.", { tipo: "sucesso" });
+        } else {
+          await addDoc(collection(db, "timeSlotRules"), payload);
+          mostrarToast("Regra adicionada.", { tipo: "sucesso" });
+        }
+        resetarFormularioRegra();
+        await carregarRegras();
+      } catch (err) {
+        console.error("Erro ao salvar regra:", err);
+        await mostrarAlerta("Erro ao salvar a regra: " + err.message, { titulo: "Erro", tipo: "erro" });
+      } finally {
+        btn.disabled = false;
+        if (btn.textContent === "Salvando...") btn.textContent = editandoId ? "Salvar Alterações" : "Adicionar Regra";
+      }
+    });
+
+    // ---------------------- Exceções Recorrentes ----------------------
+
+    async function carregarExcecoes() {
+      const tbody = document.getElementById("tbody-excecoes");
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Carregando exceções...</td></tr>';
+      try {
+        const snap = await getDocs(collection(db, "timeSlotExceptions"));
+        const excecoes = snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
+
+        if (excecoes.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#888;">Nenhuma exceção cadastrada.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = excecoes.map(ex => `
+          <tr data-id="${ex.id}">
+            <td>${(ex.diasSemana || []).map(d => DIAS_SEMANA_LABELS[d]).join(", ")}</td>
+            <td>${ex.horaInicio} às ${ex.horaFim}</td>
+            <td>${ex.capacidadePorHora === 0 ? "Fechado" : ex.capacidadePorHora}</td>
+            <td>${ex.ativo ? '<span class="badge aprovado">Ativa</span>' : '<span class="badge recusado">Inativa</span>'}</td>
+            <td>
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <button type="button" class="btn-acao btn-editar-excecao" style="background:var(--azul,#1a5f9e); color:#fff;">Editar</button>
+                <button type="button" class="btn-acao btn-toggle-excecao" style="background:${ex.ativo ? "#dc3545" : "#28a745"}; color:#fff;">${ex.ativo ? "Desativar" : "Ativar"}</button>
+                <button type="button" class="btn-acao btn-excluir-excecao" style="background:#fff; color:#333; border:1px solid var(--cinza-borda,#ccc);">Excluir</button>
+              </div>
+            </td>
+          </tr>
+        `).join("");
+
+        vincularEventosExcecoes(excecoes);
+      } catch (err) {
+        console.error("Erro ao carregar exceções:", err);
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">Erro ao carregar as exceções.</td></tr>';
+      }
+    }
+
+    function vincularEventosExcecoes(excecoes) {
+      document.querySelectorAll(".btn-editar-excecao").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.closest("tr").dataset.id;
+          const ex = excecoes.find(x => x.id === id);
+          if (!ex) return;
+
+          marcarDiasSelecionados("excecao-dias-semana", ex.diasSemana);
+          document.getElementById("excecao-hora-inicio").value = ex.horaInicio;
+          document.getElementById("excecao-hora-fim").value = ex.horaFim;
+          document.getElementById("excecao-capacidade").value = ex.capacidadePorHora;
+          document.getElementById("excecao-ativo").checked = !!ex.ativo;
+          document.getElementById("excecao-editando-id").value = ex.id;
+          document.getElementById("btn-salvar-excecao").textContent = "Salvar Alterações";
+          document.getElementById("btn-cancelar-edicao-excecao").style.display = "inline-flex";
+          document.getElementById("form-excecao-slot").scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      });
+
+      document.querySelectorAll(".btn-toggle-excecao").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.closest("tr").dataset.id;
+          const ex = excecoes.find(x => x.id === id);
+          if (!ex) return;
+          btn.disabled = true;
+          try {
+            await updateDoc(doc(db, "timeSlotExceptions", id), { ativo: !ex.ativo });
+            mostrarToast(`Exceção ${ex.ativo ? "desativada" : "ativada"}.`, { tipo: "sucesso" });
+            await carregarExcecoes();
+          } catch (err) {
+            console.error("Erro ao alterar status da exceção:", err);
+            await mostrarAlerta("Erro ao alterar o status da exceção: " + err.message, { titulo: "Erro", tipo: "erro" });
+            btn.disabled = false;
+          }
+        });
+      });
+
+      document.querySelectorAll(".btn-excluir-excecao").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.closest("tr").dataset.id;
+          const confirmado = await mostrarConfirm(
+            "Excluir esta exceção? O horário afetado volta a seguir a Regra Padrão de Atendimento.",
+            { titulo: "Excluir exceção", perigo: true, textoConfirmar: "Excluir" }
+          );
+          if (!confirmado) return;
+          try {
+            await deleteDoc(doc(db, "timeSlotExceptions", id));
+            mostrarToast("Exceção excluída.", { tipo: "sucesso" });
+            await carregarExcecoes();
+          } catch (err) {
+            console.error("Erro ao excluir exceção:", err);
+            await mostrarAlerta("Erro ao excluir a exceção: " + err.message, { titulo: "Erro", tipo: "erro" });
+          }
+        });
+      });
+    }
+
+    function resetarFormularioExcecao() {
+      document.getElementById("form-excecao-slot").reset();
+      document.getElementById("excecao-ativo").checked = true;
+      document.getElementById("excecao-editando-id").value = "";
+      marcarDiasSelecionados("excecao-dias-semana", []);
+      document.getElementById("btn-salvar-excecao").textContent = "Adicionar Exceção";
+      document.getElementById("btn-cancelar-edicao-excecao").style.display = "none";
+    }
+
+    document.getElementById("btn-cancelar-edicao-excecao").addEventListener("click", resetarFormularioExcecao);
+
+    document.getElementById("form-excecao-slot").addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const diasSemana = lerDiasSelecionados("excecao-dias-semana");
+      const horaInicio = document.getElementById("excecao-hora-inicio").value;
+      const horaFim = document.getElementById("excecao-hora-fim").value;
+      const capacidadePorHora = parseInt(document.getElementById("excecao-capacidade").value, 10);
+      const ativo = document.getElementById("excecao-ativo").checked;
+      const editandoId = document.getElementById("excecao-editando-id").value;
+
+      if (diasSemana.length === 0) {
+        mostrarToast("Selecione ao menos um dia da semana.", { tipo: "erro" });
+        return;
+      }
+      if (!horaInicio || !horaFim) {
+        mostrarToast("Informe a hora de início e fim.", { tipo: "erro" });
+        return;
+      }
+      if (capacidadePorHora === "" || isNaN(capacidadePorHora) || capacidadePorHora < 0) {
+        mostrarToast("Informe uma capacidade válida (0 ou mais).", { tipo: "erro" });
+        return;
+      }
+
+      const payload = { diasSemana, horaInicio, horaFim, capacidadePorHora, ativo };
+      const btn = document.getElementById("btn-salvar-excecao");
+      btn.disabled = true;
+      btn.textContent = "Salvando...";
+
+      try {
+        if (editandoId) {
+          await updateDoc(doc(db, "timeSlotExceptions", editandoId), payload);
+          mostrarToast("Exceção atualizada.", { tipo: "sucesso" });
+        } else {
+          await addDoc(collection(db, "timeSlotExceptions"), payload);
+          mostrarToast("Exceção adicionada.", { tipo: "sucesso" });
+        }
+        resetarFormularioExcecao();
+        await carregarExcecoes();
+      } catch (err) {
+        console.error("Erro ao salvar exceção:", err);
+        await mostrarAlerta("Erro ao salvar a exceção: " + err.message, { titulo: "Erro", tipo: "erro" });
+      } finally {
+        btn.disabled = false;
+        if (btn.textContent === "Salvando...") btn.textContent = editandoId ? "Salvar Alterações" : "Adicionar Exceção";
+      }
+    });
 
     /* ===================================================================
        ETAPA 5: GESTÃO DE VAGAS (AJUSTE MANUAL DE CAPACIDADE POR DIA)
