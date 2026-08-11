@@ -40,7 +40,7 @@
     .status-concluido { background: #d4edda; color: #155724; }
     .status-noshow { background: #f8d7da; color: #721c24; }
     
-    .modal-overlay {
+    .modal-overlay-portaria {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0,0,0,0.5);
@@ -50,16 +50,22 @@
       z-index: 1000;
       /* BUGFIX: style.css define, na regra global .modal-overlay,
          opacity:0 e pointer-events:none — só revertidos pela classe
-         .aberto (usada em admin/cadastro/transportadora). Esta página
-         usa outro esquema (.oculto), e nunca adiciona .aberto, então
-         sem estas duas linhas os 3 modais (check-in, check-out,
-         encaixe) ficavam tecnicamente visíveis no layout porém com
-         opacidade 0 e sem clique — pareciam simplesmente "não abrir".
+         .aberto (usada em admin/cadastro/transportadora e agora
+         também pelo mostrarAlerta/mostrarConfirm desta própria
+         página). Os modais de check-in/check-out/encaixe usam outro
+         esquema (.oculto) — por isso ganharam uma classe própria
+         (.modal-overlay-portaria) em vez de reaproveitar
+         ".modal-overlay": as duas classes coexistindo no mesmo nome
+         faziam o modal genérico (mostrarAlerta/mostrarConfirm) herdar
+         opacity:1/pointer-events:auto incondicionais definidos aqui e
+         ficar permanentemente visível e bloqueando a tela, mesmo sem
+         nenhum alerta ativo — sem "aberto" ele nunca aparecia
+         formatado, e sem "oculto" ele nunca escondia.
          */
       opacity: 1;
       pointer-events: auto;
     }
-    .modal-overlay.oculto { display: none; }
+    .modal-overlay-portaria.oculto { display: none; }
     .modal-card {
       background: #fff;
       border-radius: 8px;
@@ -145,7 +151,7 @@
     </div>
   </div>
 
-  <div id="modal-checkin" class="modal-overlay oculto">
+  <div id="modal-checkin" class="modal-overlay-portaria oculto">
     <div class="modal-card">
       <h3> Confirmar Entrada em Pátio (Check-in)</h3>
       <p style="font-size: 0.85rem; color: #666; margin-bottom: 15px;">Confirme as informações do veículo e motorista antes da liberação.</p>
@@ -188,7 +194,7 @@
     </div>
   </div>
 
-  <div id="modal-checkout" class="modal-overlay oculto">
+  <div id="modal-checkout" class="modal-overlay-portaria oculto">
     <div class="modal-card">
       <h3> Finalizar Operação (Check-out)</h3>
       <p style="font-size: 0.85rem; color: #666; margin-bottom: 15px;">Informe os dados de saída e nota fiscal para liberar o veículo.</p>
@@ -220,7 +226,7 @@
     </div>
   </div>
 
-  <div id="modal-encaixe" class="modal-overlay oculto">
+  <div id="modal-encaixe" class="modal-overlay-portaria oculto">
     <div class="modal-card">
       <h3>⚡ Entrada Expresso Sem Agendamento</h3>
       <p style="font-size: 0.85rem; color: #666; margin-bottom: 15px;">Registro direto de veículos de encaixe. Entrará imediatamente como "Em Pátio".</p>
@@ -838,7 +844,7 @@
     }
 
     function fecharModais() {
-      document.querySelectorAll(".modal-overlay").forEach(m => m.classList.add("oculto"));
+      document.querySelectorAll(".modal-overlay-portaria").forEach(m => m.classList.add("oculto"));
     }
 
     document.querySelectorAll(".btn-fechar-modal").forEach(btn => {
