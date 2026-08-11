@@ -435,6 +435,125 @@
     let todosBookingsGerais = [];
     let dataSelecionadaPainel = new Date().toISOString().split("T")[0];
 
+    /* ===================================================================
+       POPUP / MODAL CUSTOMIZADO (substitui alert() e confirm() nativos —
+       mesmo padrão de transportadora-dashboard/admin-dashboard/cadastro)
+       =================================================================== */
+    function criarModalHost() {
+      if (document.getElementById("modal-overlay")) return;
+      const overlay = document.createElement("div");
+      overlay.id = "modal-overlay";
+      overlay.className = "modal-overlay";
+      overlay.innerHTML = `
+        <div class="modal-caixa" id="modal-caixa" role="alertdialog" aria-modal="true">
+          <div class="modal-icone" id="modal-icone"></div>
+          <div class="modal-titulo" id="modal-titulo"></div>
+          <div class="modal-mensagem" id="modal-mensagem"></div>
+          <div class="modal-botoes" id="modal-botoes"></div>
+        </div>`;
+      document.body.appendChild(overlay);
+    }
+    criarModalHost();
+
+    function mostrarAlerta(mensagem, opcoes = {}) {
+      const { titulo = "Aviso", tipo = "info" } = opcoes;
+      const icones = { sucesso: "✅", erro: "⚠️", info: "ℹ️" };
+      return new Promise((resolve) => {
+        const overlay = document.getElementById("modal-overlay");
+        const caixa = document.getElementById("modal-caixa");
+        caixa.className = `modal-caixa modal-${tipo}`;
+        document.getElementById("modal-icone").textContent = icones[tipo] || icones.info;
+        document.getElementById("modal-titulo").textContent = titulo;
+        document.getElementById("modal-mensagem").textContent = mensagem;
+        document.getElementById("modal-botoes").innerHTML =
+          `<button type="button" class="modal-btn-primario" id="modal-btn-ok">OK</button>`;
+        overlay.classList.add("aberto");
+
+        const btnOk = document.getElementById("modal-btn-ok");
+        function fechar() {
+          overlay.classList.remove("aberto");
+          btnOk.removeEventListener("click", fechar);
+          resolve();
+        }
+        btnOk.addEventListener("click", fechar);
+        btnOk.focus();
+      });
+    }
+
+    function mostrarConfirm(mensagem, opcoes = {}) {
+      const { titulo = "Confirmar ação", textoConfirmar = "Confirmar", textoCancelar = "Cancelar", perigo = false } = opcoes;
+      return new Promise((resolve) => {
+        const overlay = document.getElementById("modal-overlay");
+        const caixa = document.getElementById("modal-caixa");
+        caixa.className = "modal-caixa modal-pergunta";
+        document.getElementById("modal-icone").textContent = perigo ? "⚠️" : "❓";
+        document.getElementById("modal-titulo").textContent = titulo;
+        document.getElementById("modal-mensagem").textContent = mensagem;
+        document.getElementById("modal-botoes").innerHTML = `
+          <button type="button" class="modal-btn-secundario" id="modal-btn-cancelar">${textoCancelar}</button>
+          <button type="button" class="modal-btn-primario ${perigo ? "perigo" : ""}" id="modal-btn-confirmar">${textoConfirmar}</button>
+        `;
+        overlay.classList.add("aberto");
+
+        const btnConfirmar = document.getElementById("modal-btn-confirmar");
+        const btnCancelar = document.getElementById("modal-btn-cancelar");
+        function limpar(resultado) {
+          overlay.classList.remove("aberto");
+          btnConfirmar.removeEventListener("click", onConfirmar);
+          btnCancelar.removeEventListener("click", onCancelar);
+          resolve(resultado);
+        }
+        function onConfirmar() { limpar(true); }
+        function onCancelar() { limpar(false); }
+        btnConfirmar.addEventListener("click", onConfirmar);
+        btnCancelar.addEventListener("click", onCancelar);
+        btnCancelar.focus();
+      });
+    }
+
+    /* ===================================================================
+       TOAST — notificação não-bloqueante para confirmações rápidas de
+       sucesso (aprovar, salvar vaga, fechar/reabrir horário etc.). O
+       modal acima continua reservado para erros e confirmações que
+       precisam travar a tela até o usuário decidir.
+       =================================================================== */
+    function criarToastHost() {
+      if (document.getElementById("toast-container")) return;
+      const container = document.createElement("div");
+      container.id = "toast-container";
+      container.className = "toast-container";
+      document.body.appendChild(container);
+    }
+    criarToastHost();
+
+    function mostrarToast(mensagem, opcoes = {}) {
+      const { tipo = "info", duracaoMs = 3500 } = opcoes;
+      const icones = { sucesso: "✅", erro: "⚠️", info: "ℹ️" };
+      const container = document.getElementById("toast-container");
+
+      const toast = document.createElement("div");
+      toast.className = `toast toast-${tipo}`;
+      toast.innerHTML = `
+        <span class="toast-icone">${icones[tipo] || icones.info}</span>
+        <span class="toast-mensagem"></span>
+        <button type="button" class="toast-fechar" aria-label="Fechar">✕</button>
+      `;
+      toast.querySelector(".toast-mensagem").textContent = mensagem;
+      container.appendChild(toast);
+      requestAnimationFrame(() => toast.classList.add("visivel"));
+
+      function remover() {
+        toast.classList.remove("visivel");
+        toast.classList.add("saindo");
+        setTimeout(() => toast.remove(), 200);
+      }
+      const timer = setTimeout(remover, duracaoMs);
+      toast.querySelector(".toast-fechar").addEventListener("click", () => {
+        clearTimeout(timer);
+        remover();
+      });
+    }
+
     // Proteção de acesso (Tipo 2 = Logística, 3 = Admin)
     protegerPagina([2, 3], async (user, dadosUser) => {
       usuarioLogado = { uid: user.uid, ...dadosUser };
@@ -714,12 +833,12 @@
             observacoes: document.getElementById("op-observacoes").value.trim()
           });
 
-          alert("Agendamento Operacional criado com sucesso!");
+          mostrarToast("Agendamento Operacional criado com sucesso!", { tipo: "sucesso" });
           form.reset();
           await carregarDadosGerais();
           carregarPainelDoDia(dataSelecionadaPainel);
         } catch (err) {
-          alert(`Erro ao agendar: ${err.message}`);
+          await mostrarAlerta(`Erro ao agendar: ${err.message}`, { titulo: "Erro", tipo: "erro" });
         } finally {
           btnSalvar.disabled = false;
           btnSalvar.textContent = "Salvar Agendamento Direto";
@@ -810,7 +929,11 @@
     }
 
     window.responderSolicitacao = async function(bookingId, novoStatus) {
-      if (!confirm(`Confirmar alteração do agendamento para "${novoStatus}"?`)) return;
+      const confirmado = await mostrarConfirm(
+        `Confirmar alteração do agendamento para "${novoStatus}"?`,
+        { titulo: "Confirmar ação" }
+      );
+      if (!confirmado) return;
 
       try {
         // mudarStatusBooking relê o booking direto do servidor (dentro da
@@ -836,12 +959,14 @@
         carregarSolicitacoesPendentes();
         carregarPainelDoDia(dataSelecionadaPainel);
 
+        mostrarToast(`Agendamento ${novoStatus === "Aprovado" ? "aprovado" : "recusado"} com sucesso.`, { tipo: "sucesso" });
+
         if (vagaLiberada) {
           console.info(`Vaga liberada automaticamente ao recusar o agendamento ${bookingId}.`);
         }
       } catch (err) {
         console.error("Erro ao atualizar o agendamento:", err);
-        alert(err.message || "Erro ao atualizar o agendamento.");
+        await mostrarAlerta(err.message || "Erro ao atualizar o agendamento.", { titulo: "Erro", tipo: "erro" });
       }
     };
 
@@ -980,7 +1105,7 @@
       const tbody = document.getElementById("tbody-vagas");
 
       if (!dataStr) {
-        alert("Selecione uma data para buscar as vagas.");
+        mostrarToast("Selecione uma data para buscar as vagas.", { tipo: "erro" });
         return;
       }
 
@@ -1044,11 +1169,11 @@
           const novaCapacidade = parseInt(tr.querySelector(".input-capacidade-vaga").value, 10);
 
           if (!novaCapacidade || novaCapacidade < 1) {
-            alert("Informe uma capacidade válida (mínimo 1).");
+            mostrarToast("Informe uma capacidade válida (mínimo 1).", { tipo: "erro" });
             return;
           }
           if (novaCapacidade < slot.ocupados) {
-            alert(`A capacidade não pode ser menor que a ocupação atual (${slot.ocupados} já reservado(s) neste horário).`);
+            mostrarToast(`A capacidade não pode ser menor que a ocupação atual (${slot.ocupados} já reservado(s)).`, { tipo: "erro" });
             return;
           }
 
@@ -1056,10 +1181,11 @@
           btn.textContent = "Salvando...";
           try {
             await salvarAjusteVaga(dataStr, slot, { capacidadeMax: novaCapacidade, ativo: !slot.fechado });
+            mostrarToast("Capacidade atualizada.", { tipo: "sucesso" });
             await carregarVagas();
           } catch (err) {
             console.error("Erro ao salvar capacidade da vaga:", err);
-            alert("Erro ao salvar a capacidade: " + err.message);
+            await mostrarAlerta("Erro ao salvar a capacidade: " + err.message, { titulo: "Erro", tipo: "erro" });
             btn.disabled = false;
             btn.textContent = "Salvar";
           }
@@ -1074,15 +1200,20 @@
           const novoAtivo = !!slot.fechado; // estava fechado -> reabre (true) | estava aberto -> fecha (false)
           const acaoTexto = slot.fechado ? "reabrir" : "fechar";
 
-          if (!confirm(`Confirma ${acaoTexto} o horário ${slot.horaInicio} às ${slot.horaFim} apenas para o dia ${formatarData(dataStr)}?`)) return;
+          const confirmado = await mostrarConfirm(
+            `Confirma ${acaoTexto} o horário ${slot.horaInicio} às ${slot.horaFim} apenas para o dia ${formatarData(dataStr)}?`,
+            { titulo: "Confirmar ação" }
+          );
+          if (!confirmado) return;
 
           btn.disabled = true;
           try {
             await salvarAjusteVaga(dataStr, slot, { capacidadeMax: slot.capacidadeMax, ativo: novoAtivo });
+            mostrarToast(`Horário ${novoAtivo ? "reaberto" : "fechado"} com sucesso.`, { tipo: "sucesso" });
             await carregarVagas();
           } catch (err) {
             console.error("Erro ao fechar/reabrir vaga:", err);
-            alert("Erro ao atualizar o horário: " + err.message);
+            await mostrarAlerta("Erro ao atualizar o horário: " + err.message, { titulo: "Erro", tipo: "erro" });
             btn.disabled = false;
           }
         });
@@ -1093,16 +1224,21 @@
           const tr = btn.closest("tr");
           const horaInicio = tr.dataset.hora;
 
-          if (!confirm(`Restaurar o horário ${horaInicio} para o padrão (Regra/Exceção)? Isso remove o ajuste manual feito para este dia.`)) return;
+          const confirmado = await mostrarConfirm(
+            `Restaurar o horário ${horaInicio} para o padrão (Regra/Exceção)? Isso remove o ajuste manual feito para este dia.`,
+            { titulo: "Restaurar padrão", perigo: true, textoConfirmar: "Restaurar" }
+          );
+          if (!confirmado) return;
 
           btn.disabled = true;
           try {
             const slotId = idSlotHorario(dataStr, horaInicio);
             await deleteDoc(doc(db, "timeSlots", slotId));
+            mostrarToast("Horário restaurado para o padrão.", { tipo: "sucesso" });
             await carregarVagas();
           } catch (err) {
             console.error("Erro ao restaurar padrão da vaga:", err);
-            alert("Erro ao restaurar o padrão: " + err.message);
+            await mostrarAlerta("Erro ao restaurar o padrão: " + err.message, { titulo: "Erro", tipo: "erro" });
             btn.disabled = false;
           }
         });

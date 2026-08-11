@@ -298,6 +298,120 @@
     let filtroAtual = "todos";
     let tiposProcessoMap = {};
 
+    /* ===================================================================
+       POPUP / MODAL CUSTOMIZADO + TOAST (esta tela usava alert()/confirm()
+       nativos, inconsistente com o resto do sistema — alinhado aqui ao
+       mesmo padrão de transportadora-dashboard/logistica-dashboard/admin)
+       =================================================================== */
+    function criarModalHost() {
+      if (document.getElementById("modal-overlay")) return;
+      const overlay = document.createElement("div");
+      overlay.id = "modal-overlay";
+      overlay.className = "modal-overlay";
+      overlay.innerHTML = `
+        <div class="modal-caixa" id="modal-caixa" role="alertdialog" aria-modal="true">
+          <div class="modal-icone" id="modal-icone"></div>
+          <div class="modal-titulo" id="modal-titulo"></div>
+          <div class="modal-mensagem" id="modal-mensagem"></div>
+          <div class="modal-botoes" id="modal-botoes"></div>
+        </div>`;
+      document.body.appendChild(overlay);
+    }
+    criarModalHost();
+
+    function mostrarAlerta(mensagem, opcoes = {}) {
+      const { titulo = "Aviso", tipo = "info" } = opcoes;
+      const icones = { sucesso: "✅", erro: "⚠️", info: "ℹ️" };
+      return new Promise((resolve) => {
+        const overlay = document.getElementById("modal-overlay");
+        const caixa = document.getElementById("modal-caixa");
+        caixa.className = `modal-caixa modal-${tipo}`;
+        document.getElementById("modal-icone").textContent = icones[tipo] || icones.info;
+        document.getElementById("modal-titulo").textContent = titulo;
+        document.getElementById("modal-mensagem").textContent = mensagem;
+        document.getElementById("modal-botoes").innerHTML =
+          `<button type="button" class="modal-btn-primario" id="modal-btn-ok">OK</button>`;
+        overlay.classList.add("aberto");
+
+        const btnOk = document.getElementById("modal-btn-ok");
+        function fechar() {
+          overlay.classList.remove("aberto");
+          btnOk.removeEventListener("click", fechar);
+          resolve();
+        }
+        btnOk.addEventListener("click", fechar);
+        btnOk.focus();
+      });
+    }
+
+    function mostrarConfirm(mensagem, opcoes = {}) {
+      const { titulo = "Confirmar ação", textoConfirmar = "Confirmar", textoCancelar = "Cancelar", perigo = false } = opcoes;
+      return new Promise((resolve) => {
+        const overlay = document.getElementById("modal-overlay");
+        const caixa = document.getElementById("modal-caixa");
+        caixa.className = "modal-caixa modal-pergunta";
+        document.getElementById("modal-icone").textContent = perigo ? "⚠️" : "❓";
+        document.getElementById("modal-titulo").textContent = titulo;
+        document.getElementById("modal-mensagem").textContent = mensagem;
+        document.getElementById("modal-botoes").innerHTML = `
+          <button type="button" class="modal-btn-secundario" id="modal-btn-cancelar">${textoCancelar}</button>
+          <button type="button" class="modal-btn-primario ${perigo ? "perigo" : ""}" id="modal-btn-confirmar">${textoConfirmar}</button>
+        `;
+        overlay.classList.add("aberto");
+
+        const btnConfirmar = document.getElementById("modal-btn-confirmar");
+        const btnCancelar = document.getElementById("modal-btn-cancelar");
+        function limpar(resultado) {
+          overlay.classList.remove("aberto");
+          btnConfirmar.removeEventListener("click", onConfirmar);
+          btnCancelar.removeEventListener("click", onCancelar);
+          resolve(resultado);
+        }
+        function onConfirmar() { limpar(true); }
+        function onCancelar() { limpar(false); }
+        btnConfirmar.addEventListener("click", onConfirmar);
+        btnCancelar.addEventListener("click", onCancelar);
+        btnCancelar.focus();
+      });
+    }
+
+    function criarToastHost() {
+      if (document.getElementById("toast-container")) return;
+      const container = document.createElement("div");
+      container.id = "toast-container";
+      container.className = "toast-container";
+      document.body.appendChild(container);
+    }
+    criarToastHost();
+
+    function mostrarToast(mensagem, opcoes = {}) {
+      const { tipo = "info", duracaoMs = 3500 } = opcoes;
+      const icones = { sucesso: "✅", erro: "⚠️", info: "ℹ️" };
+      const container = document.getElementById("toast-container");
+
+      const toast = document.createElement("div");
+      toast.className = `toast toast-${tipo}`;
+      toast.innerHTML = `
+        <span class="toast-icone">${icones[tipo] || icones.info}</span>
+        <span class="toast-mensagem"></span>
+        <button type="button" class="toast-fechar" aria-label="Fechar">✕</button>
+      `;
+      toast.querySelector(".toast-mensagem").textContent = mensagem;
+      container.appendChild(toast);
+      requestAnimationFrame(() => toast.classList.add("visivel"));
+
+      function remover() {
+        toast.classList.remove("visivel");
+        toast.classList.add("saindo");
+        setTimeout(() => toast.remove(), 200);
+      }
+      const timer = setTimeout(remover, duracaoMs);
+      toast.querySelector(".toast-fechar").addEventListener("click", () => {
+        clearTimeout(timer);
+        remover();
+      });
+    }
+
     // Proteger acesso: Apenas Logística (2) e Admin (3) acessam o Módulo Portaria
     protegerPagina([2, 3], async (user, dadosPerfil) => {
       usuarioLogado = { ...user, ...dadosPerfil };
@@ -523,7 +637,11 @@
           const booking = agendamentosHoje.find(b => b.id === id);
           if (!booking) return;
 
-          if (confirm(`Confirmar que o veículo da empresa ${booking.empresa} (Horário: ${booking.horaInicio}) não compareceu (NO-SHOW)?`)) {
+          const confirmado = await mostrarConfirm(
+            `Confirmar que o veículo da empresa ${booking.empresa} (Horário: ${booking.horaInicio}) não compareceu (NO-SHOW)?`,
+            { titulo: "Confirmar No-Show", perigo: true, textoConfirmar: "Confirmar No-Show" }
+          );
+          if (confirmado) {
             await registrarNoShow(booking);
           }
         });
@@ -573,9 +691,10 @@
         await registrarAuditLog(id, "Check-In");
         fecharModais();
         await carregarMovimentacaoDia();
+        mostrarToast("Check-in realizado.", { tipo: "sucesso" });
       } catch (err) {
         console.error("Erro ao realizar Check-in:", err);
-        alert("Erro ao realizar check-in. Tente novamente.");
+        await mostrarAlerta("Erro ao realizar check-in. Tente novamente.", { titulo: "Erro", tipo: "erro" });
       }
     });
 
@@ -590,7 +709,7 @@
       const entradaMs = parseInt(document.getElementById("checkout-entrada-timestamp").value, 10);
       
       if (!notaFiscal) {
-        alert("O número da Nota Fiscal é obrigatório para realizar o Check-out.");
+        mostrarToast("O número da Nota Fiscal é obrigatório para realizar o Check-out.", { tipo: "erro" });
         return;
       }
 
@@ -615,9 +734,10 @@
         await registrarAuditLog(id, "Check-Out");
         fecharModais();
         await carregarMovimentacaoDia();
+        mostrarToast("Check-out realizado.", { tipo: "sucesso" });
       } catch (err) {
         console.error("Erro ao realizar Check-out:", err);
-        alert("Erro ao realizar check-out. Tente novamente.");
+        await mostrarAlerta("Erro ao realizar check-out. Tente novamente.", { titulo: "Erro", tipo: "erro" });
       }
     });
 
@@ -633,9 +753,10 @@
 
         await registrarAuditLog(booking.id, "No-Show");
         await carregarMovimentacaoDia();
+        mostrarToast("No-Show registrado.", { tipo: "sucesso" });
       } catch (err) {
         console.error("Erro ao registrar No-Show:", err);
-        alert(err.message || "Erro ao registrar No-Show.");
+        await mostrarAlerta(err.message || "Erro ao registrar No-Show.", { titulo: "Erro", tipo: "erro" });
       }
     }
 
@@ -689,9 +810,10 @@
 
         fecharModais();
         await carregarMovimentacaoDia();
+        mostrarToast("Entrada de encaixe registrada.", { tipo: "sucesso" });
       } catch (err) {
         console.error("Erro ao registrar entrada sem agendamento:", err);
-        alert("Erro ao salvar entrada de encaixe. Tente novamente.");
+        await mostrarAlerta("Erro ao salvar entrada de encaixe. Tente novamente.", { titulo: "Erro", tipo: "erro" });
       }
     });
 

@@ -807,3 +807,78 @@ button, .btn-primario, .btn-acao, .tab-btn, .topbar button, .slot-opcao, .btn-sl
   .faixa-horario-hora { min-width: 70px; font-size: 0.85rem; }
   .faixa-horario-contagem { min-width: 44px; font-size: 0.78rem; }
 }
+
+/* =====================================================================
+   TOAST — notificação não-bloqueante (usada para confirmar ações
+   rápidas de sucesso, ex: "Aprovado", "Check-in realizado", sem exigir
+   clique em OK como o modal exige). Erros e confirmações continuam
+   usando o modal (.modal-overlay), que trava a tela de propósito.
+   ===================================================================== */
+.toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 340px;
+  pointer-events: none;
+}
+
+.toast {
+  background: var(--branco);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 41, 66, 0.18);
+  padding: 13px 14px;
+  border-left: 4px solid var(--azul);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.86rem;
+  color: var(--texto);
+  opacity: 0;
+  transform: translateX(24px);
+  transition: opacity .2s ease, transform .2s ease;
+  pointer-events: auto;
+}
+.toast.visivel { opacity: 1; transform: translateX(0); }
+.toast.saindo { opacity: 0; transform: translateX(24px); }
+
+.toast.toast-sucesso { border-left-color: var(--verde); }
+.toast.toast-erro { border-left-color: var(--vermelho); }
+.toast.toast-info { border-left-color: var(--azul); }
+
+.toast .toast-icone { font-size: 1.05rem; line-height: 1.3; flex-shrink: 0; }
+.toast .toast-mensagem { flex: 1; line-height: 1.4; }
+.toast .toast-fechar {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--texto-suave);
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 2px;
+  flex-shrink: 0;
+}
+.toast .toast-fechar:hover { color: var(--texto); }
+
+/* ---------- Destaque temporário de item recém-criado ---------- */
+.item-agendamento.destaque-novo {
+  border-color: var(--azul);
+  box-shadow: 0 0 0 3px rgba(26, 95, 158, 0.18);
+  animation: pulso-destaque 1.8s ease-out 1;
+}
+@keyframes pulso-destaque {
+  0% { background: #eaf2fb; }
+  100% { background: var(--branco); }
+}
+
+@media (max-width: 640px) {
+  .toast-container {
+    left: 14px;
+    right: 14px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    max-width: none;
+  }
+}

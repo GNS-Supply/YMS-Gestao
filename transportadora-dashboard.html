@@ -195,6 +195,48 @@
     let slotsDoDia = [];
 
     /* ===================================================================
+       TOAST — notificação não-bloqueante para confirmações rápidas de
+       sucesso (o modal continua sendo usado para erros e confirmações,
+       que precisam travar a tela até o usuário decidir).
+       =================================================================== */
+    function criarToastHost() {
+      if (document.getElementById("toast-container")) return;
+      const container = document.createElement("div");
+      container.id = "toast-container";
+      container.className = "toast-container";
+      document.body.appendChild(container);
+    }
+    criarToastHost();
+
+    function mostrarToast(mensagem, opcoes = {}) {
+      const { tipo = "info", duracaoMs = 3500 } = opcoes;
+      const icones = { sucesso: "✅", erro: "⚠️", info: "ℹ️" };
+      const container = document.getElementById("toast-container");
+
+      const toast = document.createElement("div");
+      toast.className = `toast toast-${tipo}`;
+      toast.innerHTML = `
+        <span class="toast-icone">${icones[tipo] || icones.info}</span>
+        <span class="toast-mensagem"></span>
+        <button type="button" class="toast-fechar" aria-label="Fechar">✕</button>
+      `;
+      toast.querySelector(".toast-mensagem").textContent = mensagem;
+      container.appendChild(toast);
+      requestAnimationFrame(() => toast.classList.add("visivel"));
+
+      function remover() {
+        toast.classList.remove("visivel");
+        toast.classList.add("saindo");
+        setTimeout(() => toast.remove(), 200);
+      }
+      const timer = setTimeout(remover, duracaoMs);
+      toast.querySelector(".toast-fechar").addEventListener("click", () => {
+        clearTimeout(timer);
+        remover();
+      });
+    }
+
+    /* ===================================================================
        DATA/HORA ATUAL (fuso LOCAL do navegador — NÃO usar toISOString()
        aqui, pois ele converte para UTC e gera datas erradas à noite em
        fusos negativos como o do Brasil, ex: 23h de 10/08 em UTC-3 já
@@ -536,11 +578,20 @@
           console.error("Erro ao registrar log de auditoria:", errAudit);
         }
 
-        await mostrarAlerta("Solicitação de agendamento enviada com sucesso!", { titulo: "Agendamento enviado", tipo: "sucesso" });
+        mostrarToast("Solicitação de agendamento enviada com sucesso!", { tipo: "sucesso" });
         form.reset();
         inputHoraSelecionada.value = "";
         slotsGrid.innerHTML = "";
         slotsMsg.textContent = "Selecione uma data para consultar os horários.";
+
+        // Leva o usuário direto para "Meus Agendamentos" com o novo item
+        // destacado, em vez de deixar o formulário limpo parado na mesma
+        // aba — assim ele já vê a confirmação do que acabou de pedir.
+        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("ativo"));
+        document.querySelectorAll(".tab-conteudo").forEach(c => c.classList.remove("ativo"));
+        document.querySelector('.tab-btn[data-tab="meus"]')?.classList.add("ativo");
+        document.getElementById("tab-meus")?.classList.add("ativo");
+        await carregarMeusAgendamentos(bookingRef.id);
 
       } catch (err) {
         console.error("Erro na reserva:", err);
@@ -554,7 +605,7 @@
     /* ===================================================================
        4. MEUS AGENDAMENTOS
        =================================================================== */
-    async function carregarMeusAgendamentos() {
+    async function carregarMeusAgendamentos(idParaDestacar = null) {
       if (!listaAgendamentos) return;
       listaAgendamentos.innerHTML = '<div class="estado-vazio">Carregando seus agendamentos...</div>';
 
@@ -579,6 +630,7 @@
         agendamentos.forEach(a => {
           const div = document.createElement("div");
           div.className = "item-agendamento";
+          div.dataset.id = a.id;
 
           const statusClasse = {
             Pendente: "pendente",
@@ -613,6 +665,14 @@
         listaAgendamentos.querySelectorAll(".btn-cancelar-agendamento").forEach(btn => {
           btn.addEventListener("click", () => cancelarMeuAgendamento(btn.dataset.id, btn));
         });
+
+        if (idParaDestacar) {
+          const itemNovo = listaAgendamentos.querySelector(`.item-agendamento[data-id="${idParaDestacar}"]`);
+          if (itemNovo) {
+            itemNovo.classList.add("destaque-novo");
+            itemNovo.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }
 
       } catch (err) {
         console.error("Erro ao carregar agendamentos:", err);
@@ -658,7 +718,7 @@
           console.error("Erro ao registrar log de auditoria:", errAudit);
         }
 
-        await mostrarAlerta("Agendamento cancelado.", { titulo: "Cancelado", tipo: "sucesso" });
+        mostrarToast("Agendamento cancelado.", { tipo: "sucesso" });
         carregarMeusAgendamentos();
       } catch (err) {
         console.error("Erro ao cancelar agendamento:", err);
