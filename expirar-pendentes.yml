@@ -1,0 +1,31 @@
+name: Expirar agendamentos pendentes
+
+on:
+  schedule:
+    # A cada 15 minutos. O agendador do GitHub Actions não garante
+    # precisão exata (pode atrasar alguns minutos em horários de pico
+    # da plataforma) — suficiente para esta varredura, que não precisa
+    # ser instantânea.
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {} # permite rodar manualmente pela aba "Actions" do GitHub
+
+jobs:
+  expirar:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - run: npm install
+
+      - run: npm run expirar-pendentes
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          TOLERANCIA_HORAS: "2"
+          FUSO_OFFSET: "-03:00"

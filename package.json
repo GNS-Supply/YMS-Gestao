@@ -1,0 +1,12 @@
+{
+  "name": "patio-agendamento-scripts",
+  "private": true,
+  "type": "module",
+  "description": "Scripts de automação (fora do front-end estático) do Agendamento de Pátio",
+  "scripts": {
+    "expirar-pendentes": "node expirar-pendentes.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.6.0"
+  }
+}
