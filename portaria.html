@@ -542,6 +542,17 @@
       const agora = new Date();
       const pontualidade = calcularPontualidade(horaAgendada, agora);
 
+      // Compara os dados conferidos na portaria com o que foi originalmente
+      // cadastrado no agendamento — alimenta o KPI "Divergências de
+      // Cadastro" do painel de Logística (antes disso, nada gravava esse
+      // campo e o card ficava sempre zerado).
+      const bookingOriginal = agendamentosHoje.find(b => b.id === id);
+      const divergente = !!bookingOriginal && (
+        (bookingOriginal.placaCavalo || "").toUpperCase() !== placaCavalo ||
+        (bookingOriginal.placaCarreta || "").toUpperCase() !== placaCarreta ||
+        (bookingOriginal.motorista || "").trim() !== motorista
+      );
+
       try {
         const bookingRef = doc(db, "bookings", id);
         await updateDoc(bookingRef, {
@@ -552,7 +563,8 @@
           checkIn: {
             dataHora: serverTimestamp(),
             pontualidade: pontualidade,
-            dadosConferidos: true
+            dadosConferidos: true,
+            divergente
           },
           atualizadoEm: serverTimestamp(),
           atualizadoPor: usuarioLogado.uid

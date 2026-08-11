@@ -95,6 +95,18 @@
           await signOut(auth);
           throw new Error("Seu cadastro ainda está aguardando aprovação de um administrador.");
         }
+        if (dadosUser.status === "suspenso") {
+          await signOut(auth);
+          throw new Error("Sua conta está suspensa. Entre em contato com um administrador.");
+        }
+        if (dadosUser.status === "recusado") {
+          await signOut(auth);
+          throw new Error("Seu cadastro foi recusado. Entre em contato com um administrador.");
+        }
+        if (dadosUser.status !== "aprovado") {
+          await signOut(auth);
+          throw new Error("Sua conta não está com acesso liberado no momento.");
+        }
 
         const rota = ROTAS_POR_TIPO[dadosUser.tipo];
         if (!rota) {
