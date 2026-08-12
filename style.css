@@ -781,7 +781,7 @@ button, .btn-primario, .btn-acao, .tab-btn, .topbar button, .slot-opcao, .btn-sl
 }
 .legenda-ocupacao .ponto {
   display: inline-block;
-  width: 100px;
+  width: 10px;
   height: 10px;
   border-radius: 50%;
   margin-right: 5px;
@@ -1174,25 +1174,29 @@ button:focus-visible,
 .icon {
   width: 1em;
   height: 1em;
+  max-width: 20px;
+  max-height: 20px;
+  display: inline-block;
   vertical-align: -0.15em;
   flex-shrink: 0;
 }
-.icon-lg { width: 1.3em; height: 1.3em; }
-.icon-sm { width: 0.85em; height: 0.85em; }
+.icon-lg { width: 1.3em; height: 1.3em; max-width: 26px; max-height: 26px; }
+.icon-sm { width: 0.85em; height: 0.85em; max-width: 14px; max-height: 14px; }
 
 .marca .icon, .logo .icon {
   width: 1.15em;
   height: 1.15em;
+  max-width: 22px;
+  max-height: 22px;
   vertical-align: -0.2em;
   margin-right: 2px;
 }
 
-button, .btn-primario, .btn-acao, .sidebar-item, .tab-btn {
+button, .btn-acao {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
 }
-.btn-primario, button.btn-primario { justify-content: center; }
-.sidebar-item { justify-content: flex-start; }
+button.btn-primario { justify-content: center; }
 .acoes-tabela .btn-acao, .modal-botoes button, #tbody-portaria .btn-acao { display: inline-flex; align-items: center; gap: 5px; }
