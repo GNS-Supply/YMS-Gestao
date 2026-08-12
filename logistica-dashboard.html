@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0f2942">
   <title>Agendamento de Pátio - Painel de Logística</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <style>
     /* Estilos específicos para o Painel de KPIs */
@@ -75,6 +78,192 @@
       margin-left: 4px;
       vertical-align: middle;
     }
+
+    /* =====================================================================
+       LAYOUT ERP — MENU LATERAL (substitui a antiga barra de abas horizontal
+       no topo, ".tabs"/".tab-btn", que continua existindo em CSS global
+       para as outras telas — admin/transportadora/cadastro não usam este
+       layout, então style.css não foi tocado; o menu lateral é só deste
+       arquivo). Mantém o MESMO mecanismo de troca de aba (classes
+       ".tab-conteudo"/".ativo" nos containers de conteúdo) — só o menu que
+       aciona a troca virou uma coluna fixa à esquerda, no estilo ERP.
+       ===================================================================== */
+    .layout-erp {
+      display: flex;
+      align-items: flex-start;
+    }
+
+    .sidebar-erp {
+      flex: 0 0 232px;
+      width: 232px;
+      background: var(--azul-escuro);
+      min-height: calc(100vh - 60px);
+      position: sticky;
+      top: 60px;
+      display: flex;
+      flex-direction: column;
+      padding: 14px 0;
+      gap: 2px;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.75);
+      padding: 12px 18px;
+      font-size: 0.86rem;
+      font-weight: 600;
+      font-family: inherit;
+      text-align: left;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: background .15s, color .15s;
+      touch-action: manipulation;
+    }
+    .sidebar-item .sidebar-icone { font-size: 1.05rem; flex-shrink: 0; line-height: 1; }
+    .sidebar-item .sidebar-label { flex: 1; }
+    .sidebar-item:hover { background: rgba(255,255,255,0.07); color: #fff; }
+    .sidebar-item.ativo {
+      background: rgba(255,255,255,0.11);
+      color: #fff;
+      border-left-color: var(--laranja);
+    }
+    .sidebar-badge {
+      background: var(--laranja);
+      color: #fff;
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 20px;
+      display: none;
+      flex-shrink: 0;
+    }
+
+    .conteudo-erp {
+      flex: 1;
+      min-width: 0;
+      padding: 24px 28px;
+    }
+
+    @media (min-width: 1800px) {
+      .conteudo-erp { max-width: 1720px; }
+    }
+
+    @media (max-width: 900px) {
+      .layout-erp { flex-direction: column; }
+      .sidebar-erp {
+        position: sticky;
+        top: 0;
+        z-index: 45;
+        width: 100%;
+        min-height: auto;
+        flex-direction: row;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        padding: 6px 8px;
+        gap: 4px;
+      }
+      .sidebar-erp::-webkit-scrollbar { display: none; }
+      .sidebar-item {
+        flex: 0 0 auto;
+        border-left: none;
+        border-bottom: 3px solid transparent;
+        padding: 10px 14px;
+        white-space: nowrap;
+      }
+      .sidebar-item.ativo { border-bottom-color: var(--laranja); }
+      .conteudo-erp { padding: 14px; width: 100%; }
+    }
+
+    /* =====================================================================
+       MÓDULO PORTARIA (incorporado do antigo portaria.html — mesmos
+       perfis, Logística/Admin, já acessavam as duas telas separadamente;
+       agora é só mais uma seção do menu lateral, sem precisar trocar de
+       página nem logar de novo)
+       ===================================================================== */
+    .grid-filtros {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .btn-filtro {
+      padding: 8px 16px;
+      border: 1px solid var(--cinza-borda, #ccc);
+      background: #f8f9fa;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .btn-filtro.ativo {
+      background: var(--azul-escuro, #0f2942);
+      color: #fff;
+      border-color: var(--azul-escuro, #0f2942);
+    }
+    .badge-status {
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      font-weight: bold;
+      display: inline-block;
+    }
+    .status-aprovado { background: #e3f2fd; color: #1565c0; }
+    .status-empatio { background: #fff3cd; color: #856404; }
+    .status-concluido { background: #d4edda; color: #155724; }
+    .status-noshow { background: #f8d7da; color: #721c24; }
+
+    .modal-overlay-portaria {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      /* BUGFIX (herdado do portaria.html original): style.css define, na
+         regra global .modal-overlay, opacity:0 e pointer-events:none — só
+         revertidos pela classe .aberto (usada pelo mostrarAlerta/
+         mostrarConfirm desta própria página). Os modais de check-in/
+         check-out/encaixe usam outro esquema (.oculto) — por isso têm
+         classe própria (.modal-overlay-portaria) em vez de reaproveitar
+         ".modal-overlay": as duas coexistindo no mesmo nome faziam o
+         modal genérico herdar opacity:1/pointer-events:auto incondicionais
+         daqui e ficar permanentemente visível bloqueando a tela. */
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-overlay-portaria.oculto { display: none; }
+    .modal-card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 24px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    }
+    .acoes-tabela {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    #tbody-portaria .btn-acao {
+      padding: 6px 12px;
+      font-size: 0.85rem;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-checkin { background: #28a745; color: white; }
+    .btn-checkout { background: #007bff; color: white; }
+    .btn-noshow { background: #dc3545; color: white; }
   </style>
 </head>
 <body>
@@ -82,9 +271,6 @@
   <div class="topbar">
     <div class="marca">🚛 Agendamento de Pátio — Painel Operacional</div>
     <div style="display: flex; align-items: center; gap: 12px;">
-      <a href="portaria.html" style="color: var(--branco); font-size: 0.85rem; opacity: .9; text-decoration: underline;">
-        🛂 Módulo Portaria
-      </a>
       <div style="text-align: right; font-size: 0.85rem;">
         <div id="user-nome" style="font-weight: 600;">--</div>
         <div id="user-tipo" style="opacity: 0.75; font-size: 0.75rem;">--</div>
@@ -93,424 +279,615 @@
     </div>
   </div>
 
-  <div class="container">
+  <div class="layout-erp">
 
-    <div class="tabs">
-      <button class="tab-btn ativo" data-tab="painel">📅 Painel do Dia</button>
-      <button class="tab-btn" data-tab="solicitacoes">⏳ Solicitações Pendentes</button>
-      <button class="tab-btn" data-tab="hoje">📋 Agendamentos de Hoje</button>
-      <button class="tab-btn" data-tab="todos">🔍 Todos os Agendamentos</button>
-      <button class="tab-btn" data-tab="novo-operacional" style="background: rgba(40,167,69,0.1); color: #28a745; font-weight: 600;">➕ Novo Agendamento</button>
-      <button class="tab-btn" data-tab="kpis" style="background: rgba(0,123,255,0.1); color: #007bff; font-weight: 600;">📊 KPIs / Indicadores</button>
-      <button class="tab-btn" data-tab="regras">🗓️ Horários & Exceções</button>
-      <button class="tab-btn" data-tab="vagas">⚙️ Gestão de Vagas</button>
-    </div>
+    <nav class="sidebar-erp" id="sidebar-erp">
+      <button class="sidebar-item ativo" data-tab="painel">
+        <span class="sidebar-icone">📅</span><span class="sidebar-label">Painel do Dia</span>
+      </button>
+      <button class="sidebar-item" data-tab="portaria">
+        <span class="sidebar-icone">🛂</span><span class="sidebar-label">Portaria</span>
+      </button>
+      <button class="sidebar-item" data-tab="solicitacoes">
+        <span class="sidebar-icone">⏳</span><span class="sidebar-label">Solicitações</span>
+        <span class="sidebar-badge" id="badge-solicitacoes">0</span>
+      </button>
+      <button class="sidebar-item" data-tab="hoje">
+        <span class="sidebar-icone">📋</span><span class="sidebar-label">Agend. de Hoje</span>
+      </button>
+      <button class="sidebar-item" data-tab="todos">
+        <span class="sidebar-icone">🔍</span><span class="sidebar-label">Todos os Agend.</span>
+      </button>
+      <button class="sidebar-item" data-tab="novo-operacional">
+        <span class="sidebar-icone">➕</span><span class="sidebar-label">Novo Agendamento</span>
+      </button>
+      <button class="sidebar-item" data-tab="kpis">
+        <span class="sidebar-icone">📊</span><span class="sidebar-label">KPIs / Indicadores</span>
+      </button>
+      <button class="sidebar-item" data-tab="regras">
+        <span class="sidebar-icone">🗓️</span><span class="sidebar-label">Horários & Exceções</span>
+      </button>
+      <button class="sidebar-item" data-tab="vagas">
+        <span class="sidebar-icone">⚙️</span><span class="sidebar-label">Gestão de Vagas</span>
+      </button>
+    </nav>
 
-    <div class="tab-conteudo ativo" id="tab-painel">
-      <div class="card">
-        <h3>Visão Geral de Ocupação do Pátio</h3>
-        <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
-          Selecione a data para visualizar a ocupação e os veículos agendados hora por hora.
-        </p>
+    <main class="conteudo-erp">
 
-        <div class="tira-dias" id="tira-dias-container">
-          </div>
+      <div class="tab-conteudo ativo" id="tab-painel">
+        <div class="card">
+          <h3>Visão Geral de Ocupação do Pátio</h3>
+          <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:16px;">
+            Selecione a data para visualizar a ocupação e os veículos agendados hora por hora.
+          </p>
 
-        <div class="legenda-ocupacao" style="margin-top: 16px;">
-          <span><span class="ponto ponto-livre"></span> Vagas Livres</span>
-          <span><span class="ponto ponto-parcial"></span> Parcialmente Ocupado</span>
-          <span><span class="ponto ponto-cheio"></span> Horário Esgotado</span>
-          <span><span class="ponto ponto-fechado"></span> Horário Fechado</span>
-        </div>
-      </div>
-
-      <div class="card">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
-          <h4 id="titulo-data-selecionada">Horários para Hoje</h4>
-          <input type="date" id="picker-data-painel" style="padding:6px 10px; border-radius:6px; border:1px solid #ccc; font-size:0.9rem;">
-        </div>
-
-        <div class="linha-tempo" id="linha-tempo-container">
-          <p style="text-align:center; color:#888; padding:20px;">Carregando horários do pátio...</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="tab-conteudo" id="tab-solicitacoes">
-      <div class="card">
-        <h3>Solicitações Aguardando Aprovação</h3>
-        <div style="overflow-x:auto;">
-          <table class="tabela-padrao">
-            <thead>
-              <tr>
-                <th>Data / Horário</th>
-                <th>Transportadora</th>
-                <th>Processo</th>
-                <th>Veículo / Motorista</th>
-                <th>Solicitado em</th>
-                <th>Ações</th>
-              </tr>
-            </thead>
-            <tbody id="tbody-solicitacoes">
-              <tr><td colspan="6" style="text-align:center;">Carregando solicitações...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <div class="tab-conteudo" id="tab-hoje">
-      <div class="card">
-        <h3>Programação do Dia</h3>
-        <div style="overflow-x:auto;">
-          <table class="tabela-padrao">
-            <thead>
-              <tr>
-                <th>Horário</th>
-                <th>Transportadora</th>
-                <th>Processo</th>
-                <th>Placas</th>
-                <th>Motorista</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="tbody-hoje">
-              <tr><td colspan="6" style="text-align:center;">Carregando agendamentos...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <div class="tab-conteudo" id="tab-todos">
-      <div class="card">
-        <h3>Histórico Geral de Agendamentos</h3>
-        
-        <div style="display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
-          <div style="flex:1; min-width:160px;">
-            <label style="font-size:0.8rem; font-weight:600;">Data Início</label>
-            <input type="date" id="filtro-data-inicio" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc;">
-          </div>
-          <div style="flex:1; min-width:160px;">
-            <label style="font-size:0.8rem; font-weight:600;">Data Fim</label>
-            <input type="date" id="filtro-data-fim" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc;">
-          </div>
-          <div style="flex:1; min-width:160px;">
-            <label style="font-size:0.8rem; font-weight:600;">Status</label>
-            <select id="filtro-status" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc;">
-              <option value="">Todos</option>
-              <option value="Pendente">Pendente</option>
-              <option value="Aprovado">Aprovado</option>
-              <option value="Em Pátio">Em Pátio</option>
-              <option value="Concluído">Concluído</option>
-              <option value="No-Show">No-Show</option>
-              <option value="Recusado">Recusado</option>
-              <option value="Cancelado">Cancelado</option>
-            </select>
-          </div>
-          <div style="align-self:flex-end;">
-            <button id="btn-filtrar-todos" class="btn-primario" style="padding:9px 16px;">Filtrar</button>
-          </div>
-        </div>
-
-        <div style="overflow-x:auto;">
-          <table class="tabela-padrao">
-            <thead>
-              <tr>
-                <th>Data / Horário</th>
-                <th>Transportadora</th>
-                <th>Processo</th>
-                <th>Placas</th>
-                <th>Motorista</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="tbody-todos">
-              <tr><td colspan="6" style="text-align:center;">Selecione o período para buscar...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <div class="tab-conteudo" id="tab-novo-operacional">
-      <div class="card">
-        <h3>➕ Novo Agendamento Direto (Operacional)</h3>
-        <p style="font-size:0.85rem; color:#666; margin-bottom:16px;">
-          Crie um agendamento direto para atender emergências ou encaixes. Este registro nascerá automaticamente como <strong>Aprovado</strong>.
-        </p>
-
-        <form id="form-agendamento-operacional">
-          <div class="campo">
-            <label for="op-transportadora-select">Transportadora Parceira</label>
-            <select id="op-transportadora-select" required>
-              <option value="">Carregando transportadoras...</option>
-            </select>
-          </div>
-
-          <div class="campo" id="wrap-op-empresa-externa" style="display:none;">
-            <label for="op-empresa-externa">Nome da Empresa / Parceiro Externo</label>
-            <input type="text" id="op-empresa-externa" placeholder="Ex: Transportes Silva LTDA">
-          </div>
-
-          <div style="display:flex; gap:15px; flex-wrap:wrap;">
-            <div class="campo" style="flex:1; min-width:180px;">
-              <label for="op-data">Data da Carga/Descarga</label>
-              <input type="date" id="op-data" required>
+          <div class="tira-dias" id="tira-dias-container">
             </div>
-            <div class="campo" style="flex:1; min-width:180px;">
-              <label for="op-horario">Horário / Janela Disponível</label>
-              <select id="op-horario" required disabled>
-                <option value="">Selecione primeiro a data...</option>
+
+          <div class="legenda-ocupacao" style="margin-top: 16px;">
+            <span><span class="ponto ponto-livre"></span> Vagas Livres</span>
+            <span><span class="ponto ponto-parcial"></span> Parcialmente Ocupado</span>
+            <span><span class="ponto ponto-cheio"></span> Horário Esgotado</span>
+            <span><span class="ponto ponto-fechado"></span> Horário Fechado</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+            <h4 id="titulo-data-selecionada">Horários para Hoje</h4>
+            <input type="date" id="picker-data-painel" style="padding:6px 10px; border-radius:6px; border:1px solid #ccc; font-size:0.9rem;">
+          </div>
+
+          <div class="linha-tempo" id="linha-tempo-container">
+            <p style="text-align:center; color:#888; padding:20px;">Carregando horários do pátio...</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-conteudo" id="tab-portaria">
+        <div class="card">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+            <div>
+              <h2>Movimentação de Pátio do Dia</h2>
+              <p style="font-size: 0.85rem; color: #666;">Gerenciamento rápido de entradas, saídas e recepção sem agendamento.</p>
+            </div>
+            <div>
+              <button id="btn-abrir-encaixe" class="btn-primario" style="background: #17a2b8;">⚡ Entrada Sem Agendamento (Encaixe)</button>
+            </div>
+          </div>
+
+          <div class="grid-filtros">
+            <button class="btn-filtro ativo" data-filtro-portaria="todos">Todos (<span id="count-p-todos">0</span>)</button>
+            <button class="btn-filtro" data-filtro-portaria="Aprovado">A Caminho / Agendados (<span id="count-p-aprovados">0</span>)</button>
+            <button class="btn-filtro" data-filtro-portaria="Em Pátio">Em Pátio (<span id="count-p-empatio">0</span>)</button>
+            <button class="btn-filtro" data-filtro-portaria="Concluído">Concluídos (<span id="count-p-concluidos">0</span>)</button>
+            <button class="btn-filtro" data-filtro-portaria="No-Show">No-Show (<span id="count-p-noshow">0</span>)</button>
+          </div>
+
+          <div style="overflow-x: auto;">
+            <table width="100%" style="border-collapse: collapse; margin-top: 10px;">
+              <thead>
+                <tr style="border-bottom: 2px solid #ddd; text-align: left; font-size: 0.85rem; background: #f4f6f9;">
+                  <th style="padding: 10px;">Horário</th>
+                  <th style="padding: 10px;">Empresa</th>
+                  <th style="padding: 10px;">Placas (Cavalo / Carreta)</th>
+                  <th style="padding: 10px;">Motorista</th>
+                  <th style="padding: 10px;">Tipo / Processo</th>
+                  <th style="padding: 10px;">Status</th>
+                  <th style="padding: 10px; text-align: center;">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-portaria">
+                <tr>
+                  <td colspan="7" style="text-align: center; padding: 20px; color: #888;">Carregando movimentação do dia...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-conteudo" id="tab-solicitacoes">
+        <div class="card">
+          <h3>Solicitações Aguardando Aprovação</h3>
+          <div style="overflow-x:auto;">
+            <table class="tabela-padrao">
+              <thead>
+                <tr>
+                  <th>Data / Horário</th>
+                  <th>Transportadora</th>
+                  <th>Processo</th>
+                  <th>Veículo / Motorista</th>
+                  <th>Solicitado em</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-solicitacoes">
+                <tr><td colspan="6" style="text-align:center;">Carregando solicitações...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-conteudo" id="tab-hoje">
+        <div class="card">
+          <h3>Programação do Dia</h3>
+          <div style="overflow-x:auto;">
+            <table class="tabela-padrao">
+              <thead>
+                <tr>
+                  <th>Horário</th>
+                  <th>Transportadora</th>
+                  <th>Processo</th>
+                  <th>Placas</th>
+                  <th>Motorista</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-hoje">
+                <tr><td colspan="6" style="text-align:center;">Carregando agendamentos...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-conteudo" id="tab-todos">
+        <div class="card">
+          <h3>Histórico Geral de Agendamentos</h3>
+          
+          <div style="display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:160px;">
+              <label style="font-size:0.8rem; font-weight:600;">Data Início</label>
+              <input type="date" id="filtro-data-inicio" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc;">
+            </div>
+            <div style="flex:1; min-width:160px;">
+              <label style="font-size:0.8rem; font-weight:600;">Data Fim</label>
+              <input type="date" id="filtro-data-fim" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc;">
+            </div>
+            <div style="flex:1; min-width:160px;">
+              <label style="font-size:0.8rem; font-weight:600;">Status</label>
+              <select id="filtro-status" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc;">
+                <option value="">Todos</option>
+                <option value="Pendente">Pendente</option>
+                <option value="Aprovado">Aprovado</option>
+                <option value="Em Pátio">Em Pátio</option>
+                <option value="Concluído">Concluído</option>
+                <option value="No-Show">No-Show</option>
+                <option value="Recusado">Recusado</option>
+                <option value="Cancelado">Cancelado</option>
               </select>
             </div>
-          </div>
-
-          <div class="campo">
-            <label for="op-processo">Tipo de Processo</label>
-            <select id="op-processo" required>
-              <option value="">Selecione o tipo de processo...</option>
-            </select>
-          </div>
-
-          <div style="display:flex; gap:15px; flex-wrap:wrap;">
-            <div class="campo" style="flex:1; min-width:140px;">
-              <label for="op-placa-cavalo">Placa Cavalo</label>
-              <input type="text" id="op-placa-cavalo" required style="text-transform:uppercase;">
-            </div>
-            <div class="campo" style="flex:1; min-width:140px;">
-              <label for="op-placa-carreta">Placa Carreta (opcional)</label>
-              <input type="text" id="op-placa-carreta" style="text-transform:uppercase;">
+            <div style="align-self:flex-end;">
+              <button id="btn-filtrar-todos" class="btn-primario" style="padding:9px 16px;">Filtrar</button>
             </div>
           </div>
 
-          <div class="campo">
-            <label for="op-motorista">Nome do Motorista</label>
-            <input type="text" id="op-motorista" required>
+          <div style="overflow-x:auto;">
+            <table class="tabela-padrao">
+              <thead>
+                <tr>
+                  <th>Data / Horário</th>
+                  <th>Transportadora</th>
+                  <th>Processo</th>
+                  <th>Placas</th>
+                  <th>Motorista</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-todos">
+                <tr><td colspan="6" style="text-align:center;">Selecione o período para buscar...</td></tr>
+              </tbody>
+            </table>
           </div>
-
-          <div class="campo">
-            <label for="op-observacoes">Observações (opcional)</label>
-            <textarea id="op-observacoes" rows="2"></textarea>
-          </div>
-
-          <button type="submit" id="btn-salvar-operacional" class="btn-primario" style="margin-top:10px;">Salvar Agendamento Direto</button>
-        </form>
-      </div>
-    </div>
-
-    <div class="tab-conteudo" id="tab-kpis">
-      <div class="card" style="margin-bottom: 20px;">
-        <h3>📊 Painel Operacional de Indicadores e KPIs</h3>
-        <p style="font-size: 0.85rem; color: #666; margin-bottom: 16px;">
-          Consolidado quantitativo de desempenho do pátio e pontualidade das transportadoras.
-        </p>
-
-        <div style="display: flex; gap: 15px; flex-wrap: wrap; background: #f8f9fa; padding: 15px; border-radius: 8px; align-items: flex-end;">
-          <div class="campo" style="margin: 0; flex: 1; min-width: 150px;">
-            <label for="kpi-data-inicio">Data Inicial</label>
-            <input type="date" id="kpi-data-inicio">
-          </div>
-          <div class="campo" style="margin: 0; flex: 1; min-width: 150px;">
-            <label for="kpi-data-fim">Data Final</label>
-            <input type="date" id="kpi-data-fim">
-          </div>
-          <div class="campo" style="margin: 0; flex: 2; min-width: 200px;">
-            <label for="kpi-empresa">Transportadora / Empresa</label>
-            <select id="kpi-empresa">
-              <option value="todas">Todas as Transportadoras</option>
-            </select>
-          </div>
-          <button id="btn-filtrar-kpis" class="btn-primario" style="height: 40px; align-self: flex-end;">🔍 Filtrar Métricas</button>
         </div>
       </div>
 
-      <div class="kpi-card-grid">
-        <div class="kpi-card kpi-dwell">
-          <div class="kpi-titulo">Permanência Média (Dwell Time)</div>
-          <div class="kpi-valor" id="kpi-card-dwell">--</div>
-          <div class="kpi-sub" id="kpi-card-dwell-sub">0 veículos concluídos</div>
-        </div>
-        <div class="kpi-card kpi-pontualidade">
-          <div class="kpi-titulo">Taxa de Pontualidade</div>
-          <div class="kpi-valor" id="kpi-card-pontualidade">0.0%</div>
-          <div class="kpi-sub" id="kpi-card-pontualidade-sub">No Horário</div>
-        </div>
-        <div class="kpi-card kpi-noshow">
-          <div class="kpi-titulo">Taxa de No-Show</div>
-          <div class="kpi-valor" id="kpi-card-noshow">0.0%</div>
-          <div class="kpi-sub" id="kpi-card-noshow-sub">0 de 0 agendados</div>
-        </div>
-        <div class="kpi-card kpi-previo">
-          <div class="kpi-titulo">Agendamentos Prévios</div>
-          <div class="kpi-valor" id="kpi-card-previo">0.0%</div>
-          <div class="kpi-sub" id="kpi-card-previo-sub">0% Encaixes de Portaria</div>
-        </div>
-        <div class="kpi-card kpi-divergencia">
-          <div class="kpi-titulo">Divergências de Cadastro</div>
-          <div class="kpi-valor" id="kpi-card-divergencias">0</div>
-          <div class="kpi-sub">Alterações no Check-in</div>
+      <div class="tab-conteudo" id="tab-novo-operacional">
+        <div class="card">
+          <h3>➕ Novo Agendamento Direto (Operacional)</h3>
+          <p style="font-size:0.85rem; color:#666; margin-bottom:16px;">
+            Crie um agendamento direto para atender emergências ou encaixes. Este registro nascerá automaticamente como <strong>Aprovado</strong>.
+          </p>
+
+          <form id="form-agendamento-operacional">
+            <div class="campo">
+              <label for="op-transportadora-select">Transportadora Parceira</label>
+              <select id="op-transportadora-select" required>
+                <option value="">Carregando transportadoras...</option>
+              </select>
+            </div>
+
+            <div class="campo" id="wrap-op-empresa-externa" style="display:none;">
+              <label for="op-empresa-externa">Nome da Empresa / Parceiro Externo</label>
+              <input type="text" id="op-empresa-externa" placeholder="Ex: Transportes Silva LTDA">
+            </div>
+
+            <div style="display:flex; gap:15px; flex-wrap:wrap;">
+              <div class="campo" style="flex:1; min-width:180px;">
+                <label for="op-data">Data da Carga/Descarga</label>
+                <input type="date" id="op-data" required>
+              </div>
+              <div class="campo" style="flex:1; min-width:180px;">
+                <label for="op-horario">Horário / Janela Disponível</label>
+                <select id="op-horario" required disabled>
+                  <option value="">Selecione primeiro a data...</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="campo">
+              <label for="op-processo">Tipo de Processo</label>
+              <select id="op-processo" required>
+                <option value="">Selecione o tipo de processo...</option>
+              </select>
+            </div>
+
+            <div style="display:flex; gap:15px; flex-wrap:wrap;">
+              <div class="campo" style="flex:1; min-width:140px;">
+                <label for="op-placa-cavalo">Placa Cavalo</label>
+                <input type="text" id="op-placa-cavalo" required style="text-transform:uppercase;">
+              </div>
+              <div class="campo" style="flex:1; min-width:140px;">
+                <label for="op-placa-carreta">Placa Carreta (opcional)</label>
+                <input type="text" id="op-placa-carreta" style="text-transform:uppercase;">
+              </div>
+            </div>
+
+            <div class="campo">
+              <label for="op-motorista">Nome do Motorista</label>
+              <input type="text" id="op-motorista" required>
+            </div>
+
+            <div class="campo">
+              <label for="op-observacoes">Observações (opcional)</label>
+              <textarea id="op-observacoes" rows="2"></textarea>
+            </div>
+
+            <button type="submit" id="btn-salvar-operacional" class="btn-primario" style="margin-top:10px;">Salvar Agendamento Direto</button>
+          </form>
         </div>
       </div>
 
-      <div class="card">
-        <h4>Detalhamento Quantitativo do Período</h4>
-        <table class="tabela-kpi">
-          <thead>
-            <tr>
-              <th>Métrica / Indicador</th>
-              <th>Quantidade Absoluta</th>
-              <th>Percentual / Média</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr><td>🟢 Chegadas No Horário</td><td id="kpi-qtd-nohorario">0</td><td id="kpi-pct-nohorario">0.0%</td></tr>
-            <tr><td>🔵 Chegadas Antecipadas</td><td id="kpi-qtd-antecipado">0</td><td id="kpi-pct-antecipado">0.0%</td></tr>
-            <tr><td>🔴 Chegadas Com Atraso</td><td id="kpi-qtd-atrasado">0</td><td id="kpi-pct-atrasado">0.0%</td></tr>
-            <tr><td>⚡ Entradas por Encaixe (Portaria Expresso)</td><td id="kpi-qtd-encaixes">0</td><td id="kpi-pct-encaixes">0.0%</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+      <div class="tab-conteudo" id="tab-kpis">
+        <div class="card" style="margin-bottom: 20px;">
+          <h3>📊 Painel Operacional de Indicadores e KPIs</h3>
+          <p style="font-size: 0.85rem; color: #666; margin-bottom: 16px;">
+            Consolidado quantitativo de desempenho do pátio e pontualidade das transportadoras.
+          </p>
 
-    <div class="tab-conteudo" id="tab-regras">
-      <div class="card">
-        <h3>🗓️ Regra Padrão de Atendimento</h3>
-        <p style="font-size:0.85rem; color:#666; margin-bottom:16px;">
-          Define o horário de funcionamento recorrente do pátio e quantos veículos podem ser atendidos por hora, para cada dia da semana. Vale para qualquer data futura que não tenha Exceção ou Ajuste Manual (aba "Gestão de Vagas") sobrescrevendo.
-        </p>
+          <div style="display: flex; gap: 15px; flex-wrap: wrap; background: #f8f9fa; padding: 15px; border-radius: 8px; align-items: flex-end;">
+            <div class="campo" style="margin: 0; flex: 1; min-width: 150px;">
+              <label for="kpi-data-inicio">Data Inicial</label>
+              <input type="date" id="kpi-data-inicio">
+            </div>
+            <div class="campo" style="margin: 0; flex: 1; min-width: 150px;">
+              <label for="kpi-data-fim">Data Final</label>
+              <input type="date" id="kpi-data-fim">
+            </div>
+            <div class="campo" style="margin: 0; flex: 2; min-width: 200px;">
+              <label for="kpi-empresa">Transportadora / Empresa</label>
+              <select id="kpi-empresa">
+                <option value="todas">Todas as Transportadoras</option>
+              </select>
+            </div>
+            <button id="btn-filtrar-kpis" class="btn-primario" style="height: 40px; align-self: flex-end;">🔍 Filtrar Métricas</button>
+          </div>
+        </div>
 
-        <form id="form-regra-slot">
-          <div class="campo">
-            <label>Dias da Semana</label>
-            <div class="campo-dias-semana" id="regra-dias-semana"></div>
+        <div class="kpi-card-grid">
+          <div class="kpi-card kpi-dwell">
+            <div class="kpi-titulo">Permanência Média (Dwell Time)</div>
+            <div class="kpi-valor" id="kpi-card-dwell">--</div>
+            <div class="kpi-sub" id="kpi-card-dwell-sub">0 veículos concluídos</div>
           </div>
-          <div style="display:flex; gap:15px; flex-wrap:wrap;">
-            <div class="campo" style="flex:1; min-width:140px;">
-              <label for="regra-hora-inicio">Hora Início</label>
-              <input type="time" id="regra-hora-inicio" required>
-            </div>
-            <div class="campo" style="flex:1; min-width:140px;">
-              <label for="regra-hora-fim">Hora Fim</label>
-              <input type="time" id="regra-hora-fim" required>
-            </div>
-            <div class="campo" style="flex:1; min-width:140px;">
-              <label for="regra-capacidade">Veículos por Hora</label>
-              <input type="number" id="regra-capacidade" min="1" step="1" required>
-            </div>
+          <div class="kpi-card kpi-pontualidade">
+            <div class="kpi-titulo">Taxa de Pontualidade</div>
+            <div class="kpi-valor" id="kpi-card-pontualidade">0.0%</div>
+            <div class="kpi-sub" id="kpi-card-pontualidade-sub">No Horário</div>
           </div>
-          <div class="campo" style="display:flex; align-items:center; gap:8px;">
-            <input type="checkbox" id="regra-ativo" checked style="width:auto;">
-            <label for="regra-ativo" style="margin:0;">Regra ativa</label>
+          <div class="kpi-card kpi-noshow">
+            <div class="kpi-titulo">Taxa de No-Show</div>
+            <div class="kpi-valor" id="kpi-card-noshow">0.0%</div>
+            <div class="kpi-sub" id="kpi-card-noshow-sub">0 de 0 agendados</div>
           </div>
-          <input type="hidden" id="regra-editando-id">
-          <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <button type="submit" id="btn-salvar-regra" class="btn-primario" style="width:auto; padding:10px 20px;">Adicionar Regra</button>
-            <button type="button" id="btn-cancelar-edicao-regra" class="btn-acao btn-desativar" style="display:none;">Cancelar Edição</button>
+          <div class="kpi-card kpi-previo">
+            <div class="kpi-titulo">Agendamentos Prévios</div>
+            <div class="kpi-valor" id="kpi-card-previo">0.0%</div>
+            <div class="kpi-sub" id="kpi-card-previo-sub">0% Encaixes de Portaria</div>
           </div>
-        </form>
+          <div class="kpi-card kpi-divergencia">
+            <div class="kpi-titulo">Divergências de Cadastro</div>
+            <div class="kpi-valor" id="kpi-card-divergencias">0</div>
+            <div class="kpi-sub">Alterações no Check-in</div>
+          </div>
+        </div>
 
-        <div style="overflow-x:auto; margin-top:20px;">
-          <table class="tabela-padrao">
+        <div class="card">
+          <h4>Detalhamento Quantitativo do Período</h4>
+          <table class="tabela-kpi">
             <thead>
               <tr>
-                <th>Dias</th>
-                <th>Horário</th>
-                <th>Capacidade/h</th>
-                <th>Status</th>
-                <th>Ações</th>
+                <th>Métrica / Indicador</th>
+                <th>Quantidade Absoluta</th>
+                <th>Percentual / Média</th>
               </tr>
             </thead>
-            <tbody id="tbody-regras">
-              <tr><td colspan="5" style="text-align:center;">Carregando regras...</td></tr>
+            <tbody>
+              <tr><td>🟢 Chegadas No Horário</td><td id="kpi-qtd-nohorario">0</td><td id="kpi-pct-nohorario">0.0%</td></tr>
+              <tr><td>🔵 Chegadas Antecipadas</td><td id="kpi-qtd-antecipado">0</td><td id="kpi-pct-antecipado">0.0%</td></tr>
+              <tr><td>🔴 Chegadas Com Atraso</td><td id="kpi-qtd-atrasado">0</td><td id="kpi-pct-atrasado">0.0%</td></tr>
+              <tr><td>⚡ Entradas por Encaixe (Portaria Expresso)</td><td id="kpi-qtd-encaixes">0</td><td id="kpi-pct-encaixes">0.0%</td></tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      <div class="card">
-        <h3>⚠️ Exceções Recorrentes</h3>
-        <p style="font-size:0.85rem; color:#666; margin-bottom:16px;">
-          Sobrescrevem a Regra Padrão nos dias/horários selecionados — use para bloquear um dia inteiro (ex: domingo) ou reduzir a capacidade num intervalo específico (ex: horário de almoço). Capacidade <strong>0</strong> = sem atendimento nesse intervalo/dia.
-        </p>
+      <div class="tab-conteudo" id="tab-regras">
+        <div class="card">
+          <h3>🗓️ Regra Padrão de Atendimento</h3>
+          <p style="font-size:0.85rem; color:#666; margin-bottom:16px;">
+            Define o horário de funcionamento recorrente do pátio e quantos veículos podem ser atendidos por hora, para cada dia da semana. Vale para qualquer data futura que não tenha Exceção ou Ajuste Manual (aba "Gestão de Vagas") sobrescrevendo.
+          </p>
 
-        <form id="form-excecao-slot">
-          <div class="campo">
-            <label>Dias da Semana</label>
-            <div class="campo-dias-semana" id="excecao-dias-semana"></div>
-          </div>
-          <div style="display:flex; gap:15px; flex-wrap:wrap;">
-            <div class="campo" style="flex:1; min-width:140px;">
-              <label for="excecao-hora-inicio">Hora Início</label>
-              <input type="time" id="excecao-hora-inicio" required>
+          <form id="form-regra-slot">
+            <div class="campo">
+              <label>Dias da Semana</label>
+              <div class="campo-dias-semana" id="regra-dias-semana"></div>
             </div>
-            <div class="campo" style="flex:1; min-width:140px;">
-              <label for="excecao-hora-fim">Hora Fim</label>
-              <input type="time" id="excecao-hora-fim" required>
+            <div style="display:flex; gap:15px; flex-wrap:wrap;">
+              <div class="campo" style="flex:1; min-width:140px;">
+                <label for="regra-hora-inicio">Hora Início</label>
+                <input type="time" id="regra-hora-inicio" required>
+              </div>
+              <div class="campo" style="flex:1; min-width:140px;">
+                <label for="regra-hora-fim">Hora Fim</label>
+                <input type="time" id="regra-hora-fim" required>
+              </div>
+              <div class="campo" style="flex:1; min-width:140px;">
+                <label for="regra-capacidade">Veículos por Hora</label>
+                <input type="number" id="regra-capacidade" min="1" step="1" required>
+              </div>
             </div>
-            <div class="campo" style="flex:1; min-width:140px;">
-              <label for="excecao-capacidade">Veículos por Hora (0 = fechado)</label>
-              <input type="number" id="excecao-capacidade" min="0" step="1" required>
+            <div class="campo" style="display:flex; align-items:center; gap:8px;">
+              <input type="checkbox" id="regra-ativo" checked style="width:auto;">
+              <label for="regra-ativo" style="margin:0;">Regra ativa</label>
             </div>
-          </div>
-          <div class="campo" style="display:flex; align-items:center; gap:8px;">
-            <input type="checkbox" id="excecao-ativo" checked style="width:auto;">
-            <label for="excecao-ativo" style="margin:0;">Exceção ativa</label>
-          </div>
-          <input type="hidden" id="excecao-editando-id">
-          <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <button type="submit" id="btn-salvar-excecao" class="btn-primario" style="width:auto; padding:10px 20px;">Adicionar Exceção</button>
-            <button type="button" id="btn-cancelar-edicao-excecao" class="btn-acao btn-desativar" style="display:none;">Cancelar Edição</button>
-          </div>
-        </form>
+            <input type="hidden" id="regra-editando-id">
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button type="submit" id="btn-salvar-regra" class="btn-primario" style="width:auto; padding:10px 20px;">Adicionar Regra</button>
+              <button type="button" id="btn-cancelar-edicao-regra" class="btn-acao btn-desativar" style="display:none;">Cancelar Edição</button>
+            </div>
+          </form>
 
-        <div style="overflow-x:auto; margin-top:20px;">
-          <table class="tabela-padrao">
-            <thead>
-              <tr>
-                <th>Dias</th>
-                <th>Horário</th>
-                <th>Capacidade/h</th>
-                <th>Status</th>
-                <th>Ações</th>
-              </tr>
-            </thead>
-            <tbody id="tbody-excecoes">
-              <tr><td colspan="5" style="text-align:center;">Carregando exceções...</td></tr>
-            </tbody>
-          </table>
+          <div style="overflow-x:auto; margin-top:20px;">
+            <table class="tabela-padrao">
+              <thead>
+                <tr>
+                  <th>Dias</th>
+                  <th>Horário</th>
+                  <th>Capacidade/h</th>
+                  <th>Status</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-regras">
+                <tr><td colspan="5" style="text-align:center;">Carregando regras...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>⚠️ Exceções Recorrentes</h3>
+          <p style="font-size:0.85rem; color:#666; margin-bottom:16px;">
+            Sobrescrevem a Regra Padrão nos dias/horários selecionados — use para bloquear um dia inteiro (ex: domingo) ou reduzir a capacidade num intervalo específico (ex: horário de almoço). Capacidade <strong>0</strong> = sem atendimento nesse intervalo/dia.
+          </p>
+
+          <form id="form-excecao-slot">
+            <div class="campo">
+              <label>Dias da Semana</label>
+              <div class="campo-dias-semana" id="excecao-dias-semana"></div>
+            </div>
+            <div style="display:flex; gap:15px; flex-wrap:wrap;">
+              <div class="campo" style="flex:1; min-width:140px;">
+                <label for="excecao-hora-inicio">Hora Início</label>
+                <input type="time" id="excecao-hora-inicio" required>
+              </div>
+              <div class="campo" style="flex:1; min-width:140px;">
+                <label for="excecao-hora-fim">Hora Fim</label>
+                <input type="time" id="excecao-hora-fim" required>
+              </div>
+              <div class="campo" style="flex:1; min-width:140px;">
+                <label for="excecao-capacidade">Veículos por Hora (0 = fechado)</label>
+                <input type="number" id="excecao-capacidade" min="0" step="1" required>
+              </div>
+            </div>
+            <div class="campo" style="display:flex; align-items:center; gap:8px;">
+              <input type="checkbox" id="excecao-ativo" checked style="width:auto;">
+              <label for="excecao-ativo" style="margin:0;">Exceção ativa</label>
+            </div>
+            <input type="hidden" id="excecao-editando-id">
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button type="submit" id="btn-salvar-excecao" class="btn-primario" style="width:auto; padding:10px 20px;">Adicionar Exceção</button>
+              <button type="button" id="btn-cancelar-edicao-excecao" class="btn-acao btn-desativar" style="display:none;">Cancelar Edição</button>
+            </div>
+          </form>
+
+          <div style="overflow-x:auto; margin-top:20px;">
+            <table class="tabela-padrao">
+              <thead>
+                <tr>
+                  <th>Dias</th>
+                  <th>Horário</th>
+                  <th>Capacidade/h</th>
+                  <th>Status</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-excecoes">
+                <tr><td colspan="5" style="text-align:center;">Carregando exceções...</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="tab-conteudo" id="tab-vagas">
-      <div class="card">
-        <h3>Configuração Manual de Capacidade de Pátio</h3>
-        <p style="font-size:0.85rem; color:#666; margin-bottom:16px;">Ajuste manualmente o número máximo de caminhões por horário em datas específicas.</p>
-        <div style="display:flex; gap:10px; margin-bottom:16px; align-items:flex-end;">
-          <div class="campo" style="margin:0;">
-            <label>Data para Ajuste</label>
-            <input type="date" id="vagas-data">
+      <div class="tab-conteudo" id="tab-vagas">
+        <div class="card">
+          <h3>Configuração Manual de Capacidade de Pátio</h3>
+          <p style="font-size:0.85rem; color:#666; margin-bottom:16px;">Ajuste manualmente o número máximo de caminhões por horário em datas específicas.</p>
+          <div style="display:flex; gap:10px; margin-bottom:16px; align-items:flex-end;">
+            <div class="campo" style="margin:0;">
+              <label>Data para Ajuste</label>
+              <input type="date" id="vagas-data">
+            </div>
+            <button id="btn-carregar-vagas" class="btn-primario" style="padding:9px 16px;">Buscar Vagas</button>
           </div>
-          <button id="btn-carregar-vagas" class="btn-primario" style="padding:9px 16px;">Buscar Vagas</button>
-        </div>
-        <div id="container-vagas-grid" style="display:none; overflow-x:auto;">
-          <table class="tabela-padrao">
-            <thead>
-              <tr>
-                <th>Horário</th>
-                <th>Capacidade Máxima</th>
-                <th>Ocupados Atual</th>
-                <th>Status</th>
-                <th>Ações</th>
-              </tr>
-            </thead>
-            <tbody id="tbody-vagas"></tbody>
-          </table>
+          <div id="container-vagas-grid" style="display:none; overflow-x:auto;">
+            <table class="tabela-padrao">
+              <thead>
+                <tr>
+                  <th>Horário</th>
+                  <th>Capacidade Máxima</th>
+                  <th>Ocupados Atual</th>
+                  <th>Status</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-vagas"></tbody>
+            </table>
+          </div>
         </div>
       </div>
-    </div>
 
+    </main>
+  </div>
+
+  <!-- =====================================================================
+       MODAIS DO MÓDULO PORTARIA (incorporados do antigo portaria.html)
+       ===================================================================== -->
+  <div id="modal-checkin" class="modal-overlay-portaria oculto">
+    <div class="modal-card">
+      <h3> Confirmar Entrada em Pátio (Check-in)</h3>
+      <p style="font-size: 0.85rem; color: #666; margin-bottom: 15px;">Confirme as informações do veículo e motorista antes da liberação.</p>
+      
+      <form id="form-checkin">
+        <input type="hidden" id="checkin-booking-id">
+        <input type="hidden" id="checkin-hora-agendada">
+
+        <div class="campo">
+          <label for="checkin-empresa">Empresa</label>
+          <input type="text" id="checkin-empresa" disabled style="background: #eee;">
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <div class="campo" style="flex: 1;">
+            <label for="checkin-placa-cavalo">Placa Cavalo</label>
+            <input type="text" id="checkin-placa-cavalo" required style="text-transform: uppercase;">
+          </div>
+          <div class="campo" style="flex: 1;">
+            <label for="checkin-placa-carreta">Placa Carreta</label>
+            <input type="text" id="checkin-placa-carreta" style="text-transform: uppercase;">
+          </div>
+        </div>
+
+        <div class="campo">
+          <label for="checkin-motorista">Nome do Motorista</label>
+          <input type="text" id="checkin-motorista" required>
+        </div>
+
+        <div class="campo">
+          <label for="checkin-pontualidade">Pontualidade Calculada</label>
+          <input type="text" id="checkin-pontualidade" readonly style="background: #e9ecef; font-weight: bold;">
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn-secundario btn-fechar-modal">Cancelar</button>
+          <button type="submit" class="btn-primario btn-checkin">Confirmar Check-in</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-checkout" class="modal-overlay-portaria oculto">
+    <div class="modal-card">
+      <h3> Finalizar Operação (Check-out)</h3>
+      <p style="font-size: 0.85rem; color: #666; margin-bottom: 15px;">Informe os dados de saída e nota fiscal para liberar o veículo.</p>
+      
+      <form id="form-checkout">
+        <input type="hidden" id="checkout-booking-id">
+        <input type="hidden" id="checkout-entrada-timestamp">
+
+        <div class="campo">
+          <label for="checkout-nf">Número da Nota Fiscal (NF) *</label>
+          <input type="text" id="checkout-nf" placeholder="Ex: 102938" required>
+        </div>
+
+        <div class="campo">
+          <label for="checkout-permanencia">Tempo em Pátio</label>
+          <input type="text" id="checkout-permanencia" readonly style="background: #e9ecef; font-weight: bold;">
+        </div>
+
+        <div class="campo">
+          <label for="checkout-obs">Observações da Saída (Opcional)</label>
+          <textarea id="checkout-obs" rows="2" placeholder="Ocorrências ou divergências na carga/descarga"></textarea>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn-secundario btn-fechar-modal">Cancelar</button>
+          <button type="submit" class="btn-primario btn-checkout">Confirmar Check-out</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-encaixe" class="modal-overlay-portaria oculto">
+    <div class="modal-card">
+      <h3>⚡ Entrada Expresso Sem Agendamento</h3>
+      <p style="font-size: 0.85rem; color: #666; margin-bottom: 15px;">Registro direto de veículos de encaixe. Entrará imediatamente como "Em Pátio".</p>
+      
+      <form id="form-encaixe">
+        <div class="campo">
+          <label for="encaixe-empresa">Nome da Empresa / Transportadora *</label>
+          <input type="text" id="encaixe-empresa" required placeholder="Ex: Transportes Silva">
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <div class="campo" style="flex: 1;">
+            <label for="encaixe-placa-cavalo">Placa Cavalo *</label>
+            <input type="text" id="encaixe-placa-cavalo" required style="text-transform: uppercase;">
+          </div>
+          <div class="campo" style="flex: 1;">
+            <label for="encaixe-placa-carreta">Placa Carreta</label>
+            <input type="text" id="encaixe-placa-carreta" style="text-transform: uppercase;">
+          </div>
+        </div>
+
+        <div class="campo">
+          <label for="encaixe-motorista">Nome do Motorista *</label>
+          <input type="text" id="encaixe-motorista" required>
+        </div>
+
+        <div class="campo">
+          <label for="encaixe-processo">Tipo de Processo *</label>
+          <select id="encaixe-processo" required>
+            <option value="">Carregando tipos...</option>
+          </select>
+        </div>
+
+        <div class="campo">
+          <label for="encaixe-obs">Observação / Motivo do Encaixe</label>
+          <input type="text" id="encaixe-obs" placeholder="Ex: Carga emergencial liberada por Logística">
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn-secundario btn-fechar-modal">Cancelar</button>
+          <button type="submit" class="btn-primario" style="background: #17a2b8;">Registrar e Dar Entrada</button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <script type="module">
@@ -537,7 +914,13 @@
       calcularKPIs,
       idSlotHorario,
       mudarStatusBooking,
-      liberarVagasCanceladasPelaTransportadora
+      liberarVagasCanceladasPelaTransportadora,
+      STATUS,
+      TIPO_AGENDAMENTO,
+      PONTUALIDADE,
+      calcularPontualidade,
+      calcularTempoPermanenciaMinutos,
+      formatarPermanencia
     } from "./patioCore.js";
 
     let usuarioLogado = null;
@@ -545,10 +928,15 @@
     let listaTransportadoras = [];
     let todosBookingsGerais = [];
     let dataSelecionadaPainel = new Date().toISOString().split("T")[0];
+    let filtroPortariaAtual = "todos";
 
     /* ===================================================================
        POPUP / MODAL CUSTOMIZADO (substitui alert() e confirm() nativos —
-       mesmo padrão de transportadora-dashboard/admin-dashboard/cadastro)
+       mesmo padrão de transportadora-dashboard/admin-dashboard/cadastro).
+       Único host de modal genérico da página — reaproveitado também
+       pelas ações do módulo Portaria abaixo (mudarStatusBooking, etc.),
+       que antes viviam num arquivo separado com sua PRÓPRIA cópia deste
+       mesmo bloco.
        =================================================================== */
     function criarModalHost() {
       if (document.getElementById("modal-overlay")) return;
@@ -624,9 +1012,9 @@
 
     /* ===================================================================
        TOAST — notificação não-bloqueante para confirmações rápidas de
-       sucesso (aprovar, salvar vaga, fechar/reabrir horário etc.). O
-       modal acima continua reservado para erros e confirmações que
-       precisam travar a tela até o usuário decidir.
+       sucesso (aprovar, salvar vaga, fechar/reabrir horário, check-in,
+       check-out etc.). O modal acima continua reservado para erros e
+       confirmações que precisam travar a tela até o usuário decidir.
        =================================================================== */
     function criarToastHost() {
       if (document.getElementById("toast-container")) return;
@@ -665,7 +1053,8 @@
       });
     }
 
-    // Proteção de acesso (Tipo 2 = Logística, 3 = Admin)
+    // Proteção de acesso (Tipo 2 = Logística, 3 = Admin) — os MESMOS dois
+    // perfis que antes acessavam portaria.html separadamente.
     protegerPagina([2, 3], async (user, dadosUser) => {
       usuarioLogado = { uid: user.uid, ...dadosUser };
       document.getElementById("user-nome").textContent = dadosUser.nome || user.email;
@@ -682,6 +1071,7 @@
 
       mapProcessos = await obterTiposProcessoMap();
       preencherSelectProcessos();
+      preencherSelectProcessoEncaixe();
       await carregarTransportadoras();
 
       // Varredura de vagas presas por cancelamentos feitos pela própria
@@ -706,15 +1096,24 @@
       carregarSolicitacoesPendentes();
       carregarAgendamentosHoje();
       inicializarFormularioOperacional();
+      inicializarFormulariosPortaria();
     });
 
     document.getElementById("btn-logout").addEventListener("click", () => signOut(auth));
 
     /* ===================================================================
-       GERENCIAMENTO DE ABAS
+       GERENCIAMENTO DO MENU LATERAL (ERP)
+
+       Substitui a antiga barra de abas horizontal no topo (".tabs"/
+       ".tab-btn") por uma coluna fixa à esquerda (".sidebar-erp"/
+       ".sidebar-item") — o MECANISMO de troca de conteúdo é o mesmo de
+       antes (classes ".tab-conteudo"/".ativo"), só o gatilho visual
+       mudou. Também resolve deep-link via "?tab=NOME" na URL — usado
+       pelo antigo portaria.html, que agora só redireciona pra cá com
+       "?tab=portaria" em vez de ser uma página própria.
        =================================================================== */
     function inicializarAbas() {
-      const btns = document.querySelectorAll(".tab-btn");
+      const btns = document.querySelectorAll(".sidebar-item");
       const conteudos = document.querySelectorAll(".tab-conteudo");
 
       btns.forEach(btn => {
@@ -727,6 +1126,7 @@
           document.getElementById(`tab-${target}`).classList.add("ativo");
 
           if (target === "painel") carregarPainelDoDia(dataSelecionadaPainel);
+          if (target === "portaria") carregarPortaria();
           if (target === "solicitacoes") carregarSolicitacoesPendentes();
           if (target === "hoje") carregarAgendamentosHoje();
           if (target === "novo-operacional") atualizarHorariosOperacionais();
@@ -735,6 +1135,12 @@
           if (target === "regras") { carregarRegras(); carregarExcecoes(); }
         });
       });
+
+      const tabParam = new URLSearchParams(window.location.search).get("tab");
+      if (tabParam) {
+        const alvo = document.querySelector(`.sidebar-item[data-tab="${tabParam}"]`);
+        if (alvo) alvo.click();
+      }
     }
 
     async function carregarDadosGerais() {
@@ -878,6 +1284,386 @@
     }
 
     /* ===================================================================
+       MÓDULO PORTARIA (incorporado do antigo portaria.html)
+
+       Reaproveita "todosBookingsGerais" (já carregado por
+       carregarDadosGerais(), usado também pela aba "Agend. de Hoje") em
+       vez de fazer uma consulta própria ao Firestore — evita duplicar
+       leituras e mantém a lista sempre em sincronia com o resto do
+       painel. Depois de qualquer ação (check-in/check-out/no-show/
+       encaixe), o padrão é: gravar no Firestore -> recarregar
+       carregarDadosGerais() -> re-renderizar as telas afetadas.
+       =================================================================== */
+    function obterAgendamentosHojeOrdenados() {
+      const hojeStr = new Date().toISOString().split("T")[0];
+      return todosBookingsGerais
+        .filter(b => b.dataAgendada === hojeStr)
+        .sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
+    }
+
+    function atualizarContadoresPortaria(lista) {
+      document.getElementById("count-p-todos").textContent = lista.length;
+      document.getElementById("count-p-aprovados").textContent = lista.filter(b => b.status === STATUS.APROVADO).length;
+      document.getElementById("count-p-empatio").textContent = lista.filter(b => b.status === STATUS.EM_PATIO).length;
+      document.getElementById("count-p-concluidos").textContent = lista.filter(b => b.status === STATUS.CONCLUIDO).length;
+      document.getElementById("count-p-noshow").textContent = lista.filter(b => b.status === STATUS.NO_SHOW).length;
+    }
+
+    function gerarBotoesAcaoPortaria(booking) {
+      if (booking.status === STATUS.APROVADO) {
+        return `
+          <button class="btn-acao btn-checkin" data-id="${booking.id}">Check-in</button>
+          <button class="btn-acao btn-noshow" data-id="${booking.id}">No-Show</button>
+        `;
+      } else if (booking.status === STATUS.EM_PATIO) {
+        return `<button class="btn-acao btn-checkout" data-id="${booking.id}">Check-out</button>`;
+      } else if (booking.status === STATUS.CONCLUIDO) {
+        const perf = booking.checkOut?.permanenciaMinutos !== undefined
+          ? formatarPermanencia(booking.checkOut.permanenciaMinutos)
+          : "-";
+        return `<small style="color:#155724; font-weight:bold;">Permanência: ${perf}</small>`;
+      } else {
+        return `<small style="color:#888;">Sem ações</small>`;
+      }
+    }
+
+    function renderizarTabelaPortaria() {
+      const tbody = document.getElementById("tbody-portaria");
+      const lista = obterAgendamentosHojeOrdenados();
+      atualizarContadoresPortaria(lista);
+
+      let listaFiltrada = lista;
+      if (filtroPortariaAtual !== "todos") {
+        listaFiltrada = lista.filter(b => b.status === filtroPortariaAtual);
+      }
+
+      if (listaFiltrada.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px; color: #888;">Nenhum registro encontrado para este filtro.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = listaFiltrada.map(b => {
+        const horaFormatada = b.horaInicio || "--:--";
+        const nomeProcesso = mapProcessos[b.tipoProcessoId] || b.tipoProcessoId || "Não especificado";
+        const badgeClasse = {
+          [STATUS.APROVADO]: "status-aprovado",
+          [STATUS.EM_PATIO]: "status-empatio",
+          [STATUS.CONCLUIDO]: "status-concluido",
+          [STATUS.NO_SHOW]: "status-noshow"
+        }[b.status] || "";
+
+        return `
+          <tr>
+            <td style="padding: 10px; font-weight: bold;">${escapeHtml(horaFormatada)}</td>
+            <td style="padding: 10px;">
+              ${escapeHtml(b.empresa || "Avulso")}
+              ${b.tipoAgendamento === TIPO_AGENDAMENTO.PORTARIA ? '<br><small style="color:#17a2b8;">⚡ Encaixe</small>' : ''}
+            </td>
+            <td style="padding: 10px;">
+              <b>Cavalo:</b> ${escapeHtml(b.placaCavalo || "-")}<br>
+              <small style="color:#666;">Carreta: ${escapeHtml(b.placaCarreta || "-")}</small>
+            </td>
+            <td style="padding: 10px;">${escapeHtml(b.motorista || "-")}</td>
+            <td style="padding: 10px;">${escapeHtml(nomeProcesso)}</td>
+            <td style="padding: 10px;">
+              <span class="badge-status ${badgeClasse}">${escapeHtml(b.status)}</span>
+              ${b.checkIn?.pontualidade ? `<br><small style="font-size:0.75rem; color:#666;">${escapeHtml(b.checkIn.pontualidade)}</small>` : ''}
+            </td>
+            <td style="padding: 10px; text-align: center;">
+              <div class="acoes-tabela" style="justify-content: center;">
+                ${gerarBotoesAcaoPortaria(b)}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join("");
+
+      vincularEventosAcaoPortaria();
+    }
+
+    function vincularEventosAcaoPortaria() {
+      document.querySelectorAll("#tbody-portaria .btn-checkin").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-id");
+          const booking = obterAgendamentosHojeOrdenados().find(b => b.id === id);
+          if (!booking) return;
+
+          document.getElementById("checkin-booking-id").value = booking.id;
+          document.getElementById("checkin-empresa").value = booking.empresa || "";
+          document.getElementById("checkin-placa-cavalo").value = booking.placaCavalo || "";
+          document.getElementById("checkin-placa-carreta").value = booking.placaCarreta || "";
+          document.getElementById("checkin-motorista").value = booking.motorista || "";
+          document.getElementById("checkin-hora-agendada").value = booking.horaInicio;
+
+          const pontualidade = calcularPontualidade(booking.horaInicio, new Date());
+          document.getElementById("checkin-pontualidade").value = pontualidade;
+
+          abrirModalPortaria("modal-checkin");
+        });
+      });
+
+      document.querySelectorAll("#tbody-portaria .btn-checkout").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-id");
+          const booking = obterAgendamentosHojeOrdenados().find(b => b.id === id);
+          if (!booking) return;
+
+          document.getElementById("checkout-booking-id").value = booking.id;
+          document.getElementById("checkout-nf").value = booking.checkOut?.notaFiscal || "";
+          document.getElementById("checkout-obs").value = "";
+
+          const entradaDate = booking.checkIn?.dataHora?.toDate ? booking.checkIn.dataHora.toDate() : new Date();
+          document.getElementById("checkout-entrada-timestamp").value = entradaDate.getTime();
+
+          const minutos = calcularTempoPermanenciaMinutos(entradaDate, new Date());
+          document.getElementById("checkout-permanencia").value = formatarPermanencia(minutos);
+
+          abrirModalPortaria("modal-checkout");
+        });
+      });
+
+      document.querySelectorAll("#tbody-portaria .btn-noshow").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.getAttribute("data-id");
+          const booking = obterAgendamentosHojeOrdenados().find(b => b.id === id);
+          if (!booking) return;
+
+          const confirmado = await mostrarConfirm(
+            `Confirmar que o veículo da empresa ${booking.empresa} (Horário: ${booking.horaInicio}) não compareceu (NO-SHOW)?`,
+            { titulo: "Confirmar No-Show", perigo: true, textoConfirmar: "Confirmar No-Show" }
+          );
+          if (confirmado) {
+            await registrarNoShowPortaria(booking);
+          }
+        });
+      });
+    }
+
+    function inicializarFormulariosPortaria() {
+      document.querySelectorAll("#tab-portaria .btn-filtro").forEach(btn => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll("#tab-portaria .btn-filtro").forEach(b => b.classList.remove("ativo"));
+          btn.classList.add("ativo");
+          filtroPortariaAtual = btn.getAttribute("data-filtro-portaria");
+          renderizarTabelaPortaria();
+        });
+      });
+
+      document.getElementById("btn-abrir-encaixe").addEventListener("click", () => {
+        document.getElementById("form-encaixe").reset();
+        abrirModalPortaria("modal-encaixe");
+      });
+
+      document.querySelectorAll(".btn-fechar-modal").forEach(btn => {
+        btn.addEventListener("click", fecharModaisPortaria);
+      });
+
+      // Check-in
+      document.getElementById("form-checkin").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const id = document.getElementById("checkin-booking-id").value;
+        const placaCavalo = document.getElementById("checkin-placa-cavalo").value.trim().toUpperCase();
+        const placaCarreta = document.getElementById("checkin-placa-carreta").value.trim().toUpperCase();
+        const motorista = document.getElementById("checkin-motorista").value.trim();
+        const horaAgendada = document.getElementById("checkin-hora-agendada").value;
+
+        const agora = new Date();
+        const pontualidade = calcularPontualidade(horaAgendada, agora);
+
+        // Compara os dados conferidos na portaria com o que foi originalmente
+        // cadastrado no agendamento — alimenta o KPI "Divergências de
+        // Cadastro" do painel de Logística.
+        const bookingOriginal = obterAgendamentosHojeOrdenados().find(b => b.id === id);
+        const divergente = !!bookingOriginal && (
+          (bookingOriginal.placaCavalo || "").toUpperCase() !== placaCavalo ||
+          (bookingOriginal.placaCarreta || "").toUpperCase() !== placaCarreta ||
+          (bookingOriginal.motorista || "").trim() !== motorista
+        );
+
+        try {
+          const bookingRef = doc(db, "bookings", id);
+          await updateDoc(bookingRef, {
+            placaCavalo,
+            placaCarreta,
+            motorista,
+            status: STATUS.EM_PATIO,
+            checkIn: {
+              dataHora: serverTimestamp(),
+              pontualidade: pontualidade,
+              dadosConferidos: true,
+              divergente
+            },
+            atualizadoEm: serverTimestamp(),
+            atualizadoPor: usuarioLogado.uid
+          });
+
+          await registrarAuditLog(id, "Check-In");
+          fecharModaisPortaria();
+          await carregarDadosGerais();
+          renderizarTabelaPortaria();
+          if (dataSelecionadaPainel === new Date().toISOString().split("T")[0]) {
+            carregarPainelDoDia(dataSelecionadaPainel);
+          }
+          mostrarToast("Check-in realizado.", { tipo: "sucesso" });
+        } catch (err) {
+          console.error("Erro ao realizar Check-in:", err);
+          await mostrarAlerta("Erro ao realizar check-in. Tente novamente.", { titulo: "Erro", tipo: "erro" });
+        }
+      });
+
+      // Check-out
+      document.getElementById("form-checkout").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const id = document.getElementById("checkout-booking-id").value;
+        const notaFiscal = document.getElementById("checkout-nf").value.trim();
+        const obsSaida = document.getElementById("checkout-obs").value.trim();
+        const entradaMs = parseInt(document.getElementById("checkout-entrada-timestamp").value, 10);
+
+        if (!notaFiscal) {
+          mostrarToast("O número da Nota Fiscal é obrigatório para realizar o Check-out.", { tipo: "erro" });
+          return;
+        }
+
+        const entradaDate = new Date(entradaMs);
+        const agora = new Date();
+        const permanenciaMinutos = calcularTempoPermanenciaMinutos(entradaDate, agora);
+
+        try {
+          const bookingRef = doc(db, "bookings", id);
+          await updateDoc(bookingRef, {
+            status: STATUS.CONCLUIDO,
+            checkOut: {
+              dataHora: serverTimestamp(),
+              notaFiscal: notaFiscal,
+              permanenciaMinutos: permanenciaMinutos,
+              observacoesSaida: obsSaida
+            },
+            atualizadoEm: serverTimestamp(),
+            atualizadoPor: usuarioLogado.uid
+          });
+
+          await registrarAuditLog(id, "Check-Out");
+          fecharModaisPortaria();
+          await carregarDadosGerais();
+          renderizarTabelaPortaria();
+          if (dataSelecionadaPainel === new Date().toISOString().split("T")[0]) {
+            carregarPainelDoDia(dataSelecionadaPainel);
+          }
+          mostrarToast("Check-out realizado.", { tipo: "sucesso" });
+        } catch (err) {
+          console.error("Erro ao realizar Check-out:", err);
+          await mostrarAlerta("Erro ao realizar check-out. Tente novamente.", { titulo: "Erro", tipo: "erro" });
+        }
+      });
+
+      // Entrada sem agendamento (Encaixe)
+      document.getElementById("form-encaixe").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const empresa = document.getElementById("encaixe-empresa").value.trim();
+        const placaCavalo = document.getElementById("encaixe-placa-cavalo").value.trim().toUpperCase();
+        const placaCarreta = document.getElementById("encaixe-placa-carreta").value.trim().toUpperCase();
+        const motorista = document.getElementById("encaixe-motorista").value.trim();
+        const tipoProcessoId = document.getElementById("encaixe-processo").value;
+        const obs = document.getElementById("encaixe-obs").value.trim();
+
+        const agora = new Date();
+        const horaInicio = `${String(agora.getHours()).padStart(2, "0")}:${String(agora.getMinutes()).padStart(2, "0")}`;
+
+        try {
+          const novoBooking = {
+            usuarioId: null,
+            empresa: empresa,
+            tipoProcessoId: tipoProcessoId,
+            dataAgendada: new Date().toISOString().split("T")[0],
+            horaInicio: horaInicio,
+            placaCavalo: placaCavalo,
+            placaCarreta: placaCarreta,
+            motorista: motorista,
+            observacoes: obs ? `[ENCAIXE PORTARIA] ${obs}` : "[ENCAIXE PORTARIA]",
+            status: STATUS.EM_PATIO,
+            tipoAgendamento: TIPO_AGENDAMENTO.PORTARIA,
+            vagaLiberada: false,
+            checkIn: {
+              dataHora: serverTimestamp(),
+              pontualidade: PONTUALIDADE.PONTUAL,
+              dadosConferidos: true
+            },
+            criadoEm: serverTimestamp(),
+            criadoPor: usuarioLogado.uid,
+            atualizadoEm: serverTimestamp(),
+            atualizadoPor: usuarioLogado.uid
+          };
+
+          const docRef = await addDoc(collection(db, "bookings"), novoBooking);
+          await registrarAuditLog(docRef.id, "Entrada Encaixe Portaria");
+
+          fecharModaisPortaria();
+          await carregarDadosGerais();
+          renderizarTabelaPortaria();
+          if (dataSelecionadaPainel === new Date().toISOString().split("T")[0]) {
+            carregarPainelDoDia(dataSelecionadaPainel);
+          }
+          mostrarToast("Entrada de encaixe registrada.", { tipo: "sucesso" });
+        } catch (err) {
+          console.error("Erro ao registrar entrada sem agendamento:", err);
+          await mostrarAlerta("Erro ao salvar entrada de encaixe. Tente novamente.", { titulo: "Erro", tipo: "erro" });
+        }
+      });
+    }
+
+    async function registrarNoShowPortaria(booking) {
+      try {
+        // mudarStatusBooking já libera a vaga em timeSlots.ocupados
+        // automaticamente (No-Show está em STATUS_LIBERA_VAGA).
+        await mudarStatusBooking(db, usuarioLogado, booking, STATUS.NO_SHOW);
+
+        await registrarAuditLog(booking.id, "No-Show");
+        await carregarDadosGerais();
+        renderizarTabelaPortaria();
+        if (dataSelecionadaPainel === new Date().toISOString().split("T")[0]) {
+          carregarPainelDoDia(dataSelecionadaPainel);
+        }
+        mostrarToast("No-Show registrado.", { tipo: "sucesso" });
+      } catch (err) {
+        console.error("Erro ao registrar No-Show:", err);
+        await mostrarAlerta(err.message || "Erro ao registrar No-Show.", { titulo: "Erro", tipo: "erro" });
+      }
+    }
+
+    function abrirModalPortaria(id) {
+      document.getElementById(id).classList.remove("oculto");
+    }
+
+    function fecharModaisPortaria() {
+      document.querySelectorAll(".modal-overlay-portaria").forEach(m => m.classList.add("oculto"));
+    }
+
+    function carregarPortaria() {
+      renderizarTabelaPortaria();
+    }
+
+    async function registrarAuditLog(bookingId, acao) {
+      try {
+        await addDoc(collection(db, "auditLogs"), {
+          bookingId,
+          usuarioId: usuarioLogado.uid,
+          acao,
+          dataHora: serverTimestamp()
+        });
+      } catch (e) {
+        console.error("Erro no auditLog:", e);
+      }
+    }
+
+    function preencherSelectProcessoEncaixe() {
+      const select = document.getElementById("encaixe-processo");
+      select.innerHTML = '<option value="">Selecione o processo...</option>';
+      Object.entries(mapProcessos).forEach(([id, nome]) => {
+        select.innerHTML += `<option value="${id}">${escapeHtml(nome)}</option>`;
+      });
+    }
+
+    /* ===================================================================
        ETAPA 2B: NOVO AGENDAMENTO OPERACIONAL DIRETO
        =================================================================== */
     async function carregarTransportadoras() {
@@ -996,14 +1782,21 @@
       tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Buscando pendentes...</td></tr>';
 
       try {
-        // Sem orderBy() de propósito: combinar where("status") com
-        // orderBy("dataAgendada") exige um índice composto no Firestore
-        // que nunca chegou a ser criado no banco — a consulta falhava
-        // silenciosamente e caía no catch abaixo. Buscando só por
-        // igualdade (que usa o índice automático de campo único, sempre
-        // disponível) e ordenando no cliente evita essa dependência.
+        // Sem orderBy() de propósito (mesmo motivo já documentado em outras
+        // consultas deste projeto): igualdade simples usa o índice automático
+        // de campo único, sem depender de índice composto.
         const q = query(collection(db, "bookings"), where("status", "==", "Pendente"));
         const snap = await getDocs(q);
+
+        const badge = document.getElementById("badge-solicitacoes");
+        if (badge) {
+          if (snap.empty) {
+            badge.style.display = "none";
+          } else {
+            badge.style.display = "inline-block";
+            badge.textContent = snap.size;
+          }
+        }
 
         if (snap.empty) {
           tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#888;">Nenhuma solicitação pendente.</td></tr>';
@@ -1187,14 +1980,6 @@
 
     /* ===================================================================
        REGRA PADRÃO DE ATENDIMENTO + EXCEÇÕES RECORRENTES
-
-       Tela reconstruída: existia antes, mas foi perdida em algum ponto
-       do histórico (o CSS responsivo em style.css ainda referenciava
-       #form-regra-slot/#form-excecao-slot, evidência de que a tela já
-       existiu). O motor de cálculo (buscarSlotsVirtuaisDoDia em
-       patioCore.js) e as Firestore Rules para timeSlotRules/
-       timeSlotExceptions nunca deixaram de existir — só faltava esta
-       interface de cadastro.
        =================================================================== */
     const DIAS_SEMANA_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
@@ -1532,27 +2317,6 @@
 
     /* ===================================================================
        ETAPA 5: GESTÃO DE VAGAS (AJUSTE MANUAL DE CAPACIDADE POR DIA)
-
-       Antes desta etapa o botão "Buscar Vagas" existia só no HTML, sem
-       nenhum handler — não fazia nada ao ser clicado. Esta seção
-       implementa a busca (reaproveitando obterHorariosDisponiveis, o
-       mesmo motor usado no painel do dia e no formulário de agendamento
-       operacional, com incluirFechados:true para também listar horários
-       fechados manualmente) e as ações de edição:
-
-         - Salvar: atualiza a capacidadeMax do horário para aquela data.
-         - Fechar / Reabrir: alterna o campo `ativo` do ajuste manual.
-         - Restaurar Padrão: apaga o ajuste manual (documento em
-           timeSlots), voltando a valer a Regra Padrão/Exceção vigente.
-           Só é oferecido quando não há nenhuma reserva usando a vaga
-           (ocupados === 0), mesma trava que existe nas Firestore Rules
-           (allow delete: if souLogisticaOuAdmin() && resource.data.ocupados == 0).
-
-       Todas as escritas usam setDoc(..., {merge:true}) com o documento
-       inteiro (não apenas o campo alterado), porque a validação das
-       Rules (`camposValidos`) confere o estado final do documento como
-       um todo — não faz sentido gravar um campo isolado se o doc ainda
-       não existir (horário nunca ajustado manualmente antes).
        =================================================================== */
     document.getElementById("btn-carregar-vagas").addEventListener("click", carregarVagas);
 
@@ -1702,12 +2466,6 @@
       });
     }
 
-    // Grava (cria ou atualiza) o ajuste manual do horário em timeSlots.
-    // Usa o documento inteiro com merge:true — necessário porque a
-    // primeira vez que um horário é ajustado manualmente, o documento
-    // ainda não existe (só existia "virtualmente", calculado pela
-    // Regra/Exceção), e as Rules exigem todos os campos válidos no
-    // resultado final da escrita (camposValidos), não só o campo alterado.
     async function salvarAjusteVaga(dataStr, slot, { capacidadeMax, ativo }) {
       const slotId = idSlotHorario(dataStr, slot.horaInicio);
       await setDoc(doc(db, "timeSlots", slotId), {
