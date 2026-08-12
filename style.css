@@ -1,25 +1,62 @@
 :root {
-  --azul-escuro: #0f2942;
-  --azul: #1a5f9e;
-  --laranja: #f28c28;
-  --verde: #2e9e5b;
-  --vermelho: #d64545;
-  --cinza-bg: #f4f6f8;
-  --cinza-borda: #d9dee3;
-  --texto: #1f2937;
-  --texto-suave: #6b7280;
+  /* =====================================================================
+     PALETA — sistema de pátio logístico (doca/contêiner/portaria), não o
+     azul corporativo genérico de SaaS. Nomes e justificativa:
+       Grafite Cais       #101922  — estrutura escura (topbar, menu lateral)
+       Aço Contêiner       #2C6E8E  — cor de pintura de contêiner marítimo,
+                                       usada como acento/ação primária
+       Âmbar de Sinalização #E8A33D — giroflex/sinalização de doca (alerta
+                                       "atenção", pendências, aviso)
+       Verde Liberado       #2F9E64 — status "liberado/aprovado"
+       Vermelho Interdição  #D64545 — status "bloqueado/recusado/crítico"
+       Cinza Concreto       #EEF0F1 — piso de pátio/concreto (fundo neutro)
+     Os NOMES das variáveis abaixo foram mantidos iguais aos originais de
+     propósito — assim toda tela que já usa var(--azul), var(--laranja)
+     etc. herda a nova paleta automaticamente, sem precisar editar cada
+     arquivo HTML/JS um por um.
+     ===================================================================== */
+  --azul-escuro: #101922;   /* Grafite Cais */
+  --azul: #2C6E8E;          /* Aço Contêiner */
+  --laranja: #E8A33D;       /* Âmbar de Sinalização */
+  --verde: #2F9E64;         /* Verde Liberado */
+  --vermelho: #D64545;      /* Vermelho Interdição */
+  --cinza-bg: #EEF0F1;      /* Cinza Concreto */
+  --cinza-borda: #D8DEE2;
+  --texto: #1A2229;
+  --texto-suave: #5B6670;
   --branco: #ffffff;
-  --sombra: 0 2px 8px rgba(15, 41, 66, 0.08);
+  --sombra: 0 2px 8px rgba(16, 25, 34, 0.10);
   --raio: 10px;
+
+  /* Adicionadas na revisão de identidade visual / microinterações */
+  --sombra-sm: 0 1px 3px rgba(16, 25, 34, 0.10);
+  --sombra-md: 0 6px 20px rgba(16, 25, 34, 0.14);
+  --sombra-lg: 0 14px 40px rgba(16, 25, 34, 0.22);
+  --transicao: 160ms cubic-bezier(.4, 0, .2, 1);
+  --raio-sm: 6px;
+  --raio-lg: 16px;
+
+  /* Sistema tipográfico de 3 papéis — ver comentário na seção de tipografia */
+  --fonte-corpo: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --fonte-display: 'Oswald', 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --fonte-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family: var(--fonte-corpo);
   background: var(--cinza-bg);
   color: var(--texto);
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, .marca, .logo {
+  font-family: var(--fonte-display);
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 /* ---------- Tela de Login / Cadastro / Recuperação ---------- */
@@ -89,9 +126,12 @@ button.btn-primario {
   color: var(--branco);
   border: none;
   padding: 12px;
-  border-radius: 6px;
+  border-radius: var(--raio-sm);
+  font-family: var(--fonte-display);
   font-size: 1rem;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
   cursor: pointer;
   transition: background .15s;
 }
@@ -197,7 +237,10 @@ button.btn-primario:disabled { opacity: 0.6; cursor: not-allowed; }
 .modal-caixa.modal-erro { border-top-color: var(--vermelho); }
 .modal-caixa.modal-pergunta { border-top-color: var(--laranja); }
 
-.modal-icone { font-size: 1.8rem; margin-bottom: 10px; }
+.modal-icone { font-size: 1.8rem; margin-bottom: 10px; color: var(--azul); }
+.modal-caixa.modal-sucesso .modal-icone { color: var(--verde); }
+.modal-caixa.modal-erro .modal-icone { color: var(--vermelho); }
+.modal-caixa.modal-pergunta .modal-icone { color: var(--laranja); }
 .modal-titulo { font-size: 1.05rem; font-weight: 700; color: var(--azul-escuro); margin-bottom: 8px; }
 .modal-mensagem { font-size: 0.9rem; color: var(--texto); line-height: 1.5; margin-bottom: 22px; white-space: pre-line; }
 
@@ -293,16 +336,21 @@ button.btn-primario:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 
 .badge {
-  display: inline-block;
-  padding: 3px 10px;
-  border-radius: 20px;
-  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 4px;
+  font-family: var(--fonte-mono);
+  font-size: 0.72rem;
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-left: 3px solid currentColor;
 }
 
-.badge.pendente { background: #fff3e0; color: var(--laranja); }
-.badge.aprovado { background: #e6f7ed; color: var(--verde); }
-.badge.recusado, .badge.expirado { background: #fdeaea; color: var(--vermelho); }
+.badge.pendente { background: #fdf1de; color: #a5680b; }
+.badge.aprovado { background: #e4f5ec; color: var(--verde); }
+.badge.recusado, .badge.expirado { background: #fbe9e9; color: var(--vermelho); }
 
 /* ---------- Abas ---------- */
 .tabs {
@@ -316,8 +364,11 @@ button.btn-primario:disabled { opacity: 0.6; cursor: not-allowed; }
   background: none;
   border: none;
   padding: 10px 18px;
-  font-size: 0.95rem;
+  font-family: var(--fonte-display);
+  font-size: 0.85rem;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--texto-suave);
   cursor: pointer;
   border-bottom: 3px solid transparent;
@@ -406,9 +457,11 @@ button.btn-primario:disabled { opacity: 0.6; cursor: not-allowed; }
   padding: 9px 14px;
   border: none;
   border-radius: 7px;
-  font-size: 0.82rem;
+  font-family: var(--fonte-display);
+  font-size: 0.78rem;
   font-weight: 600;
-  font-family: inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
   cursor: pointer;
   transition: opacity .15s, transform .05s, background .15s;
   white-space: nowrap;
@@ -785,7 +838,7 @@ button, .btn-primario, .btn-acao, .tab-btn, .topbar button, .slot-opcao, .btn-sl
 .nivel-fechado .faixa-horario-barra-preenchida { background: #b8c0c9; }
 
 .faixa-horario-contagem { font-size: 0.82rem; font-weight: 600; color: var(--texto-suave); min-width: 54px; text-align: right; white-space: nowrap; }
-.faixa-horario-seta { font-size: 0.75rem; color: var(--texto-suave); transition: transform .15s; }
+.faixa-horario-seta { display: inline-flex; font-size: 0.75rem; color: var(--texto-suave); transition: transform .15s; }
 .faixa-horario.aberta .faixa-horario-seta { transform: rotate(90deg); }
 
 .faixa-horario-corpo { display: none; padding: 0 14px 14px; border-top: 1px solid var(--cinza-borda); }
@@ -876,7 +929,9 @@ button, .btn-primario, .btn-acao, .tab-btn, .topbar button, .slot-opcao, .btn-sl
 .toast.toast-erro { border-left-color: var(--vermelho); }
 .toast.toast-info { border-left-color: var(--azul); }
 
-.toast .toast-icone { font-size: 1.05rem; line-height: 1.3; flex-shrink: 0; }
+.toast .toast-icone { font-size: 1.05rem; line-height: 1.3; flex-shrink: 0; color: var(--azul); }
+.toast.toast-sucesso .toast-icone { color: var(--verde); }
+.toast.toast-erro .toast-icone { color: var(--vermelho); }
 .toast .toast-mensagem { flex: 1; line-height: 1.4; }
 .toast .toast-fechar {
   background: none;
@@ -909,3 +964,235 @@ button, .btn-primario, .btn-acao, .tab-btn, .topbar button, .slot-opcao, .btn-sl
     max-width: none;
   }
 }
+
+/* =====================================================================
+   MICROINTERAÇÕES E REFINO DE IDENTIDADE VISUAL
+   Acrescentado ao final do arquivo de propósito: como o CSS resolve
+   empates de especificidade pela ordem de declaração, colocar estas
+   regras por último garante que elas "vençam" sobre as equivalentes
+   já declaradas acima, sem precisar de seletores mais específicos nem
+   de !important. Nenhuma classe/estrutura HTML precisa mudar — tudo
+   aqui reaproveita seletores que já existem nas telas.
+   ===================================================================== */
+
+/* ---------- Transições globais: qualquer hover/foco/clique fica suave
+   em vez de instantâneo, em qualquer elemento interativo do sistema ---------- */
+button,
+.btn-primario,
+.btn-acao,
+.tab-btn,
+.sidebar-item,
+.chip-dia,
+.faixa-horario-cabecalho,
+.kpi-card,
+.item-agendamento,
+.campo input,
+.campo select,
+.campo textarea,
+input,
+select,
+textarea,
+.badge,
+.badge-status,
+.toast,
+.modal-caixa,
+.btn-slot,
+.slot-opcao,
+.btn-filtro,
+.dia-semana-opcao {
+  transition:
+    background var(--transicao),
+    color var(--transicao),
+    border-color var(--transicao),
+    box-shadow var(--transicao),
+    transform var(--transicao),
+    opacity var(--transicao);
+}
+
+/* ---------- Botões primários: leve elevação ao passar o mouse, "afundam" ao clicar ---------- */
+button.btn-primario:hover:not(:disabled) {
+  box-shadow: var(--sombra-md);
+  transform: translateY(-1px);
+}
+button.btn-primario:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+  box-shadow: var(--sombra-sm);
+}
+
+.btn-acao:hover:not(:disabled) { box-shadow: var(--sombra-sm); transform: translateY(-1px); }
+.btn-acao:active:not(:disabled) { transform: scale(0.96); }
+
+/* ---------- Cartões e itens interativos: elevação sutil ao passar o mouse
+   (sinaliza "isso responde a você", sem exagerar) ---------- */
+.kpi-card:hover,
+.item-agendamento:hover,
+.chip-dia:hover {
+  box-shadow: var(--sombra-md);
+  transform: translateY(-2px);
+}
+
+.faixa-horario-cabecalho:hover { background: rgba(15, 41, 66, 0.03); }
+
+/* ---------- Campos de formulário: anel de foco visível e consistente
+   (acessibilidade + feedback claro de "você está aqui") ---------- */
+.campo input:focus,
+.campo select:focus,
+.campo textarea:focus,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--azul);
+  box-shadow: 0 0 0 3px rgba(26, 95, 158, 0.18);
+}
+
+button:focus-visible,
+.btn-primario:focus-visible,
+.btn-acao:focus-visible,
+.sidebar-item:focus-visible,
+.tab-btn:focus-visible {
+  outline: 2px solid var(--azul);
+  outline-offset: 2px;
+}
+
+/* ---------- Troca de conteúdo (abas / menu lateral): entrada suave em vez
+   de aparecer abruptamente ---------- */
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.tab-conteudo.ativo {
+  animation: fadeSlideIn 220ms ease-out;
+}
+
+/* ---------- Badge de pendências no menu lateral: "respira" para chamar
+   atenção sem ser irritante (não é um alerta piscando) ---------- */
+@keyframes respirarBadge {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+.sidebar-badge {
+  animation: respirarBadge 2.2s ease-in-out infinite;
+}
+
+/* ---------- Botões de horário (slots de agendamento): feedback claro ---------- */
+.btn-slot:hover:not(.esgotado):not(.selecionado),
+.slot-opcao:hover:not(.selecionado) {
+  transform: translateY(-1px);
+  box-shadow: var(--sombra-sm);
+}
+.btn-slot.selecionado, .slot-opcao.selecionado {
+  box-shadow: var(--sombra-sm);
+}
+
+/* ---------- Checkboxes de dias da semana: feedback ao marcar ---------- */
+.dia-semana-opcao:has(input:checked) {
+  transform: translateY(-1px);
+  box-shadow: var(--sombra-sm);
+}
+
+/* ---------- Cards principais: cantos um pouco mais suaves (visual mais
+   premium, menos "quadrado") ---------- */
+.card, .login-card {
+  border-radius: var(--raio-lg);
+}
+
+/* ---------- Spinner reutilizável para botões em estado de carregamento
+   Uso opcional em qualquer tela: btn.classList.add("carregando") antes
+   da chamada assíncrona, e .remove("carregando") no finally — mantém o
+   texto original do botão (só fica transparente) e soma um spinner
+   girando por cima. Nenhuma tela precisa disso pra funcionar; é uma
+   melhoria incremental que pode ser adotada aos poucos. ---------- */
+.carregando {
+  position: relative;
+  color: transparent !important;
+  pointer-events: none;
+}
+.carregando::after {
+  content: "";
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 16px; height: 16px;
+  margin: -8px 0 0 -8px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: girarSpinner 0.6s linear infinite;
+}
+.btn-desativar.carregando::after,
+.modal-btn-secundario.carregando::after {
+  border-color: rgba(15,41,66,0.25);
+  border-top-color: var(--azul-escuro);
+}
+@keyframes girarSpinner { to { transform: rotate(360deg); } }
+
+/* ---------- Acessibilidade: respeita quem pediu menos animação no
+   sistema operacional (prefers-reduced-motion) ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* =====================================================================
+   TIPOGRAFIA DE DADOS + ÍCONES (revisão de paleta/ícones/botões)
+   ===================================================================== */
+
+/* Cabeçalho de card no estilo "seção de manifesto": maiúsculas
+   condensadas + régua fina — reforça a identidade sem exigir nenhuma
+   classe nova no HTML (aplica-se a qualquer h2/h3/h4 filho direto de
+   .card, que é o padrão já usado em todas as telas). */
+.card > h2, .card > h3, .card > h4 {
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 1rem;
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+  border-bottom: 2px solid var(--cinza-bg);
+}
+
+/* Números e horários lidos como dado (não como prosa) ganham a fonte
+   monoespaçada — remete a manifesto/ticket impresso e melhora o
+   escaneamento de horários e placas em tabelas. */
+.kpi-valor,
+.faixa-horario-hora,
+.faixa-horario-contagem,
+.chip-dia-numero,
+.item-agendamento .data-hora,
+.badge,
+.badge-status {
+  font-family: var(--fonte-mono);
+}
+
+/* ---------- Ícones SVG inline (substituem os emojis) ----------
+   Uso: <svg class="icon">...</svg> ou <svg class="icon icon-lg">.
+   stroke="currentColor" nos paths deixa a cor herdar do elemento pai
+   (funciona em botões, badges, texto colorido etc. sem CSS extra). */
+.icon {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.15em;
+  flex-shrink: 0;
+}
+.icon-lg { width: 1.3em; height: 1.3em; }
+.icon-sm { width: 0.85em; height: 0.85em; }
+
+.marca .icon, .logo .icon {
+  width: 1.15em;
+  height: 1.15em;
+  vertical-align: -0.2em;
+  margin-right: 2px;
+}
+
+button, .btn-primario, .btn-acao, .sidebar-item, .tab-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.btn-primario, button.btn-primario { justify-content: center; }
+.sidebar-item { justify-content: flex-start; }
+.acoes-tabela .btn-acao, .modal-botoes button, #tbody-portaria .btn-acao { display: inline-flex; align-items: center; gap: 5px; }

@@ -13,7 +13,7 @@
 <body>
 
   <div class="topbar">
-    <div class="marca">🚛 Agendamento de Pátio</div>
+    <div class="marca"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="9"></rect><path d="M14 10h4l3 3v3h-7z"></path><circle cx="6" cy="18" r="2"></circle><circle cx="17" cy="18" r="2"></circle></svg> Agendamento de Pátio</div>
     <div>
       <span id="user-empresa" style="margin-right:16px; font-size:0.9rem; opacity:.85;"></span>
       <button id="btn-logout">Sair</button>
@@ -140,12 +140,16 @@
 
     function mostrarAlerta(mensagem, opcoes = {}) {
       const { titulo = "Aviso", tipo = "info" } = opcoes;
-      const icones = { sucesso: "✅", erro: "⚠️", info: "ℹ️" };
+      const icones = {
+        sucesso: '<svg class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><polyline points="8 12.5 11 15.5 16 9.5"></polyline></svg>',
+        erro: '<svg class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 L21.5 20 L2.5 20 Z"></path><line x1="12" y1="9.5" x2="12" y2="14"></line><circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none"></circle></svg>',
+        info: '<svg class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16"></line><circle cx="12" cy="8" r="0.6" fill="currentColor" stroke="none"></circle></svg>'
+      };
       return new Promise((resolve) => {
         const overlay = document.getElementById("modal-overlay");
         const caixa = document.getElementById("modal-caixa");
         caixa.className = `modal-caixa modal-${tipo}`;
-        document.getElementById("modal-icone").textContent = icones[tipo] || icones.info;
+        document.getElementById("modal-icone").innerHTML = icones[tipo] || icones.info;
         document.getElementById("modal-titulo").textContent = titulo;
         document.getElementById("modal-mensagem").textContent = mensagem;
         document.getElementById("modal-botoes").innerHTML =
@@ -169,7 +173,7 @@
         const overlay = document.getElementById("modal-overlay");
         const caixa = document.getElementById("modal-caixa");
         caixa.className = "modal-caixa modal-pergunta";
-        document.getElementById("modal-icone").textContent = perigo ? "⚠️" : "❓";
+        document.getElementById("modal-icone").innerHTML = perigo ? '<svg class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 L21.5 20 L2.5 20 Z"></path><line x1="12" y1="9.5" x2="12" y2="14"></line><circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none"></circle></svg>' : '<svg class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1.3 1-1.3 1.9"></path><circle cx="12" cy="16.5" r="0.6" fill="currentColor" stroke="none"></circle></svg>';
         document.getElementById("modal-titulo").textContent = titulo;
         document.getElementById("modal-mensagem").textContent = mensagem;
         document.getElementById("modal-botoes").innerHTML = `
@@ -213,7 +217,11 @@
 
     function mostrarToast(mensagem, opcoes = {}) {
       const { tipo = "info", duracaoMs = 3500 } = opcoes;
-      const icones = { sucesso: "✅", erro: "⚠️", info: "ℹ️" };
+      const icones = {
+        sucesso: '<svg class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><polyline points="8 12.5 11 15.5 16 9.5"></polyline></svg>',
+        erro: '<svg class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 L21.5 20 L2.5 20 Z"></path><line x1="12" y1="9.5" x2="12" y2="14"></line><circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none"></circle></svg>',
+        info: '<svg class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16"></line><circle cx="12" cy="8" r="0.6" fill="currentColor" stroke="none"></circle></svg>'
+      };
       const container = document.getElementById("toast-container");
 
       const toast = document.createElement("div");
@@ -647,7 +655,7 @@
 
           div.innerHTML = `
             <div class="linha-topo">
-              <span class="data-hora">📅 ${formatarData(a.dataAgendada)} às ${escapeHtml(a.horaInicio || "-")}</span>
+              <span class="data-hora"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><line x1="3" y1="10" x2="21" y2="10"></line><line x1="8" y1="3" x2="8" y2="7"></line><line x1="16" y1="3" x2="16" y2="7"></line></svg> ${formatarData(a.dataAgendada)} às ${escapeHtml(a.horaInicio || "-")}</span>
               <span class="badge ${statusClasse}">${escapeHtml(a.status || "Pendente")}</span>
             </div>
             <div class="detalhes">
