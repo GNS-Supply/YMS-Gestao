@@ -2,140 +2,668 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#0f2942">
-  <title>Agendamento de Pátio - Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vitrine de Artes - Sublimação</title>
+
+  <link id="dynamicFavicon" rel="icon" type="image/x-icon" href="">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <div class="login-wrap">
-    <div class="login-card">
-      <div class="logo">🚛 Agendamento de Pátio</div>
-      <div class="subtitulo">Entre com seu e-mail e senha cadastrados</div>
-
-      <form id="login-form">
-        <div class="campo">
-          <label for="email">E-mail</label>
-          <input type="email" id="email" required autocomplete="username">
-        </div>
-        <div class="campo">
-          <label for="senha">Senha</label>
-          <div class="campo-senha-wrap">
-            <input type="password" id="senha" required autocomplete="current-password">
-            <button type="button" class="btn-toggle-senha" data-target="senha" aria-label="Mostrar senha">👁️</button>
-          </div>
-        </div>
-        <button type="submit" class="btn-primario">Entrar</button>
-        <div class="erro" id="login-error"></div>
-      </form>
-
-      <div class="login-links">
-        <a href="cadastro.html">Criar conta</a>
-        <span class="separador">·</span>
-        <a href="recuperarsenha.html">Esqueci minha senha</a>
-      </div>
-    </div>
+  <div id="headerBanner" class="header-banner escondido">
+    <img id="headerBannerImg" src="" alt="Cabeçalho">
   </div>
 
+  <header class="site-header">
+    <div class="brand">
+      <h1>Vitrine de Artes</h1>
+      <span>Artes digitais prontas para sublimação</span>
+    </div>
+    <button id="btnLogin" class="btn-engrenagem" title="Área Administrativa" aria-label="Abrir área administrativa">⚙️</button>
+  </header>
+
+  <div id="modalOverlay" class="modal-overlay escondido"></div>
+
+  <div id="boxLogin" class="modal-login escondido" role="dialog" aria-modal="true" aria-labelledby="tituloLogin">
+    <div class="modal-login-header">
+      <h3 id="tituloLogin">Acesso Restrito</h3>
+      <button id="btnFecharModal" class="btn-fechar-modal" aria-label="Fechar">✕</button>
+    </div>
+    <div class="form-group">
+      <label for="emailInput">E-mail do Admin:</label>
+      <input type="email" id="emailInput" placeholder="admin@email.com" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label for="senhaInput">Senha:</label>
+      <input type="password" id="senhaInput" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button id="btnFazerLogin" class="btn btn-primary">Entrar</button>
+    <div id="msgErro" class="status-msg" style="color: var(--danger);" role="alert"></div>
+  </div>
+
+  <div id="painelAdmin" class="painel-admin escondido">
+    <h3 id="tituloPainel">
+      Painel de Gestão
+      <button id="btnFazerLogout" class="btn-link" style="color: var(--danger);">Sair</button>
+    </h3>
+
+    <details class="secao-personalizacao">
+      <summary>🎨 Identidade Visual (Favicon &amp; Banner)</summary>
+      <div class="form-group" style="margin-top: 14px;">
+        <label for="faviconFile">Favicon da Página (Ícone da Aba):</label>
+        <input type="file" id="faviconFile" accept="image/*">
+        <span class="hint">Imagem quadrada funciona melhor.</span>
+      </div>
+      <div class="form-group" style="margin-bottom: 0;">
+        <label for="headerFile">Banner Superior (Header do Site):</label>
+        <input type="file" id="headerFile" accept="image/*">
+        <span class="hint">Formato paisagem, largo e baixo.</span>
+      </div>
+      <button id="btnSalvarIdentidade" class="btn btn-secondary" style="margin-top: 16px;">Atualizar Visual do Site</button>
+    </details>
+
+    <hr class="form-divider">
+
+    <input type="hidden" id="editDocId" value="">
+
+    <div class="form-group">
+      <label for="titulo">Título do Carrossel:</label>
+      <input type="text" id="titulo" placeholder="Ex: Pacote Canecas de Páscoa">
+    </div>
+
+    <div class="form-row">
+      <div class="form-group flex-1">
+        <label for="categoria">Categoria:</label>
+        <input type="text" id="categoria" placeholder="Ex: Páscoa">
+      </div>
+      <div class="form-group flex-1">
+        <label for="classe">Classe / Subcategoria:</label>
+        <input type="text" id="classe" placeholder="Ex: Canecas, Almofadas...">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="descricao">Descrição:</label>
+      <textarea id="descricao" rows="2" placeholder="Ex: Pacote com 10 artes digitais em alta resolução..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="preco">Valor (R$):</label>
+      <input type="text" id="preco" placeholder="Ex: 29,90">
+    </div>
+
+    <div class="form-group">
+      <label for="linkCompra">Link de Destino / Checkout:</label>
+      <input type="url" id="linkCompra" placeholder="https://seu-link.com">
+    </div>
+
+    <div class="form-group">
+      <label for="imagemFile">Imagens do Carrossel (Otimização Automática):</label>
+      <input type="file" id="imagemFile" accept="image/*" multiple>
+      <span class="hint">Deixe em branco na edição para manter as imagens atuais.</span>
+    </div>
+
+    <button id="btnSalvar" class="btn btn-primary">Publicar Carrossel</button>
+    <button id="btnCancelarEdit" class="btn btn-secondary escondido">Cancelar Edição</button>
+    <div id="statusUpload" class="status-msg"></div>
+  </div>
+
+  <div class="area-filtros">
+    <div class="area-busca">
+      <div class="campo-busca-wrap">
+        <span class="icone-busca" aria-hidden="true">🔍</span>
+        <input type="text" id="campoBusca" class="campo-busca" placeholder="Digite para buscar uma arte..." aria-label="Buscar arte">
+      </div>
+    </div>
+
+    <div id="containerFiltros" class="menu-categorias"></div>
+  </div>
+
+  <div class="vitrine" id="vitrineProdutos"></div>
+
   <script type="module">
-    import { auth, db } from "./firebase-config.js";
-    import {
-      signInWithEmailAndPassword,
-      signOut
-    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-    import {
-      doc,
-      getDoc
-    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+    import { db, auth, storage } from './firebase-config.js';
+    import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { ref, uploadString, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
-    const form = document.getElementById("login-form");
-    const errorBox = document.getElementById("login-error");
+    let usuarioAtual = null;
+    let produtosMemoria = [];
+    let filtroCategoriaAtiva = 'TODOS';
+    let filtroClasseAtiva = 'TODOS';
 
-    // Botão "mostrar/ocultar senha"
-    document.querySelectorAll(".btn-toggle-senha").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const input = document.getElementById(btn.dataset.target);
-        if (!input) return;
-        const mostrando = input.type === "text";
-        input.type = mostrando ? "password" : "text";
-        btn.textContent = mostrando ? "👁️" : "🙈";
-        btn.setAttribute("aria-label", mostrando ? "Mostrar senha" : "Ocultar senha");
-      });
-    });
+    // ===== TOAST (feedback visual não intrusivo) =====
+    function mostrarToast(texto, tipo = 'padrao') {
+      const anterior = document.querySelector('.toast');
+      if (anterior) anterior.remove();
+      const toast = document.createElement('div');
+      toast.className = `toast ${tipo === 'erro' ? 'toast-erro' : tipo === 'sucesso' ? 'toast-sucesso' : ''}`;
+      toast.innerText = texto;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 2600);
+    }
 
-    // Mapa de redirecionamento por tipo de perfil (arquivos todos na raiz)
-    const ROTAS_POR_TIPO = {
-      1: "transportadora-dashboard.html",
-      2: "logistica-dashboard.html",
-      3: "admin-dashboard.html"
+    // ===== MODAL DE LOGIN =====
+    window.abrirModalLogin = function() {
+      const box = document.getElementById('boxLogin');
+      const overlay = document.getElementById('modalOverlay');
+      if (box && overlay) {
+        box.classList.remove('escondido');
+        overlay.classList.remove('escondido');
+        document.getElementById('emailInput').focus();
+      }
     };
 
-    form?.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      errorBox.textContent = "";
+    window.fecharModalLogin = function() {
+      document.getElementById('boxLogin').classList.add('escondido');
+      document.getElementById('modalOverlay').classList.add('escondido');
+    };
 
-      const email = document.getElementById("email").value.trim();
-      const senha = document.getElementById("senha").value;
-      const btn = form.querySelector("button[type=submit]");
-      btn.disabled = true;
-      btn.textContent = "Entrando...";
+    document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById('btnLogin').addEventListener('click', window.abrirModalLogin);
+      document.getElementById('btnFecharModal').addEventListener('click', window.fecharModalLogin);
+      document.getElementById('modalOverlay').addEventListener('click', window.fecharModalLogin);
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') window.fecharModalLogin();
+      });
 
-      try {
-        const cred = await signInWithEmailAndPassword(auth, email, senha);
-        const userSnap = await getDoc(doc(db, "users", cred.user.uid));
+      document.getElementById('btnFazerLogin').addEventListener('click', fazerLogin);
+      document.getElementById('btnFazerLogout').addEventListener('click', () => signOut(auth));
+      document.getElementById('btnSalvar').addEventListener('click', salvarCarrossel);
+      document.getElementById('btnSalvarIdentidade').addEventListener('click', salvarIdentidadeVisual);
+      document.getElementById('btnCancelarEdit').addEventListener('click', cancelarEdicao);
+      document.getElementById('campoBusca').addEventListener('keyup', filtrarVitrine);
 
-        if (!userSnap.exists()) {
-          throw new Error("Usuário autenticado, mas sem perfil cadastrado. Contate o administrador.");
-        }
-
-        const dadosUser = userSnap.data();
-
-        if (dadosUser.status === "pendente_aprovacao") {
-          await signOut(auth);
-          throw new Error("Seu cadastro ainda está aguardando aprovação de um administrador.");
-        }
-        if (dadosUser.status === "suspenso") {
-          await signOut(auth);
-          throw new Error("Sua conta está suspensa. Entre em contato com um administrador.");
-        }
-        if (dadosUser.status === "recusado") {
-          await signOut(auth);
-          throw new Error("Seu cadastro foi recusado. Entre em contato com um administrador.");
-        }
-        if (dadosUser.status !== "aprovado") {
-          await signOut(auth);
-          throw new Error("Sua conta não está com acesso liberado no momento.");
-        }
-
-        const rota = ROTAS_POR_TIPO[dadosUser.tipo];
-        if (!rota) {
-          await signOut(auth);
-          throw new Error("Perfil de usuário inválido ou sem acesso definido.");
-        }
-
-        window.location.href = rota;
-      } catch (err) {
-        console.error(err);
-        errorBox.textContent = traduzErro(err.code) || err.message;
-      } finally {
-        btn.disabled = false;
-        btn.textContent = "Entrar";
-      }
+      mostrarSkeletons();
+      carregarIdentidadeVisual();
     });
 
-    function traduzErro(code) {
-      const mapa = {
-        "auth/invalid-email": "E-mail inválido.",
-        "auth/user-not-found": "Usuário não encontrado.",
-        "auth/wrong-password": "Senha incorreta.",
-        "auth/invalid-credential": "E-mail ou senha incorretos.",
-        "auth/too-many-requests": "Muitas tentativas. Tente novamente em alguns minutos."
-      };
-      return mapa[code];
+    // AUTENTICAÇÃO FIREBASE
+    onAuthStateChanged(auth, (user) => {
+      usuarioAtual = user;
+      if (user) {
+        document.getElementById('painelAdmin').classList.remove('escondido');
+        window.fecharModalLogin();
+      } else {
+        document.getElementById('painelAdmin').classList.add('escondido');
+      }
+      carregarProdutos();
+    });
+
+    async function fazerLogin() {
+      const email = document.getElementById('emailInput').value;
+      const senha = document.getElementById('senhaInput').value;
+      const msgErro = document.getElementById('msgErro');
+      const btn = document.getElementById('btnFazerLogin');
+
+      if (!email || !senha) {
+        msgErro.innerText = "Preencha e-mail e senha.";
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerText = "Entrando...";
+      try {
+        await signInWithEmailAndPassword(auth, email, senha);
+        msgErro.innerText = "";
+      } catch (error) {
+        msgErro.innerText = "Credenciais inválidas. Tente novamente.";
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "Entrar";
+      }
+    }
+
+    // COMPRESSOR DE IMAGENS AUTOMÁTICO (WEBP)
+    async function comprimirImagem(file, maxDimension = 1000) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const img = new Image();
+          img.onload = function() {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height && width > maxDimension) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else if (height > maxDimension) {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, width, height);
+
+            let base64 = canvas.toDataURL('image/webp', 0.82);
+            if (!base64.startsWith('data:image/webp')) {
+              base64 = canvas.toDataURL('image/jpeg', 0.82);
+            }
+            resolve(base64);
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // ENVIO PARA O FIREBASE STORAGE
+    // Em vez de guardar a imagem em base64 dentro do documento do Firestore
+    // (que tem limite rígido de 1 MiB por documento), enviamos o arquivo para
+    // o Storage e guardamos apenas a URL pública no Firestore.
+    async function enviarParaStorage(base64, caminho) {
+      const storageRef = ref(storage, caminho);
+      await uploadString(storageRef, base64, 'data_url');
+      return await getDownloadURL(storageRef);
+    }
+
+    // Remove imagens antigas do Storage (usado ao editar ou excluir um carrossel).
+    // Silencia erros individuais para não travar o fluxo caso um arquivo já
+    // tenha sido removido antes.
+    async function removerImagensStorage(urls) {
+      if (!urls || urls.length === 0) return;
+      await Promise.all(urls.map(async (url) => {
+        try {
+          await deleteObject(ref(storage, url));
+        } catch (e) {
+          console.warn("Não foi possível remover imagem antiga do Storage:", url, e);
+        }
+      }));
+    }
+
+    // GESTÃO DE IDENTIDADE VISUAL
+    async function salvarIdentidadeVisual() {
+      const favFile = document.getElementById('faviconFile').files[0];
+      const headFile = document.getElementById('headerFile').files[0];
+      const status = document.getElementById('statusUpload');
+      const btn = document.getElementById('btnSalvarIdentidade');
+
+      if (!favFile && !headFile) {
+        mostrarToast("Selecione uma imagem antes de atualizar.", "erro");
+        return;
+      }
+
+      btn.disabled = true;
+      let dadosConfig = {};
+
+      try {
+        if (favFile) {
+          status.innerText = "⏳ Enviando favicon...";
+          const base64Fav = await comprimirImagem(favFile, 128);
+          dadosConfig.favicon = await enviarParaStorage(base64Fav, `configuracoes/favicon_${Date.now()}.webp`);
+        }
+        if (headFile) {
+          status.innerText = "⏳ Enviando banner...";
+          const base64Head = await comprimirImagem(headFile, 1200);
+          dadosConfig.headerBanner = await enviarParaStorage(base64Head, `configuracoes/header_${Date.now()}.webp`);
+        }
+
+        status.innerText = "💾 Salvando configurações...";
+        await setDoc(doc(db, "configuracoes", "visual"), dadosConfig, { merge: true });
+        status.innerText = "";
+        mostrarToast("Visual do site atualizado!", "sucesso");
+        carregarIdentidadeVisual();
+      } catch (e) {
+        console.error("Erro ao atualizar visual:", e);
+        status.innerText = "";
+        mostrarToast("Erro ao atualizar visual.", "erro");
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function carregarIdentidadeVisual() {
+      try {
+        const docSnap = await getDoc(doc(db, "configuracoes", "visual"));
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.favicon) {
+            document.getElementById('dynamicFavicon').href = data.favicon;
+          }
+          if (data.headerBanner) {
+            document.getElementById('headerBannerImg').src = data.headerBanner;
+            document.getElementById('headerBanner').classList.remove('escondido');
+          }
+        }
+      } catch (e) {
+        console.error("Erro ao carregar configurações de marca:", e);
+      }
+    }
+
+    // SALVAR OU EDITAR CARROSSEL
+    async function salvarCarrossel() {
+      const docId = document.getElementById('editDocId').value;
+      const titulo = document.getElementById('titulo').value;
+      const categoria = document.getElementById('categoria').value.trim() || 'Geral';
+      const classe = document.getElementById('classe').value.trim() || 'Geral';
+      const descricao = document.getElementById('descricao').value;
+      const preco = document.getElementById('preco').value;
+      const link = document.getElementById('linkCompra').value;
+      const files = document.getElementById('imagemFile').files;
+      const statusUpload = document.getElementById('statusUpload');
+      const btnSalvar = document.getElementById('btnSalvar');
+
+      if (!titulo || !link) {
+        mostrarToast("Preencha ao menos o Título e o Link!", "erro");
+        return;
+      }
+
+      let imgs = [];
+      let imagensAntigasParaRemover = [];
+      btnSalvar.disabled = true;
+
+      try {
+        if (files.length > 0) {
+          // ID usado apenas para organizar as pastas no Storage.
+          const idBase = docId || `novo_${Date.now()}`;
+
+          // Se estamos editando e o usuário selecionou novas imagens, as
+          // antigas serão substituídas — marcamos para remover do Storage
+          // depois que a gravação der certo.
+          if (docId) {
+            const itemExistente = produtosMemoria.find(p => p.id === docId);
+            if (itemExistente) imagensAntigasParaRemover = itemExistente.imagens || [];
+          }
+
+          for (let i = 0; i < files.length; i++) {
+            statusUpload.innerText = `⏳ Otimizando e enviando imagem ${i + 1} de ${files.length}...`;
+            const base64 = await comprimirImagem(files[i]);
+            const caminho = `produtos/${idBase}/${Date.now()}_${i}.webp`;
+            const url = await enviarParaStorage(base64, caminho);
+            imgs.push(url);
+          }
+        } else if (docId) {
+          const itemExistente = produtosMemoria.find(p => p.id === docId);
+          if (itemExistente) imgs = itemExistente.imagens;
+        }
+
+        if (imgs.length === 0) {
+          mostrarToast("Selecione ao menos uma imagem!", "erro");
+          statusUpload.innerText = "";
+          btnSalvar.disabled = false;
+          return;
+        }
+
+        // Agora o documento do Firestore guarda apenas as URLs das imagens
+        // (poucos KB), então não existe mais limite prático de quantidade
+        // de imagens no carrossel.
+        statusUpload.innerText = "💾 Salvando no banco de dados...";
+        const dados = { titulo, categoria, classe, descricao, preco, link, imagens: imgs, criadoEm: new Date() };
+
+        if (docId) {
+          await updateDoc(doc(db, "produtos", docId), dados);
+        } else {
+          await addDoc(collection(db, "produtos"), dados);
+        }
+
+        // Limpa do Storage as imagens antigas que foram substituídas.
+        if (imagensAntigasParaRemover.length > 0) {
+          removerImagensStorage(imagensAntigasParaRemover);
+        }
+
+        statusUpload.innerText = "";
+        mostrarToast(docId ? "Carrossel atualizado!" : "Carrossel publicado!", "sucesso");
+        cancelarEdicao();
+        carregarProdutos();
+      } catch (e) {
+        console.error("Erro ao salvar carrossel:", e);
+        statusUpload.innerText = "";
+        mostrarToast("Erro ao salvar. Tente novamente.", "erro");
+      } finally {
+        btnSalvar.disabled = false;
+      }
+    }
+
+    // ESTADOS DE CARREGAMENTO
+    function mostrarSkeletons() {
+      const vitrine = document.getElementById('vitrineProdutos');
+      vitrine.innerHTML = '';
+      for (let i = 0; i < 4; i++) {
+        const sk = document.createElement('div');
+        sk.className = 'skeleton-card';
+        sk.innerHTML = '<div class="skeleton-shimmer"></div>';
+        vitrine.appendChild(sk);
+      }
+    }
+
+    // CARREGAR E RENDERIZAR PRODUTOS & FILTROS
+    async function carregarProdutos() {
+      try {
+        const querySnapshot = await getDocs(collection(db, "produtos"));
+        produtosMemoria = [];
+        querySnapshot.forEach((doc) => {
+          produtosMemoria.push({ id: doc.id, ...doc.data() });
+        });
+        construirMenuFiltros();
+        renderizarVitrine();
+      } catch (e) {
+        console.error("Erro ao carregar produtos:", e);
+        const vitrine = document.getElementById('vitrineProdutos');
+        vitrine.innerHTML = `
+          <div class="estado-vazio">
+            <div class="emoji">⚠️</div>
+            <h3>Não foi possível carregar as artes</h3>
+            <p>Verifique sua conexão e tente novamente em instantes.</p>
+          </div>
+        `;
+      }
+    }
+
+    function construirMenuFiltros() {
+      const container = document.getElementById('containerFiltros');
+      container.innerHTML = '';
+
+      const categorias = ['TODOS', ...new Set(produtosMemoria.map(p => p.categoria || 'Geral'))];
+      const classes = ['TODOS', ...new Set(produtosMemoria.map(p => p.classe || 'Geral'))];
+
+      let html = `<div class="grupo-filtro"><span>Categorias:</span>`;
+      categorias.forEach(cat => {
+        html += `<button class="btn-tag ${filtroCategoriaAtiva === cat ? 'ativo' : ''}" onclick="window.setFiltroCat('${cat}')">${cat}</button>`;
+      });
+      html += `</div>`;
+
+      if (classes.length > 1) {
+        html += `<div class="grupo-filtro"><span>Classes:</span>`;
+        classes.forEach(cls => {
+          html += `<button class="btn-tag btn-tag-sub ${filtroClasseAtiva === cls ? 'ativo' : ''}" onclick="window.setFiltroClasse('${cls}')">${cls}</button>`;
+        });
+        html += `</div>`;
+      }
+
+      container.innerHTML = html;
+    }
+
+    window.setFiltroCat = function(cat) {
+      filtroCategoriaAtiva = cat;
+      construirMenuFiltros();
+      renderizarVitrine();
+    };
+
+    window.setFiltroClasse = function(cls) {
+      filtroClasseAtiva = cls;
+      construirMenuFiltros();
+      renderizarVitrine();
+    };
+
+    function renderizarVitrine() {
+      const vitrine = document.getElementById('vitrineProdutos');
+      vitrine.innerHTML = '';
+
+      const filtrados = produtosMemoria.filter(prod => {
+        const bateCat = (filtroCategoriaAtiva === 'TODOS' || prod.categoria === filtroCategoriaAtiva);
+        const bateCls = (filtroClasseAtiva === 'TODOS' || prod.classe === filtroClasseAtiva);
+        return bateCat && bateCls;
+      });
+
+      if (produtosMemoria.length === 0) {
+        vitrine.innerHTML = `
+          <div class="estado-vazio">
+            <div class="emoji">🖼️</div>
+            <h3>Nenhuma arte publicada ainda</h3>
+            <p>${usuarioAtual ? 'Use o painel acima para publicar o primeiro carrossel.' : 'Volte em breve para conferir as novidades.'}</p>
+          </div>
+        `;
+        return;
+      }
+
+      if (filtrados.length === 0) {
+        vitrine.innerHTML = `
+          <div class="estado-vazio">
+            <div class="emoji">🔍</div>
+            <h3>Nada encontrado por aqui</h3>
+            <p>Tente outro filtro ou termo de busca.</p>
+          </div>
+        `;
+        return;
+      }
+
+      filtrados.forEach((prod) => {
+        let slidesHTML = '';
+        let dotsHTML = '';
+
+        prod.imagens.forEach((imgUrl, idx) => {
+          slidesHTML += `
+            <div class="carrossel-slide ${idx === 0 ? 'ativo' : ''}">
+              <img src="${imgUrl}" alt="${prod.titulo}" loading="lazy">
+            </div>
+          `;
+          dotsHTML += `<div class="dot ${idx === 0 ? 'ativo' : ''}"></div>`;
+        });
+
+        const temVarios = prod.imagens.length > 1;
+        const card = document.createElement('div');
+        card.className = 'card-carrossel';
+        card.innerHTML = `
+          <div class="card-header">
+            <span>${prod.titulo}</span>
+            <small class="badge-cat">${prod.categoria || 'Geral'} • ${prod.classe || 'Geral'}</small>
+          </div>
+
+          <div class="carrossel-container">
+            ${slidesHTML}
+            ${temVarios ? `
+              <button class="btn-nav btn-prev" aria-label="Imagem anterior">❮</button>
+              <button class="btn-nav btn-next" aria-label="Próxima imagem">❯</button>
+              <div class="dots-container">${dotsHTML}</div>
+            ` : ''}
+          </div>
+
+          <div class="card-body">
+            <div class="card-descricao">${prod.descricao || ''}</div>
+            <div class="card-preco">${prod.preco || '0,00'}</div>
+            <a href="${prod.link}" target="_blank" rel="noopener" class="btn-comprar">Comprar Arte</a>
+
+            ${usuarioAtual ? `
+              <div class="acoes-admin">
+                <button class="btn-editar">Editar</button>
+                <button class="btn-excluir">Excluir</button>
+              </div>
+            ` : ''}
+          </div>
+        `;
+
+        if (temVarios) {
+          card.querySelector('.btn-prev').addEventListener('click', () => mudarSlide(card, -1));
+          card.querySelector('.btn-next').addEventListener('click', () => mudarSlide(card, 1));
+        }
+
+        if (usuarioAtual) {
+          card.querySelector('.btn-editar').addEventListener('click', () => prepararEdicao(prod.id));
+          card.querySelector('.btn-excluir').addEventListener('click', () => excluirCarrossel(prod.id));
+        }
+
+        vitrine.appendChild(card);
+      });
+    }
+
+    function mudarSlide(card, dir) {
+      const slides = card.getElementsByClassName('carrossel-slide');
+      const dots = card.getElementsByClassName('dot');
+      let ativoIdx = 0;
+
+      for (let i = 0; i < slides.length; i++) {
+        if (slides[i].classList.contains('ativo')) {
+          ativoIdx = i;
+          slides[i].classList.remove('ativo');
+          if (dots[i]) dots[i].classList.remove('ativo');
+          break;
+        }
+      }
+
+      let novoIdx = ativoIdx + dir;
+      if (novoIdx >= slides.length) novoIdx = 0;
+      if (novoIdx < 0) novoIdx = slides.length - 1;
+
+      slides[novoIdx].classList.add('ativo');
+      if (dots[novoIdx]) dots[novoIdx].classList.add('ativo');
+    }
+
+    function prepararEdicao(id) {
+      const p = produtosMemoria.find(item => item.id === id);
+      if (!p) return;
+
+      document.getElementById('editDocId').value = p.id;
+      document.getElementById('titulo').value = p.titulo;
+      document.getElementById('categoria').value = p.categoria || '';
+      document.getElementById('classe').value = p.classe || '';
+      document.getElementById('descricao').value = p.descricao;
+      document.getElementById('preco').value = p.preco;
+      document.getElementById('linkCompra').value = p.link;
+
+      document.getElementById('tituloPainel').childNodes[0].nodeValue = "Editando Carrossel ";
+      document.getElementById('btnSalvar').innerText = "Atualizar Carrossel";
+      document.getElementById('btnCancelarEdit').classList.remove('escondido');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function cancelarEdicao() {
+      document.getElementById('editDocId').value = '';
+      document.getElementById('titulo').value = '';
+      document.getElementById('categoria').value = '';
+      document.getElementById('classe').value = '';
+      document.getElementById('descricao').value = '';
+      document.getElementById('preco').value = '';
+      document.getElementById('linkCompra').value = '';
+      document.getElementById('imagemFile').value = '';
+
+      document.getElementById('tituloPainel').childNodes[0].nodeValue = "Painel de Gestão ";
+      document.getElementById('btnSalvar').innerText = "Publicar Carrossel";
+      document.getElementById('btnCancelarEdit').classList.add('escondido');
+    }
+
+    async function excluirCarrossel(id) {
+      if (confirm("Deseja remover este carrossel?")) {
+        try {
+          const prod = produtosMemoria.find(p => p.id === id);
+          await deleteDoc(doc(db, "produtos", id));
+          if (prod) removerImagensStorage(prod.imagens);
+          mostrarToast("Carrossel removido.", "sucesso");
+          carregarProdutos();
+        } catch (e) {
+          mostrarToast("Erro ao remover.", "erro");
+        }
+      }
+    }
+
+    function filtrarVitrine() {
+      const termo = document.getElementById('campoBusca').value.toLowerCase();
+      const cards = document.getElementsByClassName('card-carrossel');
+
+      for (let card of cards) {
+        const texto = card.innerText.toLowerCase();
+        card.style.display = texto.includes(termo) ? "flex" : "none";
+      }
     }
   </script>
 </body>
