@@ -4,743 +4,672 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0f2942">
-  <title>Agendamento de Pátio - Transportadora</title>
+  <title>Agendamento de Pátio - Portal Transportadora</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <style>
+    /* Suporte visual para novos status de ciclo de vida */
+    .badge-expirado { background-color: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+    .badge-noshow { background-color: #f3e5f5; color: #6a1b9a; border: 1px solid #ce93d8; }
+    .badge-sem-resposta { background-color: #fff3e0; color: #ef6c00; border: 1px solid #ffe0b2; }
+  </style>
 </head>
 <body>
 
   <div class="topbar">
-    <div class="marca"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="9"></rect><path d="M14 10h4l3 3v3h-7z"></path><circle cx="6" cy="18" r="2"></circle><circle cx="17" cy="18" r="2"></circle></svg> Agendamento de Pátio</div>
+    <div class="marca">
+      <svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="9"></rect><path d="M14 10h4l3 3v3h-7z"></path><circle cx="6" cy="18" r="2"></circle><circle cx="17" cy="18" r="2"></circle></svg> 
+      Agendamento de Pátio — Portal Transportadora
+    </div>
     <div>
-      <span id="user-empresa" style="margin-right:16px; font-size:0.9rem; opacity:.85;"></span>
-      <button id="btn-logout">Sair</button>
+      <span id="user-empresa" style="margin-right: 15px; font-weight: 500;"></span>
+      <button id="btn-logout" class="btn btn-secundario btn-sm">Sair</button>
     </div>
   </div>
 
-  <div class="container">
-
-    <div class="tabs">
-      <button class="tab-btn ativo" data-tab="novo">Novo Agendamento</button>
-      <button class="tab-btn" data-tab="meus">Meus Agendamentos</button>
-    </div>
-
-    <div class="tab-conteudo ativo" id="tab-novo">
-      <div class="card">
-        <div class="aviso-suporte">
-          Caso não encontre o horário desejado, entre em contato diretamente com a equipe de logística pelo canal oficial.
+  <div class="dashboard-layout">
+    <main class="main-content" style="max-width: 1200px; margin: 0 auto; padding: 24px;">
+      
+      <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
+        <div>
+          <h2>Meus Agendamentos</h2>
+          <span class="subtext">Gerencie suas solicitações de carga e descarga no pátio</span>
         </div>
+        <button id="btn-novo-agendamento" class="btn btn-primario" style="display: inline-flex; align-items: center; gap: 8px;">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          Solicitar Agendamento
+        </button>
+      </div>
 
-        <form id="form-agendamento">
-          <div class="campo">
-            <label for="empresa">Nome da Empresa</label>
-            <input type="text" id="empresa" required>
+      <div class="card" style="padding: 16px; margin-bottom: 20px;">
+        <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
+          <div style="flex: 1; min-width: 220px;">
+            <input type="text" id="filtro-busca" class="input-control" placeholder="Buscar por placa, motorista ou processo...">
           </div>
+          <div style="width: 180px;">
+            <select id="filtro-status" class="input-control">
+              <option value="">Todos os Status</option>
+              <option value="Pendente">Pendente</option>
+              <option value="Aprovado">Aprovado</option>
+              <option value="Em Pátio">Em Pátio</option>
+              <option value="Concluído">Concluído</option>
+              <option value="Recusado">Recusado</option>
+              <option value="Cancelado">Cancelado</option>
+              <option value="Expirado">Expirado</option>
+              <option value="NO-SHOW">NO-SHOW</option>
+            </select>
+          </div>
+          <div style="width: 160px;">
+            <input type="date" id="filtro-data" class="input-control">
+          </div>
+          <button id="btn-limpar-filtros" class="btn btn-secundario btn-sm">Limpar Filtros</button>
+        </div>
+      </div>
 
-          <div class="campo">
-            <label for="tipoProcesso">Tipo de Processo</label>
-            <select id="tipoProcesso" required>
-              <option value="">Selecione...</option>
+      <div class="table-responsive card">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Data / Janela</th>
+              <th>Processo</th>
+              <th>Veículo (Placas)</th>
+              <th>Motorista</th>
+              <th>Status</th>
+              <th style="text-align: right;">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-meus-agendamentos">
+            <tr><td colspan="6" style="text-align: center; padding: 24px;">Carregando agendamentos...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </main>
+  </div>
+
+  <div id="modal-agendamento" class="modal-overlay" style="display: none;">
+    <div class="modal-card" style="max-width: 680px; width: 95%;">
+      <div class="modal-header">
+        <h3>Solicitar Novo Agendamento de Janela</h3>
+        <button class="btn-close-modal" id="btn-fechar-modal">&times;</button>
+      </div>
+
+      <form id="form-agendamento" style="padding: 20px;">
+        
+        <div class="form-row" style="display: flex; gap: 16px; flex-wrap: wrap;">
+          <div class="form-group" style="flex: 1; min-width: 240px;">
+            <label for="tipoProcesso">Tipo de Processo*</label>
+            <select id="tipoProcesso" class="input-control" required>
+              <option value="">Selecione o processo...</option>
             </select>
           </div>
 
-          <div class="campo">
-            <label for="data">Data</label>
-            <input type="date" id="data" required>
+          <div class="form-group" style="flex: 1; min-width: 200px;">
+            <label for="dataAgendada">Data Pretendida*</label>
+            <input type="date" id="dataAgendada" class="input-control" required>
           </div>
+        </div>
 
-          <div class="campo">
-            <label>Horário</label>
-            <div class="slots-grid" id="slots-grid"></div>
-            <div class="slots-msg" id="slots-msg">Selecione uma data para ver os horários disponíveis.</div>
-            <input type="hidden" id="horaInicioSelecionada">
+        <div class="form-group" style="margin-top: 12px;">
+          <label>Janela Horária Disponível*</label>
+          <div id="container-slots" class="slots-grid" style="margin-top: 8px; max-height: 180px; overflow-y: auto; padding: 4px;">
+            <span class="subtext">Selecione primeiro uma data válida acima para verificar a grade de vagas.</span>
           </div>
+          <input type="hidden" id="slotSelecionadoId" required>
+          <input type="hidden" id="slotHoraInicio">
+          <input type="hidden" id="slotHoraFim">
+        </div>
 
-          <div class="campo">
-            <label for="placaCavalo">Placa do Cavalo</label>
-            <input type="text" id="placaCavalo" required maxlength="8" placeholder="AAA-0000 ou AAA0A00" style="text-transform:uppercase;" inputmode="text" autocomplete="off">
-            <small style="display:block; margin-top:4px; color:var(--texto-suave); font-size:0.78rem;">Formatos aceitos: AAA-0000 (antigo) ou AAA0A00 (Mercosul)</small>
+        <hr style="margin: 20px 0; border: 0; border-top: 1px solid #e0e0e0;">
+
+        <div class="form-row" style="display: flex; gap: 16px; flex-wrap: wrap;">
+          <div class="form-group" style="flex: 1; min-width: 200px;">
+            <label for="placaCavalo">Placa Cavalo / Trator*</label>
+            <input type="text" id="placaCavalo" class="input-control" placeholder="ABC-1234 ou ABC1D23" required maxlength="8" style="text-transform: uppercase;">
           </div>
-
-          <div class="campo">
-            <label for="placaCarreta">Placa da Carreta</label>
-            <input type="text" id="placaCarreta" maxlength="8" placeholder="AAA-0000 ou AAA0A00" style="text-transform:uppercase;" inputmode="text" autocomplete="off">
+          <div class="form-group" style="flex: 1; min-width: 200px;">
+            <label for="placaCarreta">Placa Carreta / Reboque</label>
+            <input type="text" id="placaCarreta" class="input-control" placeholder="ABC-1234 ou ABC1D23" maxlength="8" style="text-transform: uppercase;">
           </div>
+        </div>
 
-          <div class="campo">
-            <label for="motorista">Nome do Motorista</label>
-            <input type="text" id="motorista" required>
+        <div class="form-row" style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px;">
+          <div class="form-group" style="flex: 2; min-width: 240px;">
+            <label for="nomeMotorista">Nome do Motorista*</label>
+            <input type="text" id="nomeMotorista" class="input-control" placeholder="Nome completo do condutor" required>
           </div>
-
-          <div class="campo">
-            <label for="observacoes">Observações</label>
-            <textarea id="observacoes" rows="3" placeholder="Detalhes da carga, restrições de acesso, etc."></textarea>
+          <div class="form-group" style="flex: 1; min-width: 160px;">
+            <label for="cpfMotorista">CPF Motorista</label>
+            <input type="text" id="cpfMotorista" class="input-control" placeholder="000.000.000-00" maxlength="14">
           </div>
+        </div>
 
-          <button type="submit" class="btn-primario">Confirmar Agendamento</button>
-          <div class="erro" id="agendamento-error"></div>
-        </form>
-      </div>
+        <div class="form-row" style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px;">
+          <div class="form-group" style="flex: 1; min-width: 160px;">
+            <label for="rgMotorista">RG Motorista</label>
+            <input type="text" id="rgMotorista" class="input-control" placeholder="Número do RG">
+          </div>
+          <div class="form-group" style="flex: 1; min-width: 160px;">
+            <label for="telefoneMotorista">Telefone / WhatsApp</label>
+            <input type="text" id="telefoneMotorista" class="input-control" placeholder="(00) 00000-0000">
+          </div>
+        </div>
+
+        <div class="form-row" style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px;">
+          <div class="form-group" style="flex: 1; min-width: 180px;">
+            <label for="notaFiscal">Número da Nota Fiscal / Minuta</label>
+            <input type="text" id="notaFiscal" class="input-control" placeholder="Ex: NF 10245">
+          </div>
+          <div class="form-group" style="flex: 1; min-width: 140px;">
+            <label for="pesoCarga">Peso Estimado (Ton)</label>
+            <input type="number" step="0.1" id="pesoCarga" class="input-control" placeholder="Ex: 12.5">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top: 12px;">
+          <label for="observacoes">Observações Adicionais</label>
+          <textarea id="observacoes" class="input-control" rows="2" placeholder="Informações relevantes sobre a carga ou veículo..."></textarea>
+        </div>
+
+        <div class="modal-footer" style="margin-top: 24px; display: flex; justify-content: flex-end; gap: 12px;">
+          <button type="button" class="btn btn-secundario" id="btn-cancelar-modal">Cancelar</button>
+          <button type="submit" class="btn btn-primario" id="btn-salvar-agendamento">Enviar Solicitação</button>
+        </div>
+
+      </form>
     </div>
+  </div>
 
-    <div class="tab-conteudo" id="tab-meus">
-      <div class="card">
-        <div class="lista-agendamentos" id="lista-agendamentos">
-          <div class="estado-vazio">Carregando...</div>
+  <div id="modal-cancelar" class="modal-overlay" style="display: none;">
+    <div class="modal-card" style="max-width: 450px; width: 90%;">
+      <div class="modal-header">
+        <h3>Cancelar Agendamento</h3>
+        <button class="btn-close-modal" id="btn-fechar-modal-cancelar">&times;</button>
+      </div>
+      <div style="padding: 20px;">
+        <p>Tem certeza que deseja cancelar este agendamento?</p>
+        <p class="subtext" style="margin-top: 4px;">A vaga será imediatamente devolvida e disponibilizada para a fábrica.</p>
+        
+        <div class="form-group" style="margin-top: 16px;">
+          <label for="motivoCancelamento">Motivo do Cancelamento*</label>
+          <textarea id="motivoCancelamento" class="input-control" rows="3" placeholder="Informe o motivo do cancelamento..." required></textarea>
+        </div>
+
+        <input type="hidden" id="cancelarBookingId">
+
+        <div style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" class="btn btn-secundario" id="btn-fechar-cancelar-btn">Voltar</button>
+          <button type="button" class="btn btn-danger" id="btn-confirmar-cancelamento">Confirmar Cancelamento</button>
         </div>
       </div>
     </div>
-
   </div>
+
+  <div id="modal-alerta" class="modal-overlay" style="display: none; z-index: 9999;">
+    <div class="modal-card" style="max-width: 400px; width: 90%; text-align: center; padding: 24px;">
+      <h3 id="alerta-titulo" style="margin-bottom: 12px;">Aviso</h3>
+      <p id="alerta-mensagem" style="margin-bottom: 20px; color: var(--cinza-texto);"></p>
+      <button id="btn-alerta-ok" class="btn btn-primario" style="width: 100%;">OK</button>
+    </div>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
+
 
   <script type="module">
     import { auth, db } from "./firebase-config.js";
-    import { protegerPagina, logout } from "./auth.js";
-    import {
-      collection,
-      doc,
-      getDocs,
-      addDoc,
-      updateDoc,
-      query,
-      where,
-      serverTimestamp,
-      runTransaction
+    import { protegerPagina } from "./auth.js";
+    import { 
+      STATUS, 
+      buscarSlotsVirtuaisDoDia, 
+      configurarMascaraPlaca, 
+      aplicarMascaraPlaca 
+    } from "./patioCore.js";
+    import { 
+      collection, 
+      getDocs, 
+      getDoc, 
+      doc, 
+      query, 
+      where, 
+      runTransaction, 
+      updateDoc, 
+      addDoc, 
+      serverTimestamp 
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-    import { buscarSlotsVirtuaisDoDia, idSlotHorario } from "./patioCore.js";
+    import { signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 
-    // AUTENTICAÇÃO / PROTEÇÃO DE PÁGINA: reaproveita a versão centralizada
-    // em auth.js (exige status === "aprovado"). Esta tela tinha uma cópia
-    // local antiga que só bloqueava "pendente_aprovacao" e deixava contas
-    // "suspenso"/"recusado" acessarem o painel normalmente — removida.
+    let usuarioLogado = null;
+    let dadosUsuario = null;
+    let agendamentosCache = [];
+    let processosMap = {};
 
-    let usuarioAtual = null;
-    let perfilAtual = null;
-
-    /* ===================================================================
-       POPUP / MODAL CUSTOMIZADO (substitui alert() e confirm() nativos)
-       =================================================================== */
-    function criarModalHost() {
-      if (document.getElementById("modal-overlay")) return;
-      const overlay = document.createElement("div");
-      overlay.id = "modal-overlay";
-      overlay.className = "modal-overlay";
-      overlay.innerHTML = `
-        <div class="modal-caixa" id="modal-caixa" role="alertdialog" aria-modal="true">
-          <div class="modal-icone" id="modal-icone"></div>
-          <div class="modal-titulo" id="modal-titulo"></div>
-          <div class="modal-mensagem" id="modal-mensagem"></div>
-          <div class="modal-botoes" id="modal-botoes"></div>
-        </div>`;
-      document.body.appendChild(overlay);
-    }
-    criarModalHost();
-
-    function mostrarAlerta(mensagem, opcoes = {}) {
-      const { titulo = "Aviso", tipo = "info" } = opcoes;
-      const icones = {
-        sucesso: '<svg width="26" height="26" class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><polyline points="8 12.5 11 15.5 16 9.5"></polyline></svg>',
-        erro: '<svg width="26" height="26" class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 L21.5 20 L2.5 20 Z"></path><line x1="12" y1="9.5" x2="12" y2="14"></line><circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none"></circle></svg>',
-        info: '<svg width="26" height="26" class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16"></line><circle cx="12" cy="8" r="0.6" fill="currentColor" stroke="none"></circle></svg>'
-      };
-      return new Promise((resolve) => {
-        const overlay = document.getElementById("modal-overlay");
-        const caixa = document.getElementById("modal-caixa");
-        caixa.className = `modal-caixa modal-${tipo}`;
-        document.getElementById("modal-icone").innerHTML = icones[tipo] || icones.info;
-        document.getElementById("modal-titulo").textContent = titulo;
-        document.getElementById("modal-mensagem").textContent = mensagem;
-        document.getElementById("modal-botoes").innerHTML =
-          `<button type="button" class="modal-btn-primario" id="modal-btn-ok">OK</button>`;
-        overlay.classList.add("aberto");
-
-        const btnOk = document.getElementById("modal-btn-ok");
-        function fechar() {
-          overlay.classList.remove("aberto");
-          btnOk.removeEventListener("click", fechar);
-          resolve();
-        }
-        btnOk.addEventListener("click", fechar);
-        btnOk.focus();
-      });
-    }
-
-    function mostrarConfirm(mensagem, opcoes = {}) {
-      const { titulo = "Confirmar ação", textoConfirmar = "Confirmar", textoCancelar = "Cancelar", perigo = false } = opcoes;
-      return new Promise((resolve) => {
-        const overlay = document.getElementById("modal-overlay");
-        const caixa = document.getElementById("modal-caixa");
-        caixa.className = "modal-caixa modal-pergunta";
-        document.getElementById("modal-icone").innerHTML = perigo ? '<svg width="26" height="26" class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 L21.5 20 L2.5 20 Z"></path><line x1="12" y1="9.5" x2="12" y2="14"></line><circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none"></circle></svg>' : '<svg width="26" height="26" class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1.3 1-1.3 1.9"></path><circle cx="12" cy="16.5" r="0.6" fill="currentColor" stroke="none"></circle></svg>';
-        document.getElementById("modal-titulo").textContent = titulo;
-        document.getElementById("modal-mensagem").textContent = mensagem;
-        document.getElementById("modal-botoes").innerHTML = `
-          <button type="button" class="modal-btn-secundario" id="modal-btn-cancelar">${textoCancelar}</button>
-          <button type="button" class="modal-btn-primario ${perigo ? "perigo" : ""}" id="modal-btn-confirmar">${textoConfirmar}</button>
-        `;
-        overlay.classList.add("aberto");
-
-        const btnConfirmar = document.getElementById("modal-btn-confirmar");
-        const btnCancelar = document.getElementById("modal-btn-cancelar");
-        function limpar(resultado) {
-          overlay.classList.remove("aberto");
-          btnConfirmar.removeEventListener("click", onConfirmar);
-          btnCancelar.removeEventListener("click", onCancelar);
-          resolve(resultado);
-        }
-        function onConfirmar() { limpar(true); }
-        function onCancelar() { limpar(false); }
-        btnConfirmar.addEventListener("click", onConfirmar);
-        btnCancelar.addEventListener("click", onCancelar);
-        btnCancelar.focus();
-      });
-    }
-
-    // Horários (slots) atualmente exibidos para a data escolhida
-    let slotsDoDia = [];
-
-    /* ===================================================================
-       TOAST — notificação não-bloqueante para confirmações rápidas de
-       sucesso (o modal continua sendo usado para erros e confirmações,
-       que precisam travar a tela até o usuário decidir).
-       =================================================================== */
-    function criarToastHost() {
-      if (document.getElementById("toast-container")) return;
-      const container = document.createElement("div");
-      container.id = "toast-container";
-      container.className = "toast-container";
-      document.body.appendChild(container);
-    }
-    criarToastHost();
-
-    function mostrarToast(mensagem, opcoes = {}) {
-      const { tipo = "info", duracaoMs = 3500 } = opcoes;
-      const icones = {
-        sucesso: '<svg width="26" height="26" class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><polyline points="8 12.5 11 15.5 16 9.5"></polyline></svg>',
-        erro: '<svg width="26" height="26" class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 L21.5 20 L2.5 20 Z"></path><line x1="12" y1="9.5" x2="12" y2="14"></line><circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none"></circle></svg>',
-        info: '<svg width="26" height="26" class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16"></line><circle cx="12" cy="8" r="0.6" fill="currentColor" stroke="none"></circle></svg>'
-      };
-      const container = document.getElementById("toast-container");
-
-      const toast = document.createElement("div");
-      toast.className = `toast toast-${tipo}`;
-      toast.innerHTML = `
-        <span class="toast-icone">${icones[tipo] || icones.info}</span>
-        <span class="toast-mensagem"></span>
-        <button type="button" class="toast-fechar" aria-label="Fechar">✕</button>
-      `;
-      toast.querySelector(".toast-mensagem").textContent = mensagem;
-      container.appendChild(toast);
-      requestAnimationFrame(() => toast.classList.add("visivel"));
-
-      function remover() {
-        toast.classList.remove("visivel");
-        toast.classList.add("saindo");
-        setTimeout(() => toast.remove(), 200);
-      }
-      const timer = setTimeout(remover, duracaoMs);
-      toast.querySelector(".toast-fechar").addEventListener("click", () => {
-        clearTimeout(timer);
-        remover();
-      });
-    }
-
-    /* ===================================================================
-       DATA/HORA ATUAL (fuso LOCAL do navegador — NÃO usar toISOString()
-       aqui, pois ele converte para UTC e gera datas erradas à noite em
-       fusos negativos como o do Brasil, ex: 23h de 10/08 em UTC-3 já
-       virou "2026-08-11" em UTC, bloqueando o próprio dia 10 no min do
-       input e nos cálculos de horário já passado abaixo).
-       =================================================================== */
-    function dataDeHojeStr() {
-      const agora = new Date();
-      const ano = agora.getFullYear();
-      const mes = String(agora.getMonth() + 1).padStart(2, "0");
-      const dia = String(agora.getDate()).padStart(2, "0");
-      return `${ano}-${mes}-${dia}`;
-    }
-
-    function horaAtualStr() {
-      const agora = new Date();
-      const h = String(agora.getHours()).padStart(2, "0");
-      const m = String(agora.getMinutes()).padStart(2, "0");
-      return `${h}:${m}`;
-    }
-
-    // ---------------- Elementos do DOM ----------------
-    const form = document.getElementById("form-agendamento");
-    const selectTipoProcesso = document.getElementById("tipoProcesso");
-    const inputData = document.getElementById("data");
-    const slotsGrid = document.getElementById("slots-grid");
-    const slotsMsg = document.getElementById("slots-msg");
-    const inputHoraSelecionada = document.getElementById("horaInicioSelecionada");
-    const erroBox = document.getElementById("agendamento-error");
-    const listaAgendamentos = document.getElementById("lista-agendamentos");
-    const inputPlacaCavalo = document.getElementById("placaCavalo");
-    const inputPlacaCarreta = document.getElementById("placaCarreta");
-
-    /* ===================================================================
-       MÁSCARA DE PLACA (aceita AAA-0000 e AAA0A00 / Mercosul)
-       Posições (sem contar o traço): 1-3 letras, 4 dígito,
-       5 dígito (formato antigo, insere traço) ou letra (Mercosul, sem traço),
-       6-7 sempre dígitos.
-       =================================================================== */
-    function aplicarMascaraPlaca(valorBruto) {
-      const brutoLimpo = (valorBruto || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-      let alfanumerico = "";
-
-      for (let i = 0; i < brutoLimpo.length && alfanumerico.length < 7; i++) {
-        const ch = brutoLimpo[i];
-        const pos = alfanumerico.length;
-
-        if (pos < 3) {
-          if (/[A-Z]/.test(ch)) alfanumerico += ch;
-        } else if (pos === 3) {
-          if (/[0-9]/.test(ch)) alfanumerico += ch;
-        } else if (pos === 4) {
-          if (/[A-Z0-9]/.test(ch)) alfanumerico += ch;
-        } else {
-          if (/[0-9]/.test(ch)) alfanumerico += ch;
-        }
-      }
-
-      // O 5º caractere (índice 4) define o formato: dígito = antigo (com traço), letra = Mercosul (sem traço)
-      if (alfanumerico.length >= 5 && /[0-9]/.test(alfanumerico[4])) {
-        return alfanumerico.slice(0, 3) + "-" + alfanumerico.slice(3);
-      }
-      return alfanumerico;
-    }
-
-    function placaCompleta(valorMascarado) {
-      return valorMascarado.replace("-", "").length === 7;
-    }
-
-    function configurarMascaraPlaca(inputEl) {
-      if (!inputEl) return;
-      inputEl.addEventListener("input", () => {
-        inputEl.value = aplicarMascaraPlaca(inputEl.value);
-      });
-    }
-
-    configurarMascaraPlaca(inputPlacaCavalo);
-    configurarMascaraPlaca(inputPlacaCarreta);
-
-    // Não deixa escolher datas retroativas (fuso local, ver dataDeHojeStr)
-    if (inputData) {
-      inputData.min = dataDeHojeStr();
-    }
-
-    document.getElementById("btn-logout")?.addEventListener("click", logout);
-
-    // ---------------- Navegação por abas ----------------
-    document.querySelectorAll(".tab-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("ativo"));
-        document.querySelectorAll(".tab-conteudo").forEach(c => c.classList.remove("ativo"));
-        btn.classList.add("ativo");
-        document.getElementById(`tab-${btn.dataset.tab}`)?.classList.add("ativo");
-
-        if (btn.dataset.tab === "meus") {
-          carregarMeusAgendamentos();
-        }
-      });
-    });
-
-    // ---------------- Proteção de Página (Apenas perfil Transportadora - Tipo 1) ----------------
-    protegerPagina([1], (user, perfil) => {
-      usuarioAtual = user;
-      perfilAtual = perfil;
-
-      const userEmpresaEl = document.getElementById("user-empresa");
-      if (userEmpresaEl) {
-        userEmpresaEl.textContent = perfil.empresa || perfil.nome || user.email;
-      }
-
-      const inputEmpresa = document.getElementById("empresa");
-      if (inputEmpresa && perfil.empresa) {
-        inputEmpresa.value = perfil.empresa;
-      }
-
-      carregarTiposProcessoAtivos();
-    });
-
-    /* ===================================================================
-       1. CARREGAR TIPOS DE PROCESSO ATIVOS
-       =================================================================== */
-    async function carregarTiposProcessoAtivos() {
-      if (!selectTipoProcesso) return;
+    // PROTEÇÃO E INICIALIZAÇÃO DA PÁGINA
+    protegerPagina(["transportadora"], async (user) => {
+      usuarioLogado = user;
       try {
-        const q = query(collection(db, "processTypes"), where("ativo", "==", true));
-        const snap = await getDocs(q);
+        const userSnap = await getDoc(doc(db, "users", user.uid));
+        if (userSnap.exists()) {
+          dadosUsuario = userSnap.data();
+          document.getElementById("user-empresa").textContent = dadosUsuario.empresa || user.email;
+        }
+      } catch (e) {
+        console.error("Erro ao carregar dados do usuário:", e);
+      }
 
-        selectTipoProcesso.innerHTML = '<option value="">Selecione o tipo de processo...</option>';
-        snap.docs.forEach(docSnap => {
-          const p = docSnap.data();
+      await inicializarInterface();
+    });
+
+    async function inicializarInterface() {
+      // Configurar Máscara de Placa nos inputs
+      const inputCavalo = document.getElementById("placaCavalo");
+      const inputCarreta = document.getElementById("placaCarreta");
+      if (inputCavalo) configurarMascaraPlaca(inputCavalo);
+      if (inputCarreta) configurarMascaraPlaca(inputCarreta);
+
+      processosMap = await obterTiposProcessoMap();
+      await carregarTiposProcessoSelect();
+      await carregarMeusAgendamentos();
+
+      configurarEventosUI();
+    }
+
+    function configurarEventosUI() {
+      // Logout
+      document.getElementById("btn-logout")?.addEventListener("click", () => signOut(auth));
+
+      // Modal Novo Agendamento
+      const modal = document.getElementById("modal-agendamento");
+      document.getElementById("btn-novo-agendamento")?.addEventListener("click", () => {
+        abrirModalNovoAgendamento();
+      });
+      document.getElementById("btn-fechar-modal")?.addEventListener("click", () => fecharModalNovoAgendamento());
+      document.getElementById("btn-cancelar-modal")?.addEventListener("click", () => fecharModalNovoAgendamento());
+
+      // Mudança de Data no Agendamento -> Busca Slots do Dia
+      document.getElementById("dataAgendada")?.addEventListener("change", (e) => {
+        carregarSlotsDisponiveis(e.target.value);
+      });
+
+      // Submit do Formulário de Agendamento
+      document.getElementById("form-agendamento")?.addEventListener("submit", salvarAgendamento);
+
+      // Modal Cancelar
+      document.getElementById("btn-fechar-modal-cancelar")?.addEventListener("click", fecharModalCancelar);
+      document.getElementById("btn-fechar-cancelar-btn")?.addEventListener("click", fecharModalCancelar);
+      document.getElementById("btn-confirmar-cancelamento")?.addEventListener("click", confirmarCancelamento);
+
+      // Filtros da Tabela
+      document.getElementById("filtro-busca")?.addEventListener("input", aplicarFiltrosTabela);
+      document.getElementById("filtro-status")?.addEventListener("change", aplicarFiltrosTabela);
+      document.getElementById("filtro-data")?.addEventListener("change", aplicarFiltrosTabela);
+      document.getElementById("btn-limpar-filtros")?.addEventListener("click", () => {
+        document.getElementById("filtro-busca").value = "";
+        document.getElementById("filtro-status").value = "";
+        document.getElementById("filtro-data").value = "";
+        aplicarFiltrosTabela();
+      });
+
+      // Modal Alerta OK
+      document.getElementById("btn-alerta-ok")?.addEventListener("click", () => {
+        document.getElementById("modal-alerta").style.display = "none";
+      });
+    }
+
+    /* ===================================================================
+       CARREGAMENTO DE PROCESSOS E SLOTS DISPONÍVEIS
+       =================================================================== */
+    async function carregarTiposProcessoSelect() {
+      const select = document.getElementById("tipoProcesso");
+      if (!select) return;
+
+      select.innerHTML = `<option value="">Selecione o processo...</option>`;
+      try {
+        const snap = await getDocs(query(collection(db, "processTypes"), where("ativo", "==", true)));
+        snap.docs.forEach(d => {
+          const item = d.data();
           const opt = document.createElement("option");
-          opt.value = docSnap.id;
-          opt.textContent = p.nome;
-          selectTipoProcesso.appendChild(opt);
+          opt.value = d.id;
+          opt.textContent = item.nome;
+          select.appendChild(opt);
         });
       } catch (err) {
         console.error("Erro ao carregar tipos de processo:", err);
       }
     }
 
-    /* ===================================================================
-       2. CÁLCULO DOS HORÁRIOS DISPONÍVEIS NA DATA
-       Não depende mais de vagas "geradas" previamente: qualquer data
-       futura já é calculada a partir da Regra Padrão de Atendimento +
-       Exceções configuradas pela Logística/Admin (ver patioCore.js).
-       =================================================================== */
-    inputData?.addEventListener("change", async (e) => {
-      const dataSelecionada = e.target.value;
-      inputHoraSelecionada.value = "";
-      slotsGrid.innerHTML = "";
+    async function carregarSlotsDisponiveis(dataIso) {
+      const container = document.getElementById("container-slots");
+      const processTypeId = document.getElementById("tipoProcesso").value;
 
-      if (!dataSelecionada) {
-        slotsMsg.textContent = "Selecione uma data para consultar os horários.";
+      if (!dataIso) {
+        container.innerHTML = `<span class="subtext">Selecione uma data para ver os horários.</span>`;
         return;
       }
 
-      slotsMsg.textContent = "Buscando horários disponíveis...";
+      container.innerHTML = `<span class="subtext">Buscando janelas disponíveis...</span>`;
 
       try {
-        // incluirFechados=false (padrão): horários fechados manualmente
-        // pela Logística para esta data não aparecem aqui.
-        slotsDoDia = await buscarSlotsVirtuaisDoDia(db, dataSelecionada);
+        const slots = await buscarSlotsVirtuaisDoDia(db, dataIso, processTypeId);
+        container.innerHTML = "";
 
-        // Se a data escolhida é HOJE, remove da lista qualquer horário cujo
-        // início já passou (ou está em andamento) — não faz sentido oferecer
-        // uma janela às 07:00 se já são 08:50, por exemplo.
-        if (dataSelecionada === dataDeHojeStr()) {
-          const horaAtual = horaAtualStr();
-          slotsDoDia = slotsDoDia.filter(s => s.horaInicio > horaAtual);
-        }
-
-        if (slotsDoDia.length === 0) {
-          slotsMsg.textContent = dataSelecionada === dataDeHojeStr()
-            ? "Não há mais horários disponíveis hoje. Selecione outra data."
-            : "Nenhum horário de atendimento configurado para esta data.";
+        if (!slots || slots.length === 0) {
+          container.innerHTML = `<span class="subtext" style="color: var(--vermelho-interdicao);">Nenhum horário disponível para esta data.</span>`;
           return;
         }
 
-        renderizarSlots();
-      } catch (err) {
-        console.error("Erro ao consultar horários:", err);
-        slotsMsg.textContent = "Erro ao buscar horários para a data selecionada.";
-      }
-    });
+        let algumDisponivel = false;
+        slots.forEach(s => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "slot-chip";
+          
+          const vagasRestantes = s.capacidade - s.agendados;
+          const temVaga = vagasRestantes > 0;
 
-    function renderizarSlots() {
-      slotsGrid.innerHTML = "";
-      slotsMsg.textContent = "";
+          btn.innerHTML = `
+            <span class="hora">${s.horaInicio} - ${s.horaFim}</span>
+            <span class="vagas">${temVaga ? vagasRestantes + ' vaga(s)' : 'Esgotado'}</span>
+          `;
 
-      slotsDoDia.forEach(slot => {
-        const vagasDisponiveis = slot.capacidadeMax - (slot.ocupados || 0);
-        const semVaga = vagasDisponiveis <= 0;
+          if (temVaga) {
+            algumDisponivel = true;
+            btn.onclick = () => selecionarSlot(btn, s);
+          } else {
+            btn.disabled = true;
+            btn.classList.add("disabled");
+          }
 
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = `btn-slot ${semVaga ? "esgotado" : ""}`;
-        btn.disabled = semVaga;
+          container.appendChild(btn);
+        });
 
-        btn.innerHTML = `
-          <div style="font-weight:700; font-size:1rem;">${slot.horaInicio} às ${slot.horaFim}</div>
-          <div style="font-size:0.75rem; margin-top:2px;">
-            ${semVaga ? "Esgotado" : `${vagasDisponiveis} vaga(s)`}
-          </div>
-        `;
-
-        if (!semVaga) {
-          btn.addEventListener("click", () => {
-            document.querySelectorAll(".btn-slot").forEach(b => b.classList.remove("selecionado"));
-            btn.classList.add("selecionado");
-            inputHoraSelecionada.value = slot.horaInicio;
-          });
+        if (!algumDisponivel) {
+          container.innerHTML = `<span class="subtext" style="color: var(--vermelho-interdicao);">Todos os horários desta data estão esgotados.</span>`;
         }
+      } catch (err) {
+        console.error("Erro ao carregar slots:", err);
+        container.innerHTML = `<span class="subtext" style="color:red;">Erro ao buscar janelas disponíveis.</span>`;
+      }
+    }
 
-        slotsGrid.appendChild(btn);
+    function selecionarSlot(btnElement, slotObj) {
+      document.querySelectorAll(".slot-chip").forEach(b => b.classList.remove("selected"));
+      btnElement.classList.add("selected");
+
+      document.getElementById("slotSelecionadoId").value = slotObj.id || `${slotObj.horaInicio}-${slotObj.horaFim}`;
+      document.getElementById("slotHoraInicio").value = slotObj.horaInicio;
+      document.getElementById("slotHoraFim").value = slotObj.horaFim;
+    }
+
+    function abrirModalNovoAgendamento() {
+      document.getElementById("form-agendamento").reset();
+      document.getElementById("container-slots").innerHTML = `<span class="subtext">Selecione uma data para ver os horários.</span>`;
+      document.getElementById("modal-agendamento").style.display = "flex";
+    }
+
+    function fecharModalNovoAgendamento() {
+      document.getElementById("modal-agendamento").style.display = "none";
+    }
+
+    /* ===================================================================
+       SALVAR AGENDAMENTO (TRANSAÇÃO ATÔMICA)
+       =================================================================== */
+    async function salvarAgendamento(e) {
+      e.preventDefault();
+
+      const processTypeId = document.getElementById("tipoProcesso").value;
+      const dataAgendada = document.getElementById("dataAgendada").value;
+      const horaInicio = document.getElementById("slotHoraInicio").value;
+      const horaFim = document.getElementById("slotHoraFim").value;
+      const placaCavalo = aplicarMascaraPlaca(document.getElementById("placaCavalo").value);
+      const placaCarreta = aplicarMascaraPlaca(document.getElementById("placaCarreta").value);
+      const nomeMotorista = document.getElementById("nomeMotorista").value.trim();
+      const cpfMotorista = document.getElementById("cpfMotorista").value.trim();
+      const rgMotorista = document.getElementById("rgMotorista").value.trim();
+      const telefoneMotorista = document.getElementById("telefoneMotorista").value.trim();
+      const notaFiscal = document.getElementById("notaFiscal").value.trim();
+      const pesoCarga = document.getElementById("pesoCarga").value;
+      const observacoes = document.getElementById("observacoes").value.trim();
+
+      if (!horaInicio || !horaFim) {
+        mostrarAlerta("Por favor, selecione uma janela horária disponível.", { titulo: "Atenção", tipo: "aviso" });
+        return;
+      }
+
+      const btnSalvar = document.getElementById("btn-salvar-agendamento");
+      btnSalvar.disabled = true;
+      btnSalvar.textContent = "Processando...";
+
+      try {
+        const slotKey = `${dataAgendada}_${horaInicio.replace(':', '')}`;
+        const timeSlotRef = doc(db, "timeSlots", slotKey);
+
+        await runTransaction(db, async (transaction) => {
+          const slotSnap = await transaction.get(timeSlotRef);
+
+          let agendadosAtual = 0;
+          let capacidadeAtual = 1;
+
+          if (slotSnap.exists()) {
+            const dataSlot = slotSnap.data();
+            agendadosAtual = dataSlot.agendados || 0;
+            capacidadeAtual = dataSlot.capacidade || 1;
+          }
+
+          if (agendadosAtual >= capacidadeAtual) {
+            throw new Error("A janela selecionada acabou de ser preenchida por outro usuário.");
+          }
+
+          if (slotSnap.exists()) {
+            transaction.update(timeSlotRef, { agendados: agendadosAtual + 1 });
+          } else {
+            transaction.set(timeSlotRef, {
+              data: dataAgendada,
+              horaInicio: horaInicio,
+              horaFim: horaFim,
+              capacidade: capacidadeAtual,
+              agendados: 1
+            });
+          }
+
+          const newBookingRef = doc(collection(db, "bookings"));
+          transaction.set(newBookingRef, {
+            usuarioId: usuarioLogado.uid,
+            empresa: dadosUsuario?.empresa || usuarioLogado.email,
+            tipoProcessoId: processTypeId,
+            tipoProcessoNome: processosMap[processTypeId] || "Geral",
+            dataAgendada: dataAgendada,
+            horaInicio: horaInicio,
+            horaFim: horaFim,
+            placaCavalo: placaCavalo,
+            placaCarreta: placaCarreta,
+            nomeMotorista: nomeMotorista,
+            cpfMotorista: cpfMotorista,
+            rgMotorista: rgMotorista,
+            telefoneMotorista: telefoneMotorista,
+            notaFiscal: notaFiscal,
+            pesoCarga: pesoCarga ? parseFloat(pesoCarga) : null,
+            observacoes: observacoes,
+            status: STATUS.PENDENTE,
+            criadoEm: serverTimestamp()
+          });
+
+          // Registro de Auditoria
+          const auditRef = doc(collection(db, "auditLogs"));
+          transaction.set(auditRef, {
+            bookingId: newBookingRef.id,
+            usuarioId: usuarioLogado.uid,
+            acao: "Criou Agendamento",
+            dataHora: serverTimestamp()
+          });
+        });
+
+        fecharModalNovoAgendamento();
+        mostrarToast("Solicitação de agendamento enviada com sucesso!", { tipo: "sucesso" });
+        await carregarMeusAgendamentos();
+
+      } catch (err) {
+        console.error("Erro ao criar agendamento:", err);
+        mostrarAlerta(err.message || "Não foi possível realizar o agendamento.", { titulo: "Erro", tipo: "erro" });
+      } finally {
+        btnSalvar.disabled = false;
+        btnSalvar.textContent = "Enviar Solicitação";
+      }
+    }
+
+    /* ===================================================================
+       CONSULTA E RENDERIZAÇÃO DA TABELA DE AGENDAMENTOS
+       =================================================================== */
+    async function carregarMeusAgendamentos() {
+      const tbody = document.getElementById("tbody-meus-agendamentos");
+      try {
+        const q = query(
+          collection(db, "bookings"),
+          where("usuarioId", "==", usuarioLogado.uid)
+        );
+        const snap = await getDocs(q);
+        
+        agendamentosCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        agendamentosCache.sort((a, b) => (b.dataAgendada + b.horaInicio).localeCompare(a.dataAgendada + a.horaInicio));
+
+        aplicarFiltrosTabela();
+      } catch (err) {
+        console.error("Erro ao carregar agendamentos:", err);
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red; padding: 20px;">Erro ao carregar dados.</td></tr>`;
+      }
+    }
+
+    function aplicarFiltrosTabela() {
+      const busca = document.getElementById("filtro-busca")?.value.toLowerCase().trim() || "";
+      const statusFiltro = document.getElementById("filtro-status")?.value || "";
+      const dataFiltro = document.getElementById("filtro-data")?.value || "";
+
+      const filtrados = agendamentosCache.filter(item => {
+        const matchBusca = !busca || 
+          (item.placaCavalo || "").toLowerCase().includes(busca) ||
+          (item.placaCarreta || "").toLowerCase().includes(busca) ||
+          (item.nomeMotorista || "").toLowerCase().includes(busca) ||
+          (item.tipoProcessoNome || "").toLowerCase().includes(busca);
+
+        const matchStatus = !statusFiltro || item.status === statusFiltro;
+        const matchData = !dataFiltro || item.dataAgendada === dataFiltro;
+
+        return matchBusca && matchStatus && matchData;
+      });
+
+      renderizarTabela(filtrados);
+    }
+
+    function renderizarTabela(lista) {
+      const tbody = document.getElementById("tbody-meus-agendamentos");
+      tbody.innerHTML = "";
+
+      if (lista.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:24px;" class="subtext">Nenhum agendamento encontrado para os filtros aplicados.</td></tr>`;
+        return;
+      }
+
+      lista.forEach(item => {
+        const tr = document.createElement("tr");
+
+        let badgeClass = "badge-pendente";
+        let statusDisplay = item.status || "Pendente";
+
+        if (item.status === STATUS.APROVADO) badgeClass = "badge-sucesso";
+        else if (item.status === STATUS.EM_PATIO) badgeClass = "badge-info";
+        else if (item.status === STATUS.RECUSADO || item.status === STATUS.CANCELADO) badgeClass = "badge-danger";
+        else if (item.status === STATUS.CONCLUIDO) badgeClass = "badge-sucesso";
+        else if (item.status === "EXPIRADO") badgeClass = "badge-expirado";
+        else if (item.status === "NO-SHOW") badgeClass = "badge-noshow";
+        else if (item.status === "AGENDAMENTO SEM RESPOSTA") badgeClass = "badge-sem-resposta";
+
+        tr.innerHTML = `
+          <td><strong>${formatarData(item.dataAgendada)}</strong><br><span class="subtext">${item.horaInicio} - ${item.horaFim}</span></td>
+          <td>${item.tipoProcessoNome || "Geral"}</td>
+          <td><strong>${item.placaCavalo || "-"}</strong> ${item.placaCarreta ? '<br><small class="subtext">Reboque: ' + item.placaCarreta + '</small>' : ''}</td>
+          <td>${item.nomeMotorista || "-"}<br><small class="subtext">${item.telefoneMotorista || ''}</small></td>
+          <td><span class="badge ${badgeClass}">${statusDisplay}</span></td>
+          <td style="text-align: right;">
+            ${(item.status === STATUS.PENDENTE || item.status === STATUS.APROVADO) 
+              ? `<button class="btn btn-sm btn-danger btn-abrir-cancelar" data-id="${item.id}">Cancelar</button>`
+              : `-`}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // Event listeners dos botões de cancelamento
+      document.querySelectorAll(".btn-abrir-cancelar").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-id");
+          abrirModalCancelar(id);
+        });
       });
     }
 
     /* ===================================================================
-       3. SUBMISSÃO DE NOVO AGENDAMENTO (TRANSAÇÃO ATÔMICA)
+       CANCELAMENTO DE AGENDAMENTO
        =================================================================== */
-    form?.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      erroBox.textContent = "";
-
-      const empresa = document.getElementById("empresa").value.trim();
-      const tipoProcessoId = selectTipoProcesso.value;
-      const dataAgendada = inputData.value;
-      const horaInicio = inputHoraSelecionada.value;
-      // Reaplica a máscara agora (não só no evento "input") para garantir que
-      // colar/autofill/preenchimento programático também fiquem padronizados
-      // antes de ir para o Firestore (sem espaços, traços extras, minúsculas etc.)
-      const placaCavalo = aplicarMascaraPlaca(document.getElementById("placaCavalo").value);
-      const placaCarreta = aplicarMascaraPlaca(document.getElementById("placaCarreta").value);
-      document.getElementById("placaCavalo").value = placaCavalo;
-      document.getElementById("placaCarreta").value = placaCarreta;
-      const motorista = document.getElementById("motorista").value.trim();
-      const observacoes = document.getElementById("observacoes").value.trim();
-
-      if (!horaInicio) {
-        erroBox.textContent = "Por favor, selecione um horário disponível no grid acima.";
-        return;
-      }
-
-      // Trava de segurança: se o usuário demorou para confirmar e o horário
-      // selecionado já passou nesse meio tempo (data = hoje), bloqueia o envio.
-      if (dataAgendada === dataDeHojeStr() && horaInicio <= horaAtualStr()) {
-        erroBox.textContent = "Este horário já passou. Selecione uma data/horário novamente.";
-        return;
-      }
-
-      if (!placaCompleta(placaCavalo)) {
-        erroBox.textContent = "Placa do cavalo incompleta. Use o formato AAA-0000 ou AAA0A00.";
-        return;
-      }
-      if (placaCarreta && !placaCompleta(placaCarreta)) {
-        erroBox.textContent = "Placa da carreta incompleta. Use o formato AAA-0000 ou AAA0A00.";
-        return;
-      }
-
-      // Horário calculado dinamicamente (regra/exceção) que o usuário selecionou.
-      // Serve como base de capacidade caso o documento em timeSlots ainda não exista.
-      const slotSelecionado = slotsDoDia.find(s => s.horaInicio === horaInicio);
-      if (!slotSelecionado) {
-        erroBox.textContent = "Este horário não está mais disponível. Selecione a data novamente.";
-        return;
-      }
-
-      const slotId = idSlotHorario(dataAgendada, horaInicio);
-      const slotRef = doc(db, "timeSlots", slotId);
-      const bookingRef = doc(collection(db, "bookings"));
-
-      const btnSub = form.querySelector("button[type=submit]");
-      btnSub.disabled = true;
-      btnSub.textContent = "Reservando vaga...";
-
-      try {
-        // Executa transação para evitar que 2 transportadoras peguem a última vaga simultaneamente.
-        // Se o documento da vaga ainda não existir (data futura calculada pela regra/exceção,
-        // nunca reservada antes), ele é criado agora ("lazy"), usando a capacidade já calculada.
-        await runTransaction(db, async (transaction) => {
-          const slotSnap = await transaction.get(slotRef);
-
-          let capacidadeMax;
-          let ocupadosAtuais;
-
-          if (!slotSnap.exists()) {
-            capacidadeMax = slotSelecionado.capacidadeMax;
-            ocupadosAtuais = 0;
-          } else {
-            const slotData = slotSnap.data();
-            if (slotData.ativo === false) {
-              throw new Error("O horário selecionado não está mais disponível.");
-            }
-            capacidadeMax = slotData.capacidadeMax;
-            ocupadosAtuais = slotData.ocupados || 0;
-          }
-
-          if (ocupadosAtuais >= capacidadeMax) {
-            throw new Error("As vagas para este horário acabaram de esgotar. Escolha outro horário.");
-          }
-
-          // Cria (se necessário) ou atualiza a vaga com a nova ocupação
-          transaction.set(slotRef, {
-            data: dataAgendada,
-            horaInicio,
-            horaFim: slotSelecionado.horaFim,
-            capacidadeMax,
-            ativo: true,
-            ocupados: ocupadosAtuais + 1
-          }, { merge: true });
-
-          // Salva a solicitação de agendamento
-          transaction.set(bookingRef, {
-            usuarioId: usuarioAtual.uid,
-            empresa,
-            tipoProcessoId,
-            dataAgendada,
-            horaInicio,
-            placaCavalo,
-            placaCarreta,
-            motorista,
-            observacoes,
-            status: "Pendente",
-            vagaLiberada: false, // controle interno: vira true quando a vaga é de fato liberada (recusa/cancelamento/expiração)
-            criadoEm: serverTimestamp()
-          });
-        });
-
-        // Log de auditoria (fora da transação — não afeta a reserva em si;
-        // se falhar por algum motivo, a reserva já está confirmada mesmo assim).
-        try {
-          await addDoc(collection(db, "auditLogs"), {
-            bookingId: bookingRef.id,
-            usuarioId: usuarioAtual.uid,
-            acao: "Solicitou",
-            dataHora: serverTimestamp()
-          });
-        } catch (errAudit) {
-          console.error("Erro ao registrar log de auditoria:", errAudit);
-        }
-
-        mostrarToast("Solicitação de agendamento enviada com sucesso!", { tipo: "sucesso" });
-        form.reset();
-        inputHoraSelecionada.value = "";
-        slotsGrid.innerHTML = "";
-        slotsMsg.textContent = "Selecione uma data para consultar os horários.";
-
-        // Leva o usuário direto para "Meus Agendamentos" com o novo item
-        // destacado, em vez de deixar o formulário limpo parado na mesma
-        // aba — assim ele já vê a confirmação do que acabou de pedir.
-        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("ativo"));
-        document.querySelectorAll(".tab-conteudo").forEach(c => c.classList.remove("ativo"));
-        document.querySelector('.tab-btn[data-tab="meus"]')?.classList.add("ativo");
-        document.getElementById("tab-meus")?.classList.add("ativo");
-        await carregarMeusAgendamentos(bookingRef.id);
-
-      } catch (err) {
-        console.error("Erro na reserva:", err);
-        erroBox.textContent = err.message || "Erro ao realizar o agendamento. Tente novamente.";
-      } finally {
-        btnSub.disabled = false;
-        btnSub.textContent = "Confirmar Agendamento";
-      }
-    });
-
-    /* ===================================================================
-       4. MEUS AGENDAMENTOS
-       =================================================================== */
-    async function carregarMeusAgendamentos(idParaDestacar = null) {
-      if (!listaAgendamentos) return;
-      listaAgendamentos.innerHTML = '<div class="estado-vazio">Carregando seus agendamentos...</div>';
-
-      try {
-        const tipos = await obterTiposProcessoMap();
-        const q = query(
-          collection(db, "bookings"),
-          where("usuarioId", "==", usuarioAtual.uid)
-        );
-
-        const snap = await getDocs(q);
-
-        if (snap.empty) {
-          listaAgendamentos.innerHTML = '<div class="estado-vazio">Você ainda não possui agendamentos cadastrados.</div>';
-          return;
-        }
-
-        const agendamentos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        agendamentos.sort((a, b) => (b.dataAgendada || "").localeCompare(a.dataAgendada || ""));
-
-        listaAgendamentos.innerHTML = "";
-        agendamentos.forEach(a => {
-          const div = document.createElement("div");
-          div.className = "item-agendamento";
-          div.dataset.id = a.id;
-
-          const statusClasse = {
-            Pendente: "pendente",
-            Aprovado: "aprovado",
-            Recusado: "recusado",
-            Expirado: "recusado",
-            Cancelado: "recusado"
-          }[a.status] || "pendente";
-
-          const podeCancelar = a.status === "Pendente" || a.status === "Aprovado";
-
-          div.innerHTML = `
-            <div class="linha-topo">
-              <span class="data-hora"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><line x1="3" y1="10" x2="21" y2="10"></line><line x1="8" y1="3" x2="8" y2="7"></line><line x1="16" y1="3" x2="16" y2="7"></line></svg> ${formatarData(a.dataAgendada)} às ${escapeHtml(a.horaInicio || "-")}</span>
-              <span class="badge ${statusClasse}">${escapeHtml(a.status || "Pendente")}</span>
-            </div>
-            <div class="detalhes">
-              Processo: <strong>${escapeHtml(tipos[a.tipoProcessoId] || "-")}</strong><br>
-              Placas: ${escapeHtml(a.placaCavalo || "-")}${a.placaCarreta ? " / " + escapeHtml(a.placaCarreta) : ""}<br>
-              Motorista: ${escapeHtml(a.motorista || "-")}
-              ${a.observacoes ? `<br>Obs.: ${escapeHtml(a.observacoes)}` : ""}
-            </div>
-            ${podeCancelar ? `
-              <div style="margin-top:10px;">
-                <button type="button" class="btn-acao btn-recusar btn-cancelar-agendamento" data-id="${a.id}">Cancelar Agendamento</button>
-              </div>
-            ` : ""}
-          `;
-          listaAgendamentos.appendChild(div);
-        });
-
-        listaAgendamentos.querySelectorAll(".btn-cancelar-agendamento").forEach(btn => {
-          btn.addEventListener("click", () => cancelarMeuAgendamento(btn.dataset.id, btn));
-        });
-
-        if (idParaDestacar) {
-          const itemNovo = listaAgendamentos.querySelector(`.item-agendamento[data-id="${idParaDestacar}"]`);
-          if (itemNovo) {
-            itemNovo.classList.add("destaque-novo");
-            itemNovo.scrollIntoView({ behavior: "smooth", block: "center" });
-          }
-        }
-
-      } catch (err) {
-        console.error("Erro ao carregar agendamentos:", err);
-        listaAgendamentos.innerHTML = '<div class="estado-vazio">Erro ao carregar seus agendamentos.</div>';
-      }
+    function abrirModalCancelar(bookingId) {
+      document.getElementById("cancelarBookingId").value = bookingId;
+      document.getElementById("motivoCancelamento").value = "";
+      document.getElementById("modal-cancelar").style.display = "flex";
     }
 
-    /* ===================================================================
-       5. CANCELAMENTO PELA PRÓPRIA TRANSPORTADORA
+    function fecharModalCancelar() {
+      document.getElementById("modal-cancelar").style.display = "none";
+    }
 
-       A Transportadora só marca o status como "Cancelado" — ela não tem
-       permissão para mexer em timeSlots (ver firestore.rules), então a
-       vaga em si é liberada depois, numa rotina que roda quando a
-       Logística/Admin abre o painel deles. Ou seja: a reserva some da
-       sua lista na hora, mas a vaga pode levar um pouco pra reaparecer
-       como disponível pra outras transportadoras.
-       =================================================================== */
-    async function cancelarMeuAgendamento(bookingId, btn) {
-      const confirmado = await mostrarConfirm(
-        "Tem certeza que deseja cancelar este agendamento? Essa ação não pode ser desfeita.",
-        { titulo: "Cancelar agendamento", perigo: true, textoConfirmar: "Cancelar Agendamento" }
-      );
-      if (!confirmado) return;
+    async function confirmarCancelamento() {
+      const bookingId = document.getElementById("cancelarBookingId").value;
+      const motivo = document.getElementById("motivoCancelamento").value.trim();
 
+      if (!motivo) {
+        mostrarAlerta("Por favor, preencha o motivo do cancelamento.", { titulo: "Aviso", tipo: "aviso" });
+        return;
+      }
+
+      const btn = document.getElementById("btn-confirmar-cancelamento");
       btn.disabled = true;
       btn.textContent = "Cancelando...";
 
       try {
         await updateDoc(doc(db, "bookings", bookingId), {
-          status: "Cancelado",
-          atualizadoEm: serverTimestamp(),
-          atualizadoPor: usuarioAtual.uid
+          status: STATUS.CANCELADO,
+          motivoCancelamento: motivo,
+          canceladoEm: serverTimestamp()
         });
 
+        // Registro de Auditoria
         try {
           await addDoc(collection(db, "auditLogs"), {
-            bookingId,
-            usuarioId: usuarioAtual.uid,
-            acao: "Cancelou",
+            bookingId: bookingId,
+            usuarioId: usuarioLogado.uid,
+            acao: "Cancelou Agendamento",
+            detalhe: motivo,
             dataHora: serverTimestamp()
           });
-        } catch (errAudit) {
-          console.error("Erro ao registrar log de auditoria:", errAudit);
+        } catch (eAudit) {
+          console.error("Erro auditLog:", eAudit);
         }
 
-        mostrarToast("Agendamento cancelado.", { tipo: "sucesso" });
-        carregarMeusAgendamentos();
+        fecharModalCancelar();
+        mostrarToast("Agendamento cancelado com sucesso.", { tipo: "sucesso" });
+        await carregarMeusAgendamentos();
+
       } catch (err) {
-        console.error("Erro ao cancelar agendamento:", err);
-        await mostrarAlerta("Erro ao cancelar o agendamento. Tente novamente.", { titulo: "Erro", tipo: "erro" });
+        console.error("Erro ao cancelar:", err);
+        mostrarAlerta("Erro ao cancelar o agendamento.", { titulo: "Erro", tipo: "erro" });
+      } finally {
         btn.disabled = false;
-        btn.textContent = "Cancelar Agendamento";
+        btn.textContent = "Confirmar Cancelamento";
       }
     }
 
     /* ===================================================================
-       UTILITÁRIOS
+       UTILITÁRIOS VISUAIS E DE FORMATAÇÃO
        =================================================================== */
     async function obterTiposProcessoMap() {
       const map = {};
@@ -761,14 +690,20 @@
       return `${dia}/${mes}/${ano}`;
     }
 
-    function escapeHtml(texto) {
-      if (!texto) return "";
-      return String(texto)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+    function mostrarToast(mensagem, { tipo = 'sucesso' } = {}) {
+      const container = document.getElementById("toast-container");
+      if (!container) return;
+      const toast = document.createElement("div");
+      toast.className = `toast toast-${tipo}`;
+      toast.textContent = mensagem;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 4000);
+    }
+
+    function mostrarAlerta(mensagem, { titulo = "Aviso", tipo = "aviso" } = {}) {
+      document.getElementById("alerta-titulo").textContent = titulo;
+      document.getElementById("alerta-mensagem").textContent = mensagem;
+      document.getElementById("modal-alerta").style.display = "flex";
     }
   </script>
 </body>
