@@ -746,6 +746,117 @@ export async function criarAgendamentoOperacional(db, usuarioLogado, dados, opco
   return { bookingId: bookingRef.id, slotId, capacidadeMax, ocupados, capacidadeForcada };
 }
 
+/**
+ * Cria um agendamento enviado pela própria Transportadora (nasce
+ * "Pendente", aguardando aprovação da Logística/Admin).
+ *
+ * ATENÇÃO — CENTRALIZAÇÃO: esta função existe porque a MESMA transação
+ * atômica de reserva de vaga (ler timeSlots, criar "lazy" se não
+ * existir, checar capacidade, incrementar `ocupados`, gravar o
+ * booking) vivia duplicada, escrita à mão, dentro de
+ * transportadora-dashboard.html — uma cópia paralela da lógica que já
+ * existe em `criarAgendamentoOperacional` acima. Isso não era só
+ * duplicação de código: a cópia divergia do schema em dois pontos —
+ * não gravava `horaFim` no booking (só no timeSlot) nem `tipoAgendamento`
+ * (o booking ficava sem classificação "Antecipado", usada por
+ * `calcularKPIs` para separar "Agendamento Prévio" de "Encaixe de
+ * Portaria"). Agora as duas telas (Transportadora e Logística) chamam
+ * a mesma rotina para a mesma operação de negócio ("reservar 1 vaga +
+ * criar 1 booking atomicamente"), cada uma só fornecendo o que muda
+ * entre os dois fluxos (status inicial, tipoAgendamento, dono do
+ * registro).
+ *
+ * @param {Firestore} db
+ * @param {{uid:string}} usuarioAtual - Transportadora autenticada (dona do agendamento)
+ * @param {object} dados - empresa, tipoProcessoId, dataAgendada, horaInicio,
+ *   placaCavalo, placaCarreta, motorista, observacoes
+ * @param {object} slotReferencia - o slot já calculado pela tela (via
+ *   buscarSlotsVirtuaisDoDia) para a data/hora escolhida — evita
+ *   reconsultar Regras/Exceções de novo aqui dentro
+ * @returns {Promise<{bookingId: string, slotId: string}>}
+ */
+export async function criarAgendamentoTransportadora(db, usuarioAtual, dados, slotReferencia) {
+  if (!usuarioAtual || !usuarioAtual.uid) {
+    throw new Error("Usuário não identificado.");
+  }
+
+  validarCamposObrigatorios(dados);
+
+  if (!slotReferencia) {
+    throw new Error("Este horário não está mais disponível. Selecione a data novamente.");
+  }
+
+  const slotId = idSlotHorario(dados.dataAgendada, dados.horaInicio);
+  const slotRef = doc(db, "timeSlots", slotId);
+  const bookingRef = doc(collection(db, "bookings"));
+
+  await runTransaction(db, async (transaction) => {
+    const slotSnap = await transaction.get(slotRef);
+
+    let capacidadeMax;
+    let ocupadosAtuais;
+
+    if (!slotSnap.exists()) {
+      // Vaga "lazy": data futura calculada pela Regra/Exceção, nunca
+      // reservada antes — nasce agora com a capacidade de referência.
+      capacidadeMax = slotReferencia.capacidadeMax;
+      ocupadosAtuais = 0;
+    } else {
+      const slotData = slotSnap.data();
+      if (slotData.ativo === false) {
+        throw new Error("O horário selecionado não está mais disponível.");
+      }
+      capacidadeMax = slotData.capacidadeMax;
+      ocupadosAtuais = slotData.ocupados || 0;
+    }
+
+    if (ocupadosAtuais >= capacidadeMax) {
+      throw new Error("As vagas para este horário acabaram de esgotar. Escolha outro horário.");
+    }
+
+    transaction.set(slotRef, {
+      data: dados.dataAgendada,
+      horaInicio: dados.horaInicio,
+      horaFim: slotReferencia.horaFim,
+      capacidadeMax,
+      ativo: true,
+      ocupados: ocupadosAtuais + 1
+    }, { merge: true });
+
+    transaction.set(bookingRef, {
+      usuarioId: usuarioAtual.uid,
+      empresa: String(dados.empresa).trim(),
+      tipoProcessoId: dados.tipoProcessoId,
+      dataAgendada: dados.dataAgendada,
+      horaInicio: dados.horaInicio,
+      horaFim: slotReferencia.horaFim,
+      placaCavalo: String(dados.placaCavalo).trim().toUpperCase(),
+      placaCarreta: dados.placaCarreta ? String(dados.placaCarreta).trim().toUpperCase() : "",
+      motorista: String(dados.motorista).trim(),
+      observacoes: dados.observacoes ? String(dados.observacoes).trim() : "",
+      status: STATUS.PENDENTE,
+      tipoAgendamento: TIPO_AGENDAMENTO.ANTECIPADO,
+      vagaLiberada: false,
+      criadoEm: serverTimestamp()
+    });
+  });
+
+  // Log de auditoria imutável (fora da transação, mesmo padrão de
+  // criarAgendamentoOperacional — não desfaz a reserva se falhar aqui).
+  try {
+    await addDoc(collection(db, "auditLogs"), {
+      bookingId: bookingRef.id,
+      usuarioId: usuarioAtual.uid,
+      acao: "Solicitou",
+      dataHora: serverTimestamp()
+    });
+  } catch (errAudit) {
+    console.error("Erro ao registrar log de auditoria do agendamento da Transportadora:", errAudit);
+  }
+
+  return { bookingId: bookingRef.id, slotId };
+}
+
 /* #######################################################################
    PARTE 4 — KPI METRICS
    Motor de Cálculo de KPIs e Métricas Operacionais.

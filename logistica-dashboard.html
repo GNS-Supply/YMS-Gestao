@@ -1043,8 +1043,7 @@
 
   <script type="module">
     import { auth, db } from "./firebase-config.js";
-    import { protegerPagina } from "./auth.js";
-    import { signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import { protegerPagina, logout } from "./auth.js";
     import {
       collection,
       doc,
@@ -1260,20 +1259,6 @@
       preencherSelectProcessoEncaixe();
       await carregarTransportadoras();
 
-      // Varredura de vagas presas por cancelamentos feitos pela própria
-      // Transportadora (ela só pode mudar o status para "Cancelado", nunca
-      // decrementar timeSlots.ocupados — só Logística/Admin fazem isso).
-      // Roda antes de montar o painel do dia para já refletir a vaga
-      // liberada na primeira renderização.
-      try {
-        const totalLiberadas = await liberarVagasCanceladasPelaTransportadora(db, usuarioLogado);
-        if (totalLiberadas > 0) {
-          console.info(`${totalLiberadas} vaga(s) de agendamento(s) cancelado(s) pela Transportadora foram liberadas automaticamente.`);
-        }
-      } catch (err) {
-        console.error("Erro na varredura de liberação de vagas canceladas:", err);
-      }
-
       inicializarAbas();
       inicializarMenuMobile();
       await carregarDadosGerais();
@@ -1286,7 +1271,7 @@
       inicializarFormulariosPortaria();
     });
 
-    document.getElementById("btn-logout").addEventListener("click", () => signOut(auth));
+    document.getElementById("btn-logout").addEventListener("click", logout);
 
     /* ===================================================================
        GERENCIAMENTO DO MENU LATERAL (ERP)
@@ -1386,6 +1371,29 @@
     }
 
     async function carregarDadosGerais() {
+      // Auto-cura de vagas presas por cancelamentos feitos pela própria
+      // Transportadora (ela só pode mudar o status do booking para
+      // "Cancelado" — nunca decrementar timeSlots.ocupados, ver
+      // firestore rules e liberarVagasCanceladasPelaTransportadora em
+      // patioCore.js). Rodar aqui — dentro de carregarDadosGerais(), que
+      // é chamada depois de TODA ação nesta tela (check-in, check-out,
+      // aprovar/recusar, novo agendamento operacional, encaixe, no-show)
+      // — em vez de só uma vez no carregamento inicial da página, fecha
+      // rápido a janela em que o contador `timeSlots.ocupados` (usado
+      // pelo dropdown "Novo Agendamento Operacional" e pelo formulário
+      // da Transportadora) poderia ficar temporariamente maior do que a
+      // contagem já refletida no Painel do Dia (que é recalculada ao
+      // vivo a partir dos próprios bookings, e por isso reage na hora a
+      // um cancelamento).
+      try {
+        const totalLiberadas = await liberarVagasCanceladasPelaTransportadora(db, usuarioLogado);
+        if (totalLiberadas > 0) {
+          console.info(`${totalLiberadas} vaga(s) de agendamento(s) cancelado(s) pela Transportadora foram liberadas automaticamente.`);
+        }
+      } catch (errSweep) {
+        console.error("Erro na varredura de liberação de vagas canceladas:", errSweep);
+      }
+
       try {
         const snap = await getDocs(collection(db, "bookings"));
         todosBookingsGerais = snap.docs.map(d => ({ id: d.id, ...d.data() }));
