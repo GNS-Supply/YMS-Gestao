@@ -153,32 +153,113 @@
       .conteudo-erp { max-width: 1720px; }
     }
 
+    /* ---------- Botão hambúrguer (só existe/aparece no mobile) ---------- */
+    .btn-hamburguer {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.35);
+      color: var(--branco);
+      padding: 7px;
+      border-radius: 7px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .btn-hamburguer:hover { background: rgba(255,255,255,0.08); }
+
+    /* ---------- Cabeçalho do menu no mobile (título + botão fechar) ----------
+       Fica oculto no desktop; só aparece dentro do painel deslizante. */
+    .sidebar-cabecalho-mobile {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 18px 16px;
+      margin-bottom: 6px;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+    }
+    .sidebar-cabecalho-mobile span {
+      color: var(--branco);
+      font-family: var(--fonte-display);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      font-size: 0.85rem;
+    }
+    .btn-fechar-sidebar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.35);
+      color: var(--branco);
+      padding: 6px;
+      border-radius: 7px;
+      cursor: pointer;
+    }
+
+    /* ---------- Overlay escurecido atrás do painel (fecha ao tocar fora) ---------- */
+    .sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(16, 25, 34, 0.55);
+      z-index: 199;
+      opacity: 0;
+      transition: opacity .2s ease;
+    }
+    .sidebar-overlay.aberto { display: block; opacity: 1; }
+
     @media (max-width: 900px) {
       .layout-erp { flex-direction: column; }
+
+      .btn-hamburguer { display: inline-flex; }
+      .sidebar-cabecalho-mobile { display: flex; }
+
+      /* Painel do menu vira uma gaveta (drawer) fixa que desliza da
+         esquerda por cima do conteúdo — estilo aplicativo — em vez de
+         empurrar/comprimir a tela. Fechada por padrão (translateX -100%),
+         abre com a classe ".aberto" (aplicada via JS pelo botão hambúrguer). */
       .sidebar-erp {
-        position: sticky;
+        position: fixed;
         top: 0;
-        z-index: 45;
-        width: 100%;
-        min-height: auto;
-        flex-direction: row;
-        overflow-x: auto;
-        overflow-y: hidden;
+        left: 0;
+        bottom: 0;
+        z-index: 200;
+        width: 78vw;
+        max-width: 300px;
+        min-height: 100vh;
+        flex-direction: column;
+        overflow-x: hidden;
+        overflow-y: auto;
         -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-        padding: 6px 8px;
-        gap: 4px;
+        padding: 0 0 20px;
+        gap: 2px;
+        transform: translateX(-100%);
+        transition: transform .25s ease;
+        box-shadow: var(--sombra-lg);
       }
-      .sidebar-erp::-webkit-scrollbar { display: none; }
+      .sidebar-erp.aberto { transform: translateX(0); }
+
       .sidebar-item {
         flex: 0 0 auto;
-        border-left: none;
-        border-bottom: 3px solid transparent;
-        padding: 10px 14px;
-        white-space: nowrap;
+        width: 100%;
+        border-left: 3px solid transparent;
+        border-bottom: none;
+        padding: 14px 18px;
+        white-space: normal;
+        font-size: 0.92rem;
       }
-      .sidebar-item.ativo { border-bottom-color: var(--laranja); }
+      .sidebar-item.ativo { border-left-color: var(--laranja); border-bottom: none; }
       .conteudo-erp { padding: 14px; width: 100%; }
+
+      .topbar .marca {
+        font-size: 0.85rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+      }
     }
 
     /* =====================================================================
@@ -269,7 +350,12 @@
 <body>
 
   <div class="topbar">
-    <div class="marca"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="9"></rect><path d="M14 10h4l3 3v3h-7z"></path><circle cx="6" cy="18" r="2"></circle><circle cx="17" cy="18" r="2"></circle></svg> Agendamento de Pátio — Painel Operacional</div>
+    <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+      <button id="btn-hamburguer" class="btn-hamburguer" type="button" aria-label="Abrir menu" aria-expanded="false" aria-controls="sidebar-erp">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+      <div class="marca"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="9"></rect><path d="M14 10h4l3 3v3h-7z"></path><circle cx="6" cy="18" r="2"></circle><circle cx="17" cy="18" r="2"></circle></svg> Agendamento de Pátio — Painel Operacional</div>
+    </div>
     <div style="display: flex; align-items: center; gap: 12px;">
       <div style="text-align: right; font-size: 0.85rem;">
         <div id="user-nome" style="font-weight: 600;">--</div>
@@ -281,7 +367,15 @@
 
   <div class="layout-erp">
 
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
     <nav class="sidebar-erp" id="sidebar-erp">
+      <div class="sidebar-cabecalho-mobile">
+        <span>Menu</span>
+        <button id="btn-fechar-sidebar" class="btn-fechar-sidebar" type="button" aria-label="Fechar menu">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="5" x2="19" y2="19"></line><line x1="19" y1="5" x2="5" y2="19"></line></svg>
+        </button>
+      </div>
       <button class="sidebar-item ativo" data-tab="painel">
         <span class="sidebar-icone"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><line x1="3" y1="10" x2="21" y2="10"></line><line x1="8" y1="3" x2="8" y2="7"></line><line x1="16" y1="3" x2="16" y2="7"></line></svg></span><span class="sidebar-label">Painel do Dia</span>
       </button>
@@ -1097,6 +1191,7 @@
       }
 
       inicializarAbas();
+      inicializarMenuMobile();
       await carregarDadosGerais();
       
       renderizarTiraDias();
@@ -1141,6 +1236,12 @@
           if (target === "todos") carregarTodosAgendamentos();
           if (target === "kpis") atualizarPainelKPIs();
           if (target === "regras") { carregarRegras(); carregarExcecoes(); }
+
+          // No mobile, o menu é uma gaveta por cima do conteúdo — escolher
+          // uma opção já fecha ela sozinha (comportamento padrão de app).
+          // No desktop isso não tem efeito nenhum (a gaveta só existe/some
+          // dentro do media query do mobile).
+          fecharMenuMobile();
         });
       });
 
@@ -1149,6 +1250,55 @@
         const alvo = document.querySelector(`.sidebar-item[data-tab="${tabParam}"]`);
         if (alvo) alvo.click();
       }
+    }
+
+    /* ===================================================================
+       MENU SANDUÍCHE (MOBILE) — abre/fecha a gaveta lateral
+
+       No desktop o menu já é uma coluna fixa sempre visível; este bloco
+       só entra em ação visualmente dentro do media query mobile do CSS
+       (max-width:900px), onde ".sidebar-erp" vira um painel deslizante.
+       Fecha ao: tocar no botão "✕", tocar fora do menu (overlay), ou
+       apertar Esc — os três padrões esperados num menu estilo app.
+       =================================================================== */
+    function inicializarMenuMobile() {
+      const btnHamburguer = document.getElementById("btn-hamburguer");
+      const btnFechar = document.getElementById("btn-fechar-sidebar");
+      const overlay = document.getElementById("sidebar-overlay");
+      const sidebar = document.getElementById("sidebar-erp");
+      if (!btnHamburguer || !sidebar || !overlay) return;
+
+      btnHamburguer.addEventListener("click", () => {
+        const abrindo = !sidebar.classList.contains("aberto");
+        sidebar.classList.toggle("aberto", abrindo);
+        overlay.classList.toggle("aberto", abrindo);
+        btnHamburguer.setAttribute("aria-expanded", String(abrindo));
+        document.body.style.overflow = abrindo ? "hidden" : "";
+      });
+
+      btnFechar?.addEventListener("click", fecharMenuMobile);
+      overlay.addEventListener("click", fecharMenuMobile);
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") fecharMenuMobile();
+      });
+
+      // Se a pessoa girar o celular pra paisagem/redimensionar a janela e
+      // sair da faixa mobile enquanto o menu estava aberto, garante que
+      // ele não fique "preso" aberto por cima do layout de desktop.
+      window.addEventListener("resize", () => {
+        if (window.innerWidth > 900) fecharMenuMobile();
+      });
+    }
+
+    function fecharMenuMobile() {
+      const overlay = document.getElementById("sidebar-overlay");
+      const sidebar = document.getElementById("sidebar-erp");
+      const btnHamburguer = document.getElementById("btn-hamburguer");
+      sidebar?.classList.remove("aberto");
+      overlay?.classList.remove("aberto");
+      btnHamburguer?.setAttribute("aria-expanded", "false");
+      document.body.style.overflow = "";
     }
 
     async function carregarDadosGerais() {
