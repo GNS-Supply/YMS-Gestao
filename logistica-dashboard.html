@@ -346,6 +346,7 @@
       display: inline-block;
     }
     .status-aprovado { background: #e3f2fd; color: #1565c0; }
+    .status-pendente { background: #fdf1de; color: #a5680b; }
     .status-empatio { background: #fff3cd; color: #856404; }
     .status-concluido { background: #d4edda; color: #155724; }
     .status-noshow { background: #f8d7da; color: #721c24; }
@@ -675,11 +676,12 @@
             <div style="display:flex; gap:15px; flex-wrap:wrap;">
               <div class="campo" style="flex:1; min-width:140px;">
                 <label for="op-placa-cavalo">Placa Cavalo</label>
-                <input type="text" id="op-placa-cavalo" required style="text-transform:uppercase;">
+                <input type="text" id="op-placa-cavalo" required maxlength="8" placeholder="AAA-0000 ou AAA0A00" style="text-transform:uppercase;" inputmode="text" autocomplete="off">
+                <small style="display:block; margin-top:4px; color:var(--texto-suave); font-size:0.78rem;">Formatos aceitos: AAA-0000 (antigo) ou AAA0A00 (Mercosul)</small>
               </div>
               <div class="campo" style="flex:1; min-width:140px;">
                 <label for="op-placa-carreta">Placa Carreta (opcional)</label>
-                <input type="text" id="op-placa-carreta" style="text-transform:uppercase;">
+                <input type="text" id="op-placa-carreta" maxlength="8" placeholder="AAA-0000 ou AAA0A00" style="text-transform:uppercase;" inputmode="text" autocomplete="off">
               </div>
             </div>
 
@@ -933,13 +935,14 @@
         <div style="display: flex; gap: 10px;">
           <div class="campo" style="flex: 1;">
             <label for="checkin-placa-cavalo">Placa Cavalo</label>
-            <input type="text" id="checkin-placa-cavalo" required style="text-transform: uppercase;">
+            <input type="text" id="checkin-placa-cavalo" required maxlength="8" placeholder="AAA-0000 ou AAA0A00" style="text-transform: uppercase;" inputmode="text" autocomplete="off">
           </div>
           <div class="campo" style="flex: 1;">
             <label for="checkin-placa-carreta">Placa Carreta</label>
-            <input type="text" id="checkin-placa-carreta" style="text-transform: uppercase;">
+            <input type="text" id="checkin-placa-carreta" maxlength="8" placeholder="AAA-0000 ou AAA0A00" style="text-transform: uppercase;" inputmode="text" autocomplete="off">
           </div>
         </div>
+        <small style="display:block; margin-top:-10px; margin-bottom:14px; color:var(--texto-suave); font-size:0.78rem;">Formatos aceitos: AAA-0000 (antigo) ou AAA0A00 (Mercosul)</small>
 
         <div class="campo">
           <label for="checkin-motorista">Nome do Motorista</label>
@@ -1466,6 +1469,7 @@
           const reservasHorario = agendamentosDia.filter(b => b.horaInicio === slot.horaInicio);
           const ocupados = reservasHorario.length;
           const max = slot.capacidadeMax;
+          const pendentesHorario = reservasHorario.filter(b => b.status === "Pendente").length;
 
           let nivelClasse = "nivel-livre";
           if (slot.fechado) nivelClasse = "nivel-fechado";
@@ -1475,11 +1479,20 @@
           const pct = max > 0 ? Math.min(100, Math.round((ocupados / max) * 100)) : 100;
 
           const faixa = document.createElement("div");
-          faixa.className = `faixa-horario ${nivelClasse}`;
+          faixa.className = `faixa-horario ${nivelClasse}${pendentesHorario > 0 ? " tem-pendente" : ""}`;
+
+          // Sinalização diferenciada: um horário pode estar com vagas
+          // livres (barra verde) e AINDA assim ter uma solicitação parada
+          // esperando aprovação — o selo abaixo é independente da cor de
+          // ocupação, chama atenção pra isso especificamente.
+          const seloPendente = pendentesHorario > 0
+            ? `<span class="badge-pendente-horario"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12"></path><path d="M6 21h12"></path><path d="M7 3c0 5 4 6.5 5 8-1 1.5-5 3-5 8"></path><path d="M17 3c0 5-4 6.5-5 8 1 1.5 5 3 5 8"></path></svg> ${pendentesHorario} aguardando</span>`
+            : "";
 
           faixa.innerHTML = `
             <button class="faixa-horario-cabecalho" type="button">
               <span class="faixa-horario-hora">${slot.horaInicio} às ${slot.horaFim}</span>
+              ${seloPendente}
               <div class="faixa-horario-barra">
                 <div class="faixa-horario-barra-preenchida" style="width: ${pct}%;"></div>
               </div>
@@ -1509,17 +1522,39 @@
         return '<p style="color:#888; font-size:0.85rem; margin:0;">Nenhum veículo agendado neste horário.</p>';
       }
 
-      return reservas.map(b => `
+      const badgeStatusClasse = {
+        Pendente: "status-pendente",
+        Aprovado: "status-aprovado",
+        "Em Pátio": "status-empatio",
+        "Concluído": "status-concluido",
+        "No-Show": "status-noshow"
+      };
+
+      return reservas.map(b => {
+        const nomeProcesso = mapProcessos[b.tipoProcessoId] || b.tipoProcessoId || "Não especificado";
+        const classeStatus = badgeStatusClasse[b.status] || "";
+
+        return `
         <div class="reserva-mini">
-          <strong>${escapeHtml(b.empresa)}</strong> ${b.tipoAgendamento === "Operacional" ? '<span class="tag-operacional">Op</span>' : ''}<br>
+          <div class="reserva-mini-topo">
+            <div>
+              <strong>${escapeHtml(b.empresa)}</strong>
+              ${b.tipoAgendamento === "Operacional" ? '<span class="tag-operacional">Op</span>' : ''}
+            </div>
+            <span class="badge-processo">${escapeHtml(nomeProcesso)}</span>
+          </div>
           <small>
-            Processo: ${escapeHtml(mapProcessos[b.tipoProcessoId] || b.tipoProcessoId)} | 
-            Placa: <b>${escapeHtml(b.placaCavalo)}</b> | 
-            Motorista: ${escapeHtml(b.motorista)} | 
-            Status: <b>${escapeHtml(b.status)}</b>
+            Placa: <b>${escapeHtml(b.placaCavalo)}</b>${b.placaCarreta ? ` / ${escapeHtml(b.placaCarreta)}` : ""} |
+            Motorista: ${escapeHtml(b.motorista)} |
+            Status: <span class="badge-status ${classeStatus}">${escapeHtml(b.status)}</span>
           </small>
+          ${b.observacoes ? `
+          <div class="reserva-mini-obs">
+            <strong>Obs.:</strong> ${escapeHtml(b.observacoes)}
+          </div>` : ""}
         </div>
-      `).join("");
+      `;
+      }).join("");
     }
 
     /* ===================================================================
@@ -1679,6 +1714,9 @@
     }
 
     function inicializarFormulariosPortaria() {
+      configurarMascaraPlaca(document.getElementById("checkin-placa-cavalo"));
+      configurarMascaraPlaca(document.getElementById("checkin-placa-carreta"));
+
       document.querySelectorAll("#tab-portaria .btn-filtro").forEach(btn => {
         btn.addEventListener("click", () => {
           document.querySelectorAll("#tab-portaria .btn-filtro").forEach(b => b.classList.remove("ativo"));
@@ -1701,8 +1739,13 @@
       document.getElementById("form-checkin").addEventListener("submit", async (e) => {
         e.preventDefault();
         const id = document.getElementById("checkin-booking-id").value;
-        const placaCavalo = document.getElementById("checkin-placa-cavalo").value.trim().toUpperCase();
-        const placaCarreta = document.getElementById("checkin-placa-carreta").value.trim().toUpperCase();
+        // Reaplica a máscara agora (não só no evento "input") para garantir que
+        // colar/autofill/preenchimento programático também fiquem padronizados
+        // antes de ir para o Firestore.
+        const placaCavalo = aplicarMascaraPlaca(document.getElementById("checkin-placa-cavalo").value);
+        const placaCarreta = aplicarMascaraPlaca(document.getElementById("checkin-placa-carreta").value);
+        document.getElementById("checkin-placa-cavalo").value = placaCavalo;
+        document.getElementById("checkin-placa-carreta").value = placaCarreta;
         const motorista = document.getElementById("checkin-motorista").value.trim();
         const horaAgendada = document.getElementById("checkin-hora-agendada").value;
 
@@ -1933,6 +1976,9 @@
       const inputData = document.getElementById("op-data");
       const form = document.getElementById("form-agendamento-operacional");
 
+      configurarMascaraPlaca(document.getElementById("op-placa-cavalo"));
+      configurarMascaraPlaca(document.getElementById("op-placa-carreta"));
+
       selectTransp.addEventListener("change", () => {
         if (selectTransp.value === "__OUTRA__") {
           wrapExterna.style.display = "block";
@@ -1954,6 +2000,13 @@
           ? inputExterna.value.trim() 
           : listaTransportadoras.find(t => t.id === usuarioId)?.empresa || "";
 
+        // Reaplica a máscara agora (não só no evento "input") para garantir que
+        // colar/autofill/preenchimento programático também fiquem padronizados.
+        const placaCavalo = aplicarMascaraPlaca(document.getElementById("op-placa-cavalo").value);
+        const placaCarreta = aplicarMascaraPlaca(document.getElementById("op-placa-carreta").value);
+        document.getElementById("op-placa-cavalo").value = placaCavalo;
+        document.getElementById("op-placa-carreta").value = placaCarreta;
+
         btnSalvar.disabled = true;
         btnSalvar.textContent = "Gravando...";
 
@@ -1964,8 +2017,8 @@
             dataAgendada: inputData.value,
             horaInicio: document.getElementById("op-horario").value,
             tipoProcessoId: document.getElementById("op-processo").value,
-            placaCavalo: document.getElementById("op-placa-cavalo").value.trim().toUpperCase(),
-            placaCarreta: document.getElementById("op-placa-carreta").value.trim().toUpperCase(),
+            placaCavalo,
+            placaCarreta,
             motorista: document.getElementById("op-motorista").value.trim(),
             observacoes: document.getElementById("op-observacoes").value.trim()
           });
@@ -2743,6 +2796,49 @@
       if (!dataStr) return "-";
       const [ano, mes, dia] = dataStr.split("-");
       return `${dia}/${mes}/${ano}`;
+    }
+
+    /* ===================================================================
+       MÁSCARA DE PLACA (aceita AAA-0000 e AAA0A00 / Mercosul)
+       Mesmo padrão já usado em transportadora-dashboard.html — replicado
+       aqui para os campos de placa da Logística/Portaria (Check-in e
+       Novo Agendamento Operacional), que até então aceitavam qualquer
+       texto sem formatação nem validação de tamanho.
+       Posições (sem contar o traço): 1-3 letras, 4º dígito,
+       5º dígito (formato antigo, insere traço) ou letra (Mercosul, sem
+       traço), 6-7 sempre dígitos.
+       =================================================================== */
+    function aplicarMascaraPlaca(valorBruto) {
+      const brutoLimpo = (valorBruto || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      let alfanumerico = "";
+
+      for (let i = 0; i < brutoLimpo.length && alfanumerico.length < 7; i++) {
+        const ch = brutoLimpo[i];
+        const pos = alfanumerico.length;
+
+        if (pos < 3) {
+          if (/[A-Z]/.test(ch)) alfanumerico += ch;
+        } else if (pos === 3) {
+          if (/[0-9]/.test(ch)) alfanumerico += ch;
+        } else if (pos === 4) {
+          if (/[A-Z0-9]/.test(ch)) alfanumerico += ch;
+        } else {
+          if (/[0-9]/.test(ch)) alfanumerico += ch;
+        }
+      }
+
+      // O 5º caractere (índice 4) define o formato: dígito = antigo (com traço), letra = Mercosul (sem traço)
+      if (alfanumerico.length >= 5 && /[0-9]/.test(alfanumerico[4])) {
+        return alfanumerico.slice(0, 3) + "-" + alfanumerico.slice(3);
+      }
+      return alfanumerico;
+    }
+
+    function configurarMascaraPlaca(inputEl) {
+      if (!inputEl) return;
+      inputEl.addEventListener("input", () => {
+        inputEl.value = aplicarMascaraPlaca(inputEl.value);
+      });
     }
 
     function escapeHtml(texto) {

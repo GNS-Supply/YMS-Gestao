@@ -855,10 +855,76 @@ button, .btn-primario, .btn-acao, .tab-btn, .topbar button, .slot-opcao, .btn-sl
 .reserva-mini:last-child { margin-bottom: 0; }
 .reserva-mini strong { color: var(--texto); }
 
+/* ---------- Selo "aguardando aprovação" no cabeçalho do horário ----------
+   Sinalização diferenciada e independente da cor de ocupação (verde/
+   laranja/vermelho da barra) — um horário pode estar "livre" em vagas e
+   ainda ter uma solicitação parada esperando decisão da Logística, e
+   isso merece um alerta próprio, não só a cor de ocupação. */
+.faixa-horario.tem-pendente { background: #fffaf2; }
+.badge-pendente-horario {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #fdf1de;
+  color: #a5680b;
+  font-family: var(--fonte-mono, monospace);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-left: 2px solid var(--laranja);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ---------- Cabeçalho de cada reserva dentro do horário expandido ---------- */
+.reserva-mini-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+/* Tipo de processo em destaque (tag), em vez de texto corrido misturado
+   com placa/motorista — facilita bater o olho e identificar o tipo de
+   carga/operação de cada reserva dentro da lista expandida. */
+.badge-processo {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 4px;
+  background: #eaf2fb;
+  color: var(--azul);
+  font-family: var(--fonte-mono, monospace);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-left: 2px solid var(--azul);
+  white-space: nowrap;
+}
+
+/* Observações da reserva — só aparece quando o campo existe e não é
+   vazio; visualmente separada dos dados de placa/motorista/status. */
+.reserva-mini-obs {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--cinza-borda);
+  color: var(--texto-suave);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+.reserva-mini-obs strong { color: var(--texto-suave); }
+
 @media (max-width: 640px) {
   .chip-dia { min-width: 64px; padding: 8px 4px; }
   .faixa-horario-hora { min-width: 70px; font-size: 0.85rem; }
   .faixa-horario-contagem { min-width: 44px; font-size: 0.78rem; }
+  .faixa-horario-cabecalho { flex-wrap: wrap; row-gap: 6px; }
+  .badge-pendente-horario { font-size: 0.62rem; padding: 2px 6px; order: 5; flex-basis: 100%; justify-content: center; }
 }
 
 /* ---------- Seleção de dias da semana (Regras & Exceções) ---------- */
