@@ -198,6 +198,25 @@
       cursor: pointer;
     }
 
+    /* ---------- Topbar: grupos esquerda/direita (substituem os antigos
+       estilos inline nos divs — evita que a regra genérica de
+       style.css ".topbar > div[style*=\"display:flex\"]" capture estes
+       elementos e force um wrap indesejado no mobile) ---------- */
+    .topbar-esquerda {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .topbar-direita {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .info-usuario { text-align: right; font-size: 0.85rem; }
+    .marca-texto-curto { display: none; }
+
     /* ---------- Overlay escurecido atrás do painel (fecha ao tocar fora) ---------- */
     .sidebar-overlay {
       display: none;
@@ -215,6 +234,45 @@
 
       .btn-hamburguer { display: inline-flex; }
       .sidebar-cabecalho-mobile { display: flex; }
+
+      /* Topbar mobile reorganizado numa única linha, mais baixo:
+         [hambúrguer] [ícone + "Painel Operacional"]  ....  [nome] [Sair]
+         Em vez do texto completo empilhando com o nome do usuário embaixo
+         (como acontecia antes por causa do wrap forçado herdado de
+         style.css), tudo fica compacto numa linha só. */
+      .topbar {
+        flex-wrap: nowrap;
+        padding-top: calc(8px + env(safe-area-inset-top));
+        padding-bottom: 8px;
+        padding-left: 14px;
+        padding-right: 14px;
+        gap: 8px;
+      }
+      .topbar-esquerda { flex: 1 1 auto; min-width: 0; }
+      .topbar-direita { gap: 8px; }
+
+      .marca-texto-completo { display: none; }
+      .marca-texto-curto { display: inline; }
+      .topbar .marca {
+        font-size: 0.9rem;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      /* Nome/cargo do usuário: só o nome cabe numa linha só ao lado do
+         botão Sair; o cargo (2ª linha) some no mobile pra não empilhar. */
+      .info-usuario { text-align: left; }
+      #user-tipo { display: none; }
+      #user-nome {
+        font-size: 0.78rem;
+        max-width: 24vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #btn-logout { padding: 6px 10px; font-size: 0.78rem; }
 
       /* Painel do menu vira uma gaveta (drawer) fixa que desliza da
          esquerda por cima do conteúdo — estilo aplicativo — em vez de
@@ -252,14 +310,6 @@
       }
       .sidebar-item.ativo { border-left-color: var(--laranja); border-bottom: none; }
       .conteudo-erp { padding: 14px; width: 100%; }
-
-      .topbar .marca {
-        font-size: 0.85rem;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        min-width: 0;
-      }
     }
 
     /* =====================================================================
@@ -350,14 +400,18 @@
 <body>
 
   <div class="topbar">
-    <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+    <div class="topbar-esquerda">
       <button id="btn-hamburguer" class="btn-hamburguer" type="button" aria-label="Abrir menu" aria-expanded="false" aria-controls="sidebar-erp">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
       </button>
-      <div class="marca"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="9"></rect><path d="M14 10h4l3 3v3h-7z"></path><circle cx="6" cy="18" r="2"></circle><circle cx="17" cy="18" r="2"></circle></svg> Agendamento de Pátio — Painel Operacional</div>
+      <div class="marca">
+        <svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="9"></rect><path d="M14 10h4l3 3v3h-7z"></path><circle cx="6" cy="18" r="2"></circle><circle cx="17" cy="18" r="2"></circle></svg>
+        <span class="marca-texto-completo">Agendamento de Pátio — Painel Operacional</span>
+        <span class="marca-texto-curto">Painel Operacional</span>
+      </div>
     </div>
-    <div style="display: flex; align-items: center; gap: 12px;">
-      <div style="text-align: right; font-size: 0.85rem;">
+    <div class="topbar-direita">
+      <div class="info-usuario">
         <div id="user-nome" style="font-weight: 600;">--</div>
         <div id="user-tipo" style="opacity: 0.75; font-size: 0.75rem;">--</div>
       </div>
@@ -1021,8 +1075,35 @@
     let mapProcessos = {};
     let listaTransportadoras = [];
     let todosBookingsGerais = [];
-    let dataSelecionadaPainel = new Date().toISOString().split("T")[0];
     let filtroPortariaAtual = "todos";
+
+    /* ===================================================================
+       DATA/HORA LOCAL — timezone-safe (BUGFIX)
+
+       `new Date().toISOString().split("T")[0]` estava espalhado pelo
+       arquivo todo para obter "a data de hoje". O problema: toISOString()
+       converte para UTC antes de formatar — em fusos negativos como o do
+       Brasil (UTC-3), isso troca o dia sempre que faltam menos de 3h pra
+       meia-noite local (ex: 22:01 em BRT já virou 01:01 do dia seguinte
+       em UTC). Era exatamente isso que fazia selecionar o chip "12" no
+       Painel do Dia carregar os horários do dia "13": a tira de dias é
+       gerada com este mesmo cálculo, então o PRÓPRIO CHIP já nascia com
+       a data errada.
+
+       dataLocalStr() usa getFullYear()/getMonth()/getDate() (sempre no
+       fuso do navegador do usuário) em vez de toISOString(), replicando
+       o helper que já existia e funcionava certo em
+       transportadora-dashboard.html. Todas as ocorrências do padrão
+       antigo neste arquivo foram trocadas por esta função.
+       =================================================================== */
+    function dataLocalStr(data = new Date()) {
+      const ano = data.getFullYear();
+      const mes = String(data.getMonth() + 1).padStart(2, "0");
+      const dia = String(data.getDate()).padStart(2, "0");
+      return `${ano}-${mes}-${dia}`;
+    }
+
+    let dataSelecionadaPainel = dataLocalStr();
 
     /* ===================================================================
        POPUP / MODAL CUSTOMIZADO (substitui alert() e confirm() nativos —
@@ -1162,13 +1243,13 @@
       document.getElementById("user-nome").textContent = dadosUser.nome || user.email;
       document.getElementById("user-tipo").textContent = dadosUser.tipo === 3 ? "Administrador Master" : "Operador Logística";
 
-      const hojeIso = new Date().toISOString().split("T")[0];
+      const hojeIso = dataLocalStr();
       document.getElementById("picker-data-painel").value = hojeIso;
       document.getElementById("op-data").value = hojeIso;
       document.getElementById("vagas-data").value = hojeIso;
       document.getElementById("filtro-data-inicio").value = hojeIso;
       document.getElementById("filtro-data-fim").value = hojeIso;
-      document.getElementById("kpi-data-inicio").value = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0];
+      document.getElementById("kpi-data-inicio").value = dataLocalStr(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
       document.getElementById("kpi-data-fim").value = hojeIso;
 
       mapProcessos = await obterTiposProcessoMap();
@@ -1325,7 +1406,7 @@
         const d = new Date();
         d.setDate(hoje.getDate() + i);
 
-        const dataIso = d.toISOString().split("T")[0];
+        const dataIso = dataLocalStr(d);
         const diaSemanaStr = diasSemana[d.getDay()];
         const diaNum = String(d.getDate()).padStart(2, "0");
 
@@ -1453,7 +1534,7 @@
        carregarDadosGerais() -> re-renderizar as telas afetadas.
        =================================================================== */
     function obterAgendamentosHojeOrdenados() {
-      const hojeStr = new Date().toISOString().split("T")[0];
+      const hojeStr = dataLocalStr();
       return todosBookingsGerais
         .filter(b => b.dataAgendada === hojeStr)
         .sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
@@ -1659,7 +1740,7 @@
           fecharModaisPortaria();
           await carregarDadosGerais();
           renderizarTabelaPortaria();
-          if (dataSelecionadaPainel === new Date().toISOString().split("T")[0]) {
+          if (dataSelecionadaPainel === dataLocalStr()) {
             carregarPainelDoDia(dataSelecionadaPainel);
           }
           mostrarToast("Check-in realizado.", { tipo: "sucesso" });
@@ -1704,7 +1785,7 @@
           fecharModaisPortaria();
           await carregarDadosGerais();
           renderizarTabelaPortaria();
-          if (dataSelecionadaPainel === new Date().toISOString().split("T")[0]) {
+          if (dataSelecionadaPainel === dataLocalStr()) {
             carregarPainelDoDia(dataSelecionadaPainel);
           }
           mostrarToast("Check-out realizado.", { tipo: "sucesso" });
@@ -1732,7 +1813,7 @@
             usuarioId: null,
             empresa: empresa,
             tipoProcessoId: tipoProcessoId,
-            dataAgendada: new Date().toISOString().split("T")[0],
+            dataAgendada: dataLocalStr(),
             horaInicio: horaInicio,
             placaCavalo: placaCavalo,
             placaCarreta: placaCarreta,
@@ -1758,7 +1839,7 @@
           fecharModaisPortaria();
           await carregarDadosGerais();
           renderizarTabelaPortaria();
-          if (dataSelecionadaPainel === new Date().toISOString().split("T")[0]) {
+          if (dataSelecionadaPainel === dataLocalStr()) {
             carregarPainelDoDia(dataSelecionadaPainel);
           }
           mostrarToast("Entrada de encaixe registrada.", { tipo: "sucesso" });
@@ -1778,7 +1859,7 @@
         await registrarAuditLog(booking.id, "No-Show");
         await carregarDadosGerais();
         renderizarTabelaPortaria();
-        if (dataSelecionadaPainel === new Date().toISOString().split("T")[0]) {
+        if (dataSelecionadaPainel === dataLocalStr()) {
           carregarPainelDoDia(dataSelecionadaPainel);
         }
         mostrarToast("No-Show registrado.", { tipo: "sucesso" });
@@ -2037,7 +2118,7 @@
 
     async function carregarAgendamentosHoje() {
       const tbody = document.getElementById("tbody-hoje");
-      const hojeStr = new Date().toISOString().split("T")[0];
+      const hojeStr = dataLocalStr();
 
       const filtrados = todosBookingsGerais.filter(b => b.dataAgendada === hojeStr);
 
