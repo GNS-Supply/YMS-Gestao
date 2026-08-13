@@ -1,3 +1,7 @@
+o quanto desse código já tem de feito de alguma dessas etapas?
+
+
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -1060,12 +1064,21 @@
     import {
       obterHorariosDisponiveis,
       criarAgendamentoOperacional,
+      criarEntradaEncaixe,
       filtrarBookings,
       calcularKPIs,
       idSlotHorario,
-      mudarStatusBooking,
+      normalizarBooking,
+      situacaoResumoLabel,
+      aprovarSolicitacao,
+      recusarSolicitacao,
+      registrarCheckIn,
+      registrarCheckOut,
+      registrarNoShow,
       liberarVagasCanceladasPelaTransportadora,
-      STATUS,
+      APROVACAO,
+      COMPARECIMENTO,
+      OPERACIONAL,
       TIPO_AGENDAMENTO,
       PONTUALIDADE,
       calcularPontualidade,
@@ -1396,7 +1409,10 @@
 
       try {
         const snap = await getDocs(collection(db, "bookings"));
-        todosBookingsGerais = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        // normalizarBooking() garante as 3 dimensões (aprovacaoStatus /
+        // comparecimentoStatus / operacionalStatus) mesmo em documentos
+        // antigos que só têm o campo único `status` legado.
+        todosBookingsGerais = snap.docs.map(d => normalizarBooking({ id: d.id, ...d.data() }));
         preencherSelectEmpresasKPIs(todosBookingsGerais);
       } catch (err) {
         console.error("Erro ao carregar banco de agendamentos:", err);
@@ -1464,7 +1480,9 @@
 
       try {
         const slots = await obterHorariosDisponiveis(db, dataIso, { incluirFechados: true });
-        const agendamentosDia = todosBookingsGerais.filter(b => b.dataAgendada === dataIso && ["Aprovado", "Em Pátio", "Concluído", "Pendente"].includes(b.status));
+        // Aprovado cobre Em Pátio/Concluído/No-Show também (aprovacaoStatus
+        // permanece "Aprovado" nessas 3 dimensões independentes — ver patioCore.js).
+        const agendamentosDia = todosBookingsGerais.filter(b => b.dataAgendada === dataIso && [APROVACAO.PENDENTE, APROVACAO.APROVADO].includes(b.aprovacaoStatus));
 
         if (slots.length === 0) {
           container.innerHTML = '<p style="text-align:center; color:#888; padding:20px;">Nenhum atendimento configurado para esta data.</p>';
@@ -1477,7 +1495,7 @@
           const reservasHorario = agendamentosDia.filter(b => b.horaInicio === slot.horaInicio);
           const ocupados = reservasHorario.length;
           const max = slot.capacidadeMax;
-          const pendentesHorario = reservasHorario.filter(b => b.status === "Pendente").length;
+          const pendentesHorario = reservasHorario.filter(b => b.aprovacaoStatus === APROVACAO.PENDENTE).length;
 
           let nivelClasse = "nivel-livre";
           if (slot.fechado) nivelClasse = "nivel-fechado";
@@ -1540,7 +1558,8 @@
 
       return reservas.map(b => {
         const nomeProcesso = mapProcessos[b.tipoProcessoId] || b.tipoProcessoId || "Não especificado";
-        const classeStatus = badgeStatusClasse[b.status] || "";
+        const rotulo = situacaoResumoLabel(b);
+        const classeStatus = badgeStatusClasse[rotulo] || "";
 
         return `
         <div class="reserva-mini">
@@ -1554,7 +1573,7 @@
           <small>
             Placa: <b>${escapeHtml(b.placaCavalo)}</b>${b.placaCarreta ? ` / ${escapeHtml(b.placaCarreta)}` : ""} |
             Motorista: ${escapeHtml(b.motorista)} |
-            Status: <span class="badge-status ${classeStatus}">${escapeHtml(b.status)}</span>
+            Status: <span class="badge-status ${classeStatus}">${escapeHtml(rotulo)}</span>
           </small>
           ${b.observacoes ? `
           <div class="reserva-mini-obs">
@@ -1583,27 +1602,37 @@
         .sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
     }
 
+    // Contadores/filtro da Portaria usam `situacaoResumoLabel()` (rótulo
+    // único de conveniência derivado das 3 dimensões reais — ver
+    // patioCore.js) como chave: "Aprovado", "Em Pátio", "Concluído" ou
+    // "No-Show". As 3 dimensões continuam gravadas separadamente no
+    // documento; isto é só a projeção usada para os contadores/badges.
     function atualizarContadoresPortaria(lista) {
       document.getElementById("count-p-todos").textContent = lista.length;
-      document.getElementById("count-p-aprovados").textContent = lista.filter(b => b.status === STATUS.APROVADO).length;
-      document.getElementById("count-p-empatio").textContent = lista.filter(b => b.status === STATUS.EM_PATIO).length;
-      document.getElementById("count-p-concluidos").textContent = lista.filter(b => b.status === STATUS.CONCLUIDO).length;
-      document.getElementById("count-p-noshow").textContent = lista.filter(b => b.status === STATUS.NO_SHOW).length;
+      document.getElementById("count-p-aprovados").textContent = lista.filter(b => situacaoResumoLabel(b) === APROVACAO.APROVADO).length;
+      document.getElementById("count-p-empatio").textContent = lista.filter(b => situacaoResumoLabel(b) === OPERACIONAL.EM_PATIO).length;
+      document.getElementById("count-p-concluidos").textContent = lista.filter(b => situacaoResumoLabel(b) === OPERACIONAL.CONCLUIDO).length;
+      document.getElementById("count-p-noshow").textContent = lista.filter(b => situacaoResumoLabel(b) === "No-Show").length;
     }
 
     function gerarBotoesAcaoPortaria(booking) {
-      if (booking.status === STATUS.APROVADO) {
+      // Aprovado + Sem Check-in + ainda não marcado como Não Compareceu -> pode dar entrada ou marcar No-Show
+      if (booking.aprovacaoStatus === APROVACAO.APROVADO
+          && booking.operacionalStatus === OPERACIONAL.SEM_CHECKIN
+          && booking.comparecimentoStatus !== COMPARECIMENTO.NAO_COMPARECEU) {
         return `
           <button class="btn-acao btn-checkin" data-id="${booking.id}">Check-in</button>
           <button class="btn-acao btn-noshow" data-id="${booking.id}">No-Show</button>
         `;
-      } else if (booking.status === STATUS.EM_PATIO) {
+      } else if (booking.operacionalStatus === OPERACIONAL.EM_PATIO) {
         return `<button class="btn-acao btn-checkout" data-id="${booking.id}">Check-out</button>`;
-      } else if (booking.status === STATUS.CONCLUIDO) {
+      } else if (booking.operacionalStatus === OPERACIONAL.CONCLUIDO) {
         const perf = booking.checkOut?.permanenciaMinutos !== undefined
           ? formatarPermanencia(booking.checkOut.permanenciaMinutos)
           : "-";
         return `<small style="color:#155724; font-weight:bold;">Permanência: ${perf}</small>`;
+      } else if (booking.comparecimentoStatus === COMPARECIMENTO.NAO_COMPARECEU) {
+        return `<small style="color:#721c24; font-weight:bold;">No-Show registrado</small>`;
       } else {
         return `<small style="color:#888;">Sem ações</small>`;
       }
@@ -1616,7 +1645,7 @@
 
       let listaFiltrada = lista;
       if (filtroPortariaAtual !== "todos") {
-        listaFiltrada = lista.filter(b => b.status === filtroPortariaAtual);
+        listaFiltrada = lista.filter(b => situacaoResumoLabel(b) === filtroPortariaAtual);
       }
 
       if (listaFiltrada.length === 0) {
@@ -1627,12 +1656,20 @@
       tbody.innerHTML = listaFiltrada.map(b => {
         const horaFormatada = b.horaInicio || "--:--";
         const nomeProcesso = mapProcessos[b.tipoProcessoId] || b.tipoProcessoId || "Não especificado";
+        const rotulo = situacaoResumoLabel(b);
         const badgeClasse = {
-          [STATUS.APROVADO]: "status-aprovado",
-          [STATUS.EM_PATIO]: "status-empatio",
-          [STATUS.CONCLUIDO]: "status-concluido",
-          [STATUS.NO_SHOW]: "status-noshow"
-        }[b.status] || "";
+          [APROVACAO.APROVADO]: "status-aprovado",
+          [OPERACIONAL.EM_PATIO]: "status-empatio",
+          [OPERACIONAL.CONCLUIDO]: "status-concluido",
+          "No-Show": "status-noshow"
+        }[rotulo] || "";
+
+        // Linha de comparecimento: só mostra quando já foi verificado
+        // (comparecimentoStatus não é mais null) — dimensão independente
+        // da aprovação, exibida lado a lado sem sobrescrever nenhuma delas.
+        const linhaComparecimento = b.comparecimentoStatus
+          ? `<br><small style="font-size:0.75rem; color:#666;">${escapeHtml(b.comparecimentoStatus)}</small>`
+          : (b.checkIn?.pontualidade ? `<br><small style="font-size:0.75rem; color:#666;">${escapeHtml(b.checkIn.pontualidade)}</small>` : "");
 
         return `
           <tr>
@@ -1648,8 +1685,8 @@
             <td style="padding: 10px;">${escapeHtml(b.motorista || "-")}</td>
             <td style="padding: 10px;">${escapeHtml(nomeProcesso)}</td>
             <td style="padding: 10px;">
-              <span class="badge-status ${badgeClasse}">${escapeHtml(b.status)}</span>
-              ${b.checkIn?.pontualidade ? `<br><small style="font-size:0.75rem; color:#666;">${escapeHtml(b.checkIn.pontualidade)}</small>` : ''}
+              <span class="badge-status ${badgeClasse}">${escapeHtml(rotulo)}</span>
+              ${linhaComparecimento}
             </td>
             <td style="padding: 10px; text-align: center;">
               <div class="acoes-tabela" style="justify-content: center;">
@@ -1755,37 +1792,14 @@
         document.getElementById("checkin-placa-cavalo").value = placaCavalo;
         document.getElementById("checkin-placa-carreta").value = placaCarreta;
         const motorista = document.getElementById("checkin-motorista").value.trim();
-        const horaAgendada = document.getElementById("checkin-hora-agendada").value;
-
-        const agora = new Date();
-        const pontualidade = calcularPontualidade(horaAgendada, agora);
-
-        // Compara os dados conferidos na portaria com o que foi originalmente
-        // cadastrado no agendamento — alimenta o KPI "Divergências de
-        // Cadastro" do painel de Logística.
-        const bookingOriginal = obterAgendamentosHojeOrdenados().find(b => b.id === id);
-        const divergente = !!bookingOriginal && (
-          (bookingOriginal.placaCavalo || "").toUpperCase() !== placaCavalo ||
-          (bookingOriginal.placaCarreta || "").toUpperCase() !== placaCarreta ||
-          (bookingOriginal.motorista || "").trim() !== motorista
-        );
 
         try {
-          const bookingRef = doc(db, "bookings", id);
-          await updateDoc(bookingRef, {
-            placaCavalo,
-            placaCarreta,
-            motorista,
-            status: STATUS.EM_PATIO,
-            checkIn: {
-              dataHora: serverTimestamp(),
-              pontualidade: pontualidade,
-              dadosConferidos: true,
-              divergente
-            },
-            atualizadoEm: serverTimestamp(),
-            atualizadoPor: usuarioLogado.uid
-          });
+          // registrarCheckIn() centraliza em patioCore.js: muda as
+          // dimensões operacional (Sem Check-in -> Em Pátio) e
+          // comparecimento (null -> Compareceu/Compareceu Atrasado) na
+          // mesma transação, calculando pontualidade e divergência de
+          // dados internamente, sem sobrescrever a dimensão de aprovação.
+          await registrarCheckIn(db, usuarioLogado, id, { placaCavalo, placaCarreta, motorista });
 
           await registrarAuditLog(id, "Check-In");
           fecharModaisPortaria();
@@ -1807,30 +1821,17 @@
         const id = document.getElementById("checkout-booking-id").value;
         const notaFiscal = document.getElementById("checkout-nf").value.trim();
         const obsSaida = document.getElementById("checkout-obs").value.trim();
-        const entradaMs = parseInt(document.getElementById("checkout-entrada-timestamp").value, 10);
 
         if (!notaFiscal) {
           mostrarToast("O número da Nota Fiscal é obrigatório para realizar o Check-out.", { tipo: "erro" });
           return;
         }
 
-        const entradaDate = new Date(entradaMs);
-        const agora = new Date();
-        const permanenciaMinutos = calcularTempoPermanenciaMinutos(entradaDate, agora);
-
         try {
-          const bookingRef = doc(db, "bookings", id);
-          await updateDoc(bookingRef, {
-            status: STATUS.CONCLUIDO,
-            checkOut: {
-              dataHora: serverTimestamp(),
-              notaFiscal: notaFiscal,
-              permanenciaMinutos: permanenciaMinutos,
-              observacoesSaida: obsSaida
-            },
-            atualizadoEm: serverTimestamp(),
-            atualizadoPor: usuarioLogado.uid
-          });
+          // registrarCheckOut() centraliza em patioCore.js: muda só a
+          // dimensão operacional (Em Pátio -> Concluído), recalculando a
+          // permanência a partir do checkIn.dataHora gravado no servidor.
+          await registrarCheckOut(db, usuarioLogado, id, { notaFiscal, observacoesSaida: obsSaida });
 
           await registrarAuditLog(id, "Check-Out");
           fecharModaisPortaria();
@@ -1860,32 +1861,20 @@
         const horaInicio = `${String(agora.getHours()).padStart(2, "0")}:${String(agora.getMinutes()).padStart(2, "0")}`;
 
         try {
-          const novoBooking = {
-            usuarioId: null,
-            empresa: empresa,
-            tipoProcessoId: tipoProcessoId,
+          // criarEntradaEncaixe() centraliza em patioCore.js: já nasce com
+          // aprovação Aprovado, comparecimento Compareceu e operação Em
+          // Pátio (o veículo já está fisicamente no pátio ao ser cadastrado).
+          const { bookingId } = await criarEntradaEncaixe(db, usuarioLogado, {
+            empresa,
+            tipoProcessoId,
             dataAgendada: dataLocalStr(),
-            horaInicio: horaInicio,
-            placaCavalo: placaCavalo,
-            placaCarreta: placaCarreta,
-            motorista: motorista,
-            observacoes: obs ? `[ENCAIXE PORTARIA] ${obs}` : "[ENCAIXE PORTARIA]",
-            status: STATUS.EM_PATIO,
-            tipoAgendamento: TIPO_AGENDAMENTO.PORTARIA,
-            vagaLiberada: false,
-            checkIn: {
-              dataHora: serverTimestamp(),
-              pontualidade: PONTUALIDADE.PONTUAL,
-              dadosConferidos: true
-            },
-            criadoEm: serverTimestamp(),
-            criadoPor: usuarioLogado.uid,
-            atualizadoEm: serverTimestamp(),
-            atualizadoPor: usuarioLogado.uid
-          };
-
-          const docRef = await addDoc(collection(db, "bookings"), novoBooking);
-          await registrarAuditLog(docRef.id, "Entrada Encaixe Portaria");
+            horaInicio,
+            placaCavalo,
+            placaCarreta,
+            motorista,
+            observacoes: obs ? `[ENCAIXE PORTARIA] ${obs}` : "[ENCAIXE PORTARIA]"
+          });
+          await registrarAuditLog(bookingId, "Entrada Encaixe Portaria");
 
           fecharModaisPortaria();
           await carregarDadosGerais();
