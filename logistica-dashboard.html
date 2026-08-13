@@ -2648,7 +2648,9 @@
         tbody.innerHTML = slots.map(slot => {
           const statusTexto = slot.fechado
             ? '<svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg> Fechado manualmente'
-            : (slot.ocupados >= slot.capacidadeMax ? '<svg class="icon icon-sm" width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#D64545"></circle></svg> Esgotado' : '<svg class="icon icon-sm" width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#2F9E64"></circle></svg> Com vagas');
+            : (slot.capacidadeMax === 0
+                ? '<svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg> Bloqueado (0 vagas nesta data)'
+                : (slot.ocupados >= slot.capacidadeMax ? '<svg class="icon icon-sm" width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#D64545"></circle></svg> Esgotado' : '<svg class="icon icon-sm" width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#2F9E64"></circle></svg> Com vagas'));
 
           const podeRestaurar = slot.temAjusteManual && slot.ocupados === 0;
 
@@ -2659,7 +2661,7 @@
                 <small style="color:#888;">${origemLabel[slot.origem] || slot.origem}${slot.divergeDoPadrao ? ' <svg width="14" height="14" class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 L21.5 20 L2.5 20 Z"></path><line x1="12" y1="9.5" x2="12" y2="14"></line><circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none"></circle></svg> diverge do padrão atual' : ""}</small>
               </td>
               <td data-label="Capacidade Máxima">
-                <input type="number" min="1" step="1" class="input-capacidade-vaga" value="${slot.capacidadeMax}" style="width:80px; padding:6px; border:1px solid var(--cinza-borda,#ccc); border-radius:4px;">
+                <input type="number" min="0" step="1" class="input-capacidade-vaga" value="${slot.capacidadeMax}" style="width:80px; padding:6px; border:1px solid var(--cinza-borda,#ccc); border-radius:4px;">
               </td>
               <td data-label="Ocupados Atual">${slot.ocupados}</td>
               <td data-label="Status">${statusTexto}</td>
@@ -2691,8 +2693,8 @@
           const slot = slots.find(s => s.horaInicio === horaInicio);
           const novaCapacidade = parseInt(tr.querySelector(".input-capacidade-vaga").value, 10);
 
-          if (!novaCapacidade || novaCapacidade < 1) {
-            mostrarToast("Informe uma capacidade válida (mínimo 1).", { tipo: "erro" });
+          if (isNaN(novaCapacidade) || novaCapacidade < 0) {
+            mostrarToast("Informe uma capacidade válida (0 ou mais). Use 0 para bloquear este horário apenas nesta data.", { tipo: "erro" });
             return;
           }
           if (novaCapacidade < slot.ocupados) {
