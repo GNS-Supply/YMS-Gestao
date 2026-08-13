@@ -1000,7 +1000,8 @@ export async function aprovarSolicitacao(db, usuarioLogado, bookingId) {
   await runTransaction(db, async (transaction) => {
     const snap = await transaction.get(bookingRef);
     if (!snap.exists()) throw new Error("Agendamento não encontrado (pode já ter sido removido).");
-    const dadosAtuais = snap.data();
+    // BUGFIX: ver comentário equivalente em registrarCheckIn.
+    const dadosAtuais = normalizarBooking(snap.data());
 
     if (dadosAtuais.aprovacaoStatus !== APROVACAO.PENDENTE) {
       throw new Error(`Este agendamento não está mais Pendente (situação atual: "${situacaoResumoLabel(dadosAtuais)}"). Atualize a lista e tente novamente.`);
@@ -1009,7 +1010,10 @@ export async function aprovarSolicitacao(db, usuarioLogado, bookingId) {
     const novasDims = { aprovacaoStatus: APROVACAO.APROVADO, comparecimentoStatus: dadosAtuais.comparecimentoStatus, operacionalStatus: dadosAtuais.operacionalStatus };
 
     transaction.update(bookingRef, {
+      // Grava as 3 dimensões por completo (auto-cura de documento antigo).
       aprovacaoStatus: APROVACAO.APROVADO,
+      comparecimentoStatus: novasDims.comparecimentoStatus,
+      operacionalStatus: novasDims.operacionalStatus,
       status: derivarStatusLegado(novasDims),
       historicoEstados: arrayUnion(_entradaHistorico("aprovacaoStatus", APROVACAO.PENDENTE, APROVACAO.APROVADO, usuarioLogado.uid)),
       atualizadoEm: serverTimestamp(),
@@ -1035,7 +1039,8 @@ export async function recusarSolicitacao(db, usuarioLogado, bookingId) {
   await runTransaction(db, async (transaction) => {
     const snap = await transaction.get(bookingRef);
     if (!snap.exists()) throw new Error("Agendamento não encontrado (pode já ter sido removido).");
-    const dadosAtuais = snap.data();
+    // BUGFIX: ver comentário equivalente em registrarCheckIn.
+    const dadosAtuais = normalizarBooking(snap.data());
 
     if (dadosAtuais.aprovacaoStatus !== APROVACAO.PENDENTE) {
       throw new Error(`Este agendamento não está mais Pendente (situação atual: "${situacaoResumoLabel(dadosAtuais)}"). Atualize a lista e tente novamente.`);
@@ -1051,7 +1056,10 @@ export async function recusarSolicitacao(db, usuarioLogado, bookingId) {
     const novasDims = { aprovacaoStatus: APROVACAO.RECUSADO, comparecimentoStatus: dadosAtuais.comparecimentoStatus, operacionalStatus: dadosAtuais.operacionalStatus };
 
     const payload = {
+      // Grava as 3 dimensões por completo (auto-cura de documento antigo).
       aprovacaoStatus: APROVACAO.RECUSADO,
+      comparecimentoStatus: novasDims.comparecimentoStatus,
+      operacionalStatus: novasDims.operacionalStatus,
       status: derivarStatusLegado(novasDims),
       historicoEstados: arrayUnion(_entradaHistorico("aprovacaoStatus", APROVACAO.PENDENTE, APROVACAO.RECUSADO, usuarioLogado.uid)),
       atualizadoEm: serverTimestamp(),
@@ -1096,7 +1104,15 @@ export async function registrarCheckIn(db, usuarioLogado, bookingId, dadosConfir
   await runTransaction(db, async (transaction) => {
     const snap = await transaction.get(bookingRef);
     if (!snap.exists()) throw new Error("Agendamento não encontrado (pode já ter sido removido).");
-    const dadosAtuais = snap.data();
+    // BUGFIX: antes lia snap.data() "cru". Documentos criados/gravados
+    // antes da Etapa 1 (modelo tridimensional) podem não ter
+    // aprovacaoStatus/comparecimentoStatus/operacionalStatus gravados —
+    // sem normalizar, os campos vinham `undefined` e a checagem abaixo
+    // SEMPRE falhava com "situação atual: Pendente", mesmo o agendamento
+    // estando de fato Aprovado (a tela mostrava o botão de Check-in
+    // porque ela lê a lista já normalizada em memória; a transação lia o
+    // documento bruto direto do Firestore).
+    const dadosAtuais = normalizarBooking(snap.data());
 
     if (dadosAtuais.aprovacaoStatus !== APROVACAO.APROVADO) {
       throw new Error(`Só é possível dar check-in em agendamentos Aprovados (situação atual: "${situacaoResumoLabel(dadosAtuais)}").`);
@@ -1124,6 +1140,9 @@ export async function registrarCheckIn(db, usuarioLogado, bookingId, dadosConfir
       placaCavalo,
       placaCarreta,
       motorista,
+      // Grava as 3 dimensões por completo (não só as que mudaram) —
+      // auto-cura o documento caso ele ainda estivesse no formato antigo.
+      aprovacaoStatus: novasDims.aprovacaoStatus,
       comparecimentoStatus: novoComparecimento,
       operacionalStatus: OPERACIONAL.EM_PATIO,
       status: derivarStatusLegado(novasDims),
@@ -1160,7 +1179,9 @@ export async function registrarCheckOut(db, usuarioLogado, bookingId, dados) {
   await runTransaction(db, async (transaction) => {
     const snap = await transaction.get(bookingRef);
     if (!snap.exists()) throw new Error("Agendamento não encontrado (pode já ter sido removido).");
-    const dadosAtuais = snap.data();
+    // BUGFIX: ver comentário equivalente em registrarCheckIn — normaliza
+    // o documento lido antes de checar o estado atual.
+    const dadosAtuais = normalizarBooking(snap.data());
 
     if (dadosAtuais.operacionalStatus !== OPERACIONAL.EM_PATIO) {
       throw new Error(`Só é possível dar check-out em veículos Em Pátio (situação atual: "${situacaoResumoLabel(dadosAtuais)}").`);
@@ -1175,6 +1196,9 @@ export async function registrarCheckOut(db, usuarioLogado, bookingId, dados) {
     const novasDims = { aprovacaoStatus: dadosAtuais.aprovacaoStatus, comparecimentoStatus: dadosAtuais.comparecimentoStatus, operacionalStatus: OPERACIONAL.CONCLUIDO };
 
     transaction.update(bookingRef, {
+      // Grava as 3 dimensões por completo (auto-cura de documento antigo).
+      aprovacaoStatus: novasDims.aprovacaoStatus,
+      comparecimentoStatus: novasDims.comparecimentoStatus,
       operacionalStatus: OPERACIONAL.CONCLUIDO,
       status: derivarStatusLegado(novasDims),
       checkOut: {
@@ -1213,7 +1237,8 @@ export async function registrarNoShow(db, usuarioLogado, bookingId) {
   await runTransaction(db, async (transaction) => {
     const snap = await transaction.get(bookingRef);
     if (!snap.exists()) throw new Error("Agendamento não encontrado (pode já ter sido removido).");
-    const dadosAtuais = snap.data();
+    // BUGFIX: ver comentário equivalente em registrarCheckIn.
+    const dadosAtuais = normalizarBooking(snap.data());
 
     if (dadosAtuais.aprovacaoStatus !== APROVACAO.APROVADO || dadosAtuais.operacionalStatus !== OPERACIONAL.SEM_CHECKIN) {
       throw new Error(`Só é possível marcar No-Show em agendamentos Aprovados sem check-in (situação atual: "${situacaoResumoLabel(dadosAtuais)}"). Atualize a lista e tente novamente.`);
@@ -1229,7 +1254,10 @@ export async function registrarNoShow(db, usuarioLogado, bookingId) {
     const novasDims = { aprovacaoStatus: dadosAtuais.aprovacaoStatus, comparecimentoStatus: COMPARECIMENTO.NAO_COMPARECEU, operacionalStatus: dadosAtuais.operacionalStatus };
 
     const payload = {
+      // Grava as 3 dimensões por completo (auto-cura de documento antigo).
+      aprovacaoStatus: novasDims.aprovacaoStatus,
       comparecimentoStatus: COMPARECIMENTO.NAO_COMPARECEU,
+      operacionalStatus: novasDims.operacionalStatus,
       status: derivarStatusLegado(novasDims),
       historicoEstados: arrayUnion(_entradaHistorico("comparecimentoStatus", null, COMPARECIMENTO.NAO_COMPARECEU, usuarioLogado.uid)),
       atualizadoEm: serverTimestamp(),
