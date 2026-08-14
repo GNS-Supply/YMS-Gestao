@@ -543,6 +543,36 @@ function diaSemanaDaData(dataStr) {
   return new Date(ano, mes - 1, dia).getDay();
 }
 
+/* ---------------------------------------------------------------------
+   RECORRÊNCIA QUINZENAL ALTERNADA (Regra Padrão de Atendimento)
+
+   Permite horários que alternam a cada semana — ex: Sábado às vezes
+   começa 06:00, no sábado seguinte começa 10:00. Isso é resolvido com
+   DUAS regras normais no mesmo dia da semana, cada uma com
+   `tipoRecorrencia: "quinzenal"` e uma `semanaReferencia` (uma data
+   qualquer dentro da semana em que aquela regra deve valer). A regra só
+   é aplicada em datas cuja diferença de semanas em relação à
+   `semanaReferencia` é PAR (a própria semana de referência, e a cada 2
+   semanas a partir dela). Duas regras com referências em semanas
+   consecutivas (uma semana de diferença) alternam perfeitamente entre
+   si. `tipoRecorrencia` ausente/"todas_semanas" = comportamento
+   original, aplica-se toda semana.
+   --------------------------------------------------------------------- */
+function _semanasEntreDatas(dataBaseStr, dataAlvoStr) {
+  const [a1, m1, d1] = dataBaseStr.split("-").map(Number);
+  const [a2, m2, d2] = dataAlvoStr.split("-").map(Number);
+  const base = new Date(a1, m1 - 1, d1);
+  const alvo = new Date(a2, m2 - 1, d2);
+  const diffDias = Math.round((alvo.getTime() - base.getTime()) / 86400000);
+  return Math.floor(diffDias / 7);
+}
+
+export function regraSeAplicaNaData(regra, dataStr) {
+  if (regra.tipoRecorrencia !== "quinzenal" || !regra.semanaReferencia) return true;
+  const semanas = _semanasEntreDatas(regra.semanaReferencia, dataStr);
+  return ((semanas % 2) + 2) % 2 === 0;
+}
+
 export async function buscarSlotsVirtuaisDoDia(db, dataStr, opcoes = {}) {
   const { incluirFechados = false } = opcoes;
   const diaSemana = diaSemanaDaData(dataStr);
@@ -553,6 +583,7 @@ export async function buscarSlotsVirtuaisDoDia(db, dataStr, opcoes = {}) {
   snapRegras.docs.forEach(d => {
     const r = d.data();
     if (!(r.diasSemana || []).includes(diaSemana)) return;
+    if (!regraSeAplicaNaData(r, dataStr)) return;
     calcularBlocosHorario(r).forEach(min => {
       mapa[minutosParaHora(min)] = { capacidadeMax: r.capacidadePorHora, origem: "regra" };
     });

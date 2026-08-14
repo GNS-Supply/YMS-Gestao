@@ -87,6 +87,24 @@
 
     <div class="tab-conteudo" id="tab-meus">
       <div class="card">
+        <div style="display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
+          <div class="campo" style="flex:2; min-width:200px; margin:0;">
+            <label for="busca-meus-agendamentos">Buscar (motorista ou placa)</label>
+            <input type="text" id="busca-meus-agendamentos" placeholder="Ex: João ou AAA0A00">
+          </div>
+          <div class="campo" style="flex:1; min-width:200px; margin:0;">
+            <label for="ordenar-meus-agendamentos">Ordenar por</label>
+            <select id="ordenar-meus-agendamentos">
+              <option value="data_desc">Data (mais recente primeiro)</option>
+              <option value="data_asc">Data (mais antiga primeiro)</option>
+              <option value="horario_asc">Horário (crescente)</option>
+              <option value="horario_desc">Horário (decrescente)</option>
+              <option value="motorista_asc">Motorista (A-Z)</option>
+              <option value="placa_asc">Placa do Cavalo (A-Z)</option>
+              <option value="status_asc">Status (A-Z)</option>
+            </select>
+          </div>
+        </div>
         <div class="lista-agendamentos" id="lista-agendamentos">
           <div class="estado-vazio">Carregando...</div>
         </div>
@@ -338,6 +356,16 @@
       const inputEmpresa = document.getElementById("empresa");
       if (inputEmpresa && perfil.empresa) {
         inputEmpresa.value = perfil.empresa;
+        // Parceiro externo: nome da empresa vem fixo do cadastro e não
+        // pode ser alterado no formulário (readOnly em vez de disabled
+        // para o valor continuar sendo lido normalmente por
+        // document.getElementById("empresa").value.trim() na submissão).
+        if (perfil.vinculo === "externo") {
+          inputEmpresa.readOnly = true;
+          inputEmpresa.style.background = "#eee";
+          inputEmpresa.style.cursor = "not-allowed";
+          inputEmpresa.title = "Empresa vinculada ao seu cadastro — não pode ser alterada aqui. Contate a Logística para corrigir.";
+        }
       }
 
       mapTiposProcessoCache = await obterTiposProcessoMap();
@@ -556,6 +584,18 @@
     let mapTiposProcessoCache = {};
     let cancelarListenerMeusAgendamentos = null;
     let idParaDestacarPendente = null;
+    let buscaMeusAgendamentosTexto = "";
+    let ordenacaoMeusAgendamentos = "data_desc";
+
+    document.getElementById("busca-meus-agendamentos")?.addEventListener("input", (e) => {
+      buscaMeusAgendamentosTexto = e.target.value.trim();
+      renderizarListaAgendamentos();
+    });
+
+    document.getElementById("ordenar-meus-agendamentos")?.addEventListener("change", (e) => {
+      ordenacaoMeusAgendamentos = e.target.value;
+      renderizarListaAgendamentos();
+    });
 
     function iniciarListenerMeusAgendamentos() {
       if (cancelarListenerMeusAgendamentos) return;
@@ -587,6 +627,29 @@
       "No-Show": "recusado"
     };
 
+    const COMPARADORES_ORDENACAO_MEUS = {
+      data_desc: (a, b) => (b.dataAgendada || "").localeCompare(a.dataAgendada || "") || (b.horaInicio || "").localeCompare(a.horaInicio || ""),
+      data_asc: (a, b) => (a.dataAgendada || "").localeCompare(b.dataAgendada || "") || (a.horaInicio || "").localeCompare(b.horaInicio || ""),
+      horario_asc: (a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""),
+      horario_desc: (a, b) => (b.horaInicio || "").localeCompare(a.horaInicio || ""),
+      motorista_asc: (a, b) => (a.motorista || "").localeCompare(b.motorista || "", "pt-BR"),
+      placa_asc: (a, b) => (a.placaCavalo || "").localeCompare(b.placaCavalo || "", "pt-BR"),
+      status_asc: (a, b) => situacaoDetalhadaLabel(a).localeCompare(situacaoDetalhadaLabel(b), "pt-BR")
+    };
+
+    function filtrarESordenarMeusAgendamentos(lista) {
+      let resultado = lista;
+      if (buscaMeusAgendamentosTexto) {
+        const termo = buscaMeusAgendamentosTexto.toLowerCase();
+        resultado = resultado.filter(a => {
+          const alvo = `${a.motorista || ""} ${a.placaCavalo || ""} ${a.placaCarreta || ""}`.toLowerCase();
+          return alvo.includes(termo);
+        });
+      }
+      const comparador = COMPARADORES_ORDENACAO_MEUS[ordenacaoMeusAgendamentos] || COMPARADORES_ORDENACAO_MEUS.data_desc;
+      return resultado.slice().sort(comparador);
+    }
+
     function renderizarListaAgendamentos() {
       if (!listaAgendamentos) return;
 
@@ -595,8 +658,12 @@
         return;
       }
 
-      const agendamentos = meusAgendamentos.slice()
-        .sort((a, b) => (b.dataAgendada || "").localeCompare(a.dataAgendada || "") || (b.horaInicio || "").localeCompare(a.horaInicio || ""));
+      const agendamentos = filtrarESordenarMeusAgendamentos(meusAgendamentos);
+
+      if (agendamentos.length === 0) {
+        listaAgendamentos.innerHTML = '<div class="estado-vazio">Nenhum agendamento encontrado para esta busca.</div>';
+        return;
+      }
 
       listaAgendamentos.innerHTML = "";
       agendamentos.forEach(a => {
