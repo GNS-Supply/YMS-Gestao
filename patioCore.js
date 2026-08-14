@@ -1,5 +1,4 @@
 // =====================================================================
-//
 // patioCore.js — Núcleo do Sistema de Agendamento de Pátio
 //
 // ETAPA "REVISÃO ESTRUTURAL" — RESUMO DAS MUDANÇAS DESTA REVISÃO
