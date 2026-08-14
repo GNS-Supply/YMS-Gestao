@@ -424,17 +424,17 @@ export function aplicarMascaraPlaca(valorBruto) {
 
   // ============================================================
   // FORMATO ANTIGO
-  // AAA-000
+  // AAA-0000
   //
   // Exemplo:
-  // ABC123 -> ABC-123
+  // ABC1234 -> ABC-1234
   //
   // ============================================================
 
   // Se temos somente números depois das três letras,
   // trata como formato antigo.
   if (/^[0-9]+$/.test(restante)) {
-    const numeros = restante.slice(0, 3);
+    const numeros = restante.slice(0, 4);
 
     return letras + "-" + numeros;
   }
