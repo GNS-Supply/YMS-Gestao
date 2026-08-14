@@ -1,147 +1,187 @@
 // =====================================================================
-// scripts/expirar-pendentes.mjs
+// expirar-pendentes.mjs — Varredura de expiração de solicitações
 //
-// Varredura de expiração automática de agendamentos "Pendente".
+// Roda via GitHub Actions (ver expirar-pendentes.yml) a cada 15 minutos,
+// usando firebase-admin (fora das Firestore Rules do cliente, por isso
+// precisa da própria validação de negócio aqui dentro).
 //
-// Roda via GitHub Actions (.github/workflows/expirar-pendentes.yml) —
-// NÃO faz parte do site publicado. O front-end continua 100% estático
-// (HTML/CSS/JS puro, sem build, sem backend). Esta é a única peça do
-// projeto que roda fora do navegador.
+// REGRA (alinhada com patioCore.js / APROVACAO.SEM_RESPOSTA):
+//   Um agendamento só deve ser marcado EXPIRADO quando:
+//     1) sua dimensão administrativa ainda está em aberto
+//        (PENDENTE ou SEM_RESPOSTA — nunca RECUSADO/CANCELADO/APROVADO);
+//     2) ele ainda NÃO teve check-in (operacionalStatus === SEM_CHECKIN)
+//        — se o veículo já chegou, o check-in já resolveu a pendência
+//        (ver registrarCheckIn em patioCore.js), então não há mais nada
+//        para expirar aqui;
+//     3) a janela agendada (data + horaInicio) + TOLERANCIA_HORAS de
+//        carência já passou.
 //
-// Por quê GitHub Actions e não Cloud Functions agendada? Cloud
-// Functions com trigger de tempo (Pub/Sub scheduler) exige o plano
-// Blaze do Firebase (pay-as-you-go, precisa cadastrar cartão mesmo que
-// o uso fique dentro da faixa gratuita). GitHub Actions com cron
-// agendado é gratuito, não pede cartão, e já é a mesma plataforma que
-// hospeda o site — por isso foi a opção escolhida enquanto o projeto
-// usa só GitHub + Firebase.
+//   Isso vale tanto para quem nunca foi respondido pela Logística
+//   (PENDENTE) quanto para quem passou de PENDENTE para SEM_RESPOSTA
+//   por outro motivo — nos dois casos o resultado é EXPIRADO, e a vaga
+//   é liberada em timeSlots.ocupados na mesma transação.
 //
-// O Firebase Admin SDK IGNORA as Firestore Rules (elas só valem para o
-// SDK client-side, usado no navegador). Por isso a liberação de vaga é
-// replicada aqui manualmente, nos mesmos moldes de mudarStatusBooking()
-// em patioCore.js: tudo dentro de uma única transação (ou o booking
-// muda para "Expirado" E a vaga é liberada juntos, ou nada é gravado).
-//
-// Credenciais: variável de ambiente FIREBASE_SERVICE_ACCOUNT_JSON deve
-// conter o JSON da Service Account (Firebase Console > Configurações
-// do Projeto > Contas de serviço > Gerar nova chave privada), como
-// texto puro. No GitHub Actions isso vem de um Secret do repositório
-// — nunca comitar esse JSON no código.
-//
-// Variáveis de ambiente opcionais:
-//   TOLERANCIA_HORAS - quantas horas antes do horário agendado um
-//     "Pendente" ainda sem resposta já deve expirar (padrão: 2).
-//   FUSO_OFFSET - offset de fuso horário usado para interpretar
-//     dataAgendada + horaInicio (padrão: "-03:00", horário de Brasília,
-//     que não tem mais horário de verão desde 2019).
+// Variáveis de ambiente (definidas no workflow):
+//   FIREBASE_SERVICE_ACCOUNT_JSON — JSON da service account (secret)
+//   TOLERANCIA_HORAS              — horas de carência após o início da
+//                                    janela antes de expirar (padrão 2)
+//   FUSO_OFFSET                   — offset do fuso do pátio, ex "-03:00"
+//                                    (padrão "-03:00", horário de Brasília)
 // =====================================================================
 
 import { initializeApp, cert } from "firebase-admin/app";
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import {
+  getFirestore,
+  FieldValue,
+  Timestamp
+} from "firebase-admin/firestore";
 
-const TOLERANCIA_HORAS = Number(process.env.TOLERANCIA_HORAS || 2);
-const FUSO_OFFSET = process.env.FUSO_OFFSET || "-03:00";
+const APROVACAO = {
+  PENDENTE: "PENDENTE",
+  SEM_RESPOSTA: "SEM_RESPOSTA",
+  EXPIRADO: "EXPIRADO"
+};
+const OPERACIONAL = { SEM_CHECKIN: "SEM_CHECKIN" };
+const STATUS_EXPIRADO_LEGADO = "Expirado";
 
-function carregarCredencial() {
-  const bruto = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (!bruto) {
-    throw new Error("Variável de ambiente FIREBASE_SERVICE_ACCOUNT_JSON não definida.");
+function carregarServiceAccount() {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (!raw) {
+    throw new Error("FIREBASE_SERVICE_ACCOUNT_JSON não definido. Configure o secret no GitHub Actions.");
   }
   try {
-    return JSON.parse(bruto);
+    return JSON.parse(raw);
   } catch (err) {
     throw new Error("FIREBASE_SERVICE_ACCOUNT_JSON não é um JSON válido: " + err.message);
   }
-}
-
-// Converte dataAgendada ("AAAA-MM-DD") + horaInicio ("HH:MM") num
-// timestamp absoluto, assumindo o fuso configurado em FUSO_OFFSET —
-// necessário porque o runner do GitHub Actions roda em UTC, não no
-// fuso do pátio.
-function dataHoraAgendadaEmMs(dataAgendada, horaInicio) {
-  return new Date(`${dataAgendada}T${horaInicio}:00${FUSO_OFFSET}`).getTime();
 }
 
 function idSlotHorario(dataStr, horaInicio) {
   return `${dataStr}_${horaInicio.replace(":", "-")}`;
 }
 
-async function expirarBooking(db, bookingRef) {
-  await db.runTransaction(async (transaction) => {
-    const bookingSnap = await transaction.get(bookingRef);
-    if (!bookingSnap.exists) return;
-    const atual = bookingSnap.data();
-
-    // Revalida dentro da transação: só expira quem ainda está Pendente
-    // — protege contra corrida com uma aprovação/recusa manual feita
-    // entre a consulta inicial (fora da transação) e esta execução.
-    if (atual.status !== "Pendente") return;
-
-    const slotRef = db.collection("timeSlots").doc(idSlotHorario(atual.dataAgendada, atual.horaInicio));
-    const slotSnap = await transaction.get(slotRef);
-
-    const payloadBooking = {
-      status: "Expirado",
-      atualizadoEm: FieldValue.serverTimestamp(),
-      atualizadoPor: "sistema-expiracao-automatica"
-    };
-
-    if (atual.vagaLiberada !== true && slotSnap.exists) {
-      const slotData = slotSnap.data();
-      const ocupadosAtuais = slotData.ocupados || 0;
-      if (ocupadosAtuais > 0) {
-        transaction.set(slotRef, { ...slotData, ocupados: ocupadosAtuais - 1 }, { merge: true });
-      }
-      payloadBooking.vagaLiberada = true;
-    }
-
-    transaction.update(bookingRef, payloadBooking);
-
-    const logRef = db.collection("auditLogs").doc();
-    transaction.set(logRef, {
-      bookingId: bookingRef.id,
-      usuarioId: "sistema-expiracao-automatica",
-      acao: "Expirou",
-      dataHora: FieldValue.serverTimestamp()
-    });
-  });
+/**
+ * Constrói o instante (UTC) em que a janela agendada + tolerância
+ * expira, a partir de `dataAgendada` ("AAAA-MM-DD"), `horaInicio`
+ * ("HH:MM") e o offset de fuso do pátio (ex.: "-03:00").
+ */
+function calcularInstanteLimite(dataAgendada, horaInicio, toleranciaHoras, fusoOffset) {
+  // "AAAA-MM-DDTHH:MM:00-03:00" é um formato ISO 8601 válido — o motor
+  // de Date do Node interpreta o offset corretamente e converte para o
+  // instante UTC equivalente internamente.
+  const isoComOffset = `${dataAgendada}T${horaInicio}:00${fusoOffset}`;
+  const inicioJanela = new Date(isoComOffset);
+  if (isNaN(inicioJanela.getTime())) return null;
+  return new Date(inicioJanela.getTime() + toleranciaHoras * 60 * 60 * 1000);
 }
 
 async function main() {
-  const credencial = carregarCredencial();
-  initializeApp({ credential: cert(credencial) });
-  const db = getFirestore();
+  const toleranciaHoras = Number(process.env.TOLERANCIA_HORAS || "2");
+  const fusoOffset = process.env.FUSO_OFFSET || "-03:00";
 
-  const agora = Date.now();
-  const limiteMs = TOLERANCIA_HORAS * 60 * 60 * 1000;
+  const app = initializeApp({ credential: cert(carregarServiceAccount()) });
+  const db = getFirestore(app);
 
-  const snap = await db.collection("bookings").where("status", "==", "Pendente").get();
+  const agora = new Date();
 
-  let totalVerificados = 0;
+  // Busca só o necessário: ainda sem check-in. Filtra PENDENTE/SEM_RESPOSTA
+  // e a janela vencida em memória, para não depender de um índice
+  // composto (aprovacaoStatus IN [...] + operacionalStatus ==) que o
+  // projeto não declara em firestore.indexes.json.
+  const snap = await db.collection("bookings")
+    .where("operacionalStatus", "==", OPERACIONAL.SEM_CHECKIN)
+    .get();
+
+  const candidatos = snap.docs.filter(d => {
+    const b = d.data();
+    return [APROVACAO.PENDENTE, APROVACAO.SEM_RESPOSTA].includes(b.aprovacaoStatus)
+      && b.dataAgendada && b.horaInicio;
+  });
+
   let totalExpirados = 0;
+  let totalIgnorados = 0;
+  let totalErros = 0;
 
-  for (const doc of snap.docs) {
-    totalVerificados++;
-    const dados = doc.data();
-    if (!dados.dataAgendada || !dados.horaInicio) continue;
+  for (const docSnap of candidatos) {
+    const booking = docSnap.data();
+    const instanteLimite = calcularInstanteLimite(booking.dataAgendada, booking.horaInicio, toleranciaHoras, fusoOffset);
 
-    const faltamMs = dataHoraAgendadaEmMs(dados.dataAgendada, dados.horaInicio) - agora;
+    if (!instanteLimite || agora < instanteLimite) {
+      totalIgnorados++;
+      continue;
+    }
 
-    if (faltamMs <= limiteMs) {
-      try {
-        await expirarBooking(db, doc.ref);
-        totalExpirados++;
-        console.log(`Expirado: ${doc.id} (${dados.empresa || "-"}, ${dados.dataAgendada} ${dados.horaInicio})`);
-      } catch (err) {
-        console.error(`Erro ao expirar ${doc.id}:`, err.message);
-      }
+    const bookingRef = db.collection("bookings").doc(docSnap.id);
+    const slotRef = db.collection("timeSlots").doc(idSlotHorario(booking.dataAgendada, booking.horaInicio));
+
+    try {
+      await db.runTransaction(async (tx) => {
+        const bookingSnapAtual = await tx.get(bookingRef);
+        if (!bookingSnapAtual.exists) return;
+        const dadosAtuais = bookingSnapAtual.data();
+
+        // Revalida dentro da transação — outra execução ou um check-in
+        // pode ter mudado o estado entre a consulta e agora.
+        if (dadosAtuais.operacionalStatus !== OPERACIONAL.SEM_CHECKIN) return;
+        if (![APROVACAO.PENDENTE, APROVACAO.SEM_RESPOSTA].includes(dadosAtuais.aprovacaoStatus)) return;
+
+        const precisaLiberarVaga = dadosAtuais.vagaLiberada !== true;
+        let slotSnapAtual = null;
+        if (precisaLiberarVaga) {
+          slotSnapAtual = await tx.get(slotRef);
+        }
+
+        const payload = {
+          aprovacaoStatus: APROVACAO.EXPIRADO,
+          status: STATUS_EXPIRADO_LEGADO,
+          historicoEstados: FieldValue.arrayUnion({
+            dataHora: Timestamp.now(),
+            dimensaoAlterada: "aprovacaoStatus",
+            valorAnterior: dadosAtuais.aprovacaoStatus,
+            novoValor: APROVACAO.EXPIRADO,
+            usuarioId: "sistema:expirar-pendentes"
+          }),
+          atualizadoEm: FieldValue.serverTimestamp(),
+          atualizadoPor: "sistema:expirar-pendentes"
+        };
+
+        if (precisaLiberarVaga && slotSnapAtual && slotSnapAtual.exists) {
+          const slotData = slotSnapAtual.data();
+          const ocupadosAtuais = slotData.ocupados || 0;
+          if (ocupadosAtuais > 0) {
+            tx.set(slotRef, { ...slotData, ocupados: ocupadosAtuais - 1 }, { merge: true });
+          }
+          payload.vagaLiberada = true;
+        }
+
+        tx.update(bookingRef, payload);
+      });
+
+      await db.collection("auditLogs").add({
+        bookingId: docSnap.id,
+        usuarioId: "sistema:expirar-pendentes",
+        acao: "Expirou",
+        dataHora: FieldValue.serverTimestamp()
+      });
+
+      totalExpirados++;
+    } catch (err) {
+      totalErros++;
+      console.error(`Erro ao expirar o agendamento ${docSnap.id}:`, err);
     }
   }
 
-  console.log(`Varredura concluída: ${totalVerificados} pendente(s) verificado(s), ${totalExpirados} expirado(s).`);
+  console.log(
+    `Varredura concluída: ${totalExpirados} expirado(s), ${totalIgnorados} ainda dentro do prazo, ${totalErros} erro(s). ` +
+    `Tolerância: ${toleranciaHoras}h | Fuso: ${fusoOffset}.`
+  );
+
+  if (totalErros > 0) {
+    process.exitCode = 1;
+  }
 }
 
 main().catch((err) => {
-  console.error("Falha na varredura de expiração:", err);
+  console.error("Falha fatal na varredura de expiração:", err);
   process.exitCode = 1;
 });

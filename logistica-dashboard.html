@@ -347,9 +347,11 @@
     }
     .status-aprovado { background: #e3f2fd; color: #1565c0; }
     .status-pendente { background: #fdf1de; color: #a5680b; }
+    .status-semresposta { background: #f1e7fb; color: #6f3fa0; }
     .status-empatio { background: #fff3cd; color: #856404; }
     .status-concluido { background: #d4edda; color: #155724; }
     .status-noshow { background: #f8d7da; color: #721c24; }
+    .status-recusado { background: #f1f2f4; color: #495057; }
 
     .modal-overlay-portaria {
       position: fixed;
@@ -410,6 +412,7 @@
         <span class="marca-texto-completo">Agendamento de Pátio — Painel Operacional</span>
         <span class="marca-texto-curto">Painel Operacional</span>
       </div>
+      <span class="indicador-tempo-real" id="indicador-tempo-real"><span class="ponto-pulso"></span>Atualizado agora</span>
     </div>
     <div class="topbar-direita">
       <div class="info-usuario">
@@ -440,9 +443,6 @@
       <button class="sidebar-item" data-tab="solicitacoes">
         <span class="sidebar-icone"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12"></path><path d="M6 21h12"></path><path d="M7 3c0 5 4 6.5 5 8-1 1.5-5 3-5 8"></path><path d="M17 3c0 5-4 6.5-5 8 1 1.5 5 3 5 8"></path></svg></span><span class="sidebar-label">Solicitações</span>
         <span class="sidebar-badge" id="badge-solicitacoes">0</span>
-      </button>
-      <button class="sidebar-item" data-tab="hoje">
-        <span class="sidebar-icone"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="12" height="18" rx="2"></rect><rect x="9" y="1.5" width="6" height="3" rx="1"></rect><line x1="9" y1="9" x2="15" y2="9"></line><line x1="9" y1="13" x2="15" y2="13"></line><line x1="9" y1="17" x2="13" y2="17"></line></svg></span><span class="sidebar-label">Agend. de Hoje</span>
       </button>
       <button class="sidebar-item" data-tab="todos">
         <span class="sidebar-icone"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"></circle><line x1="15.5" y1="15.5" x2="21" y2="21"></line></svg></span><span class="sidebar-label">Todos os Agend.</span>
@@ -508,6 +508,7 @@
           <div class="grid-filtros">
             <button class="btn-filtro ativo" data-filtro-portaria="todos">Todos (<span id="count-p-todos">0</span>)</button>
             <button class="btn-filtro" data-filtro-portaria="Aprovado">A Caminho / Agendados (<span id="count-p-aprovados">0</span>)</button>
+            <button class="btn-filtro" data-filtro-portaria="Sem Resposta">Sem Resposta (<span id="count-p-semresposta">0</span>)</button>
             <button class="btn-filtro" data-filtro-portaria="Em Pátio">Em Pátio (<span id="count-p-empatio">0</span>)</button>
             <button class="btn-filtro" data-filtro-portaria="Concluído">Concluídos (<span id="count-p-concluidos">0</span>)</button>
             <button class="btn-filtro" data-filtro-portaria="No-Show">No-Show (<span id="count-p-noshow">0</span>)</button>
@@ -559,34 +560,15 @@
         </div>
       </div>
 
-      <div class="tab-conteudo" id="tab-hoje">
-        <div class="card">
-          <h3>Programação do Dia</h3>
-          <div style="overflow-x:auto;">
-            <table class="tabela-padrao">
-              <thead>
-                <tr>
-                  <th>Horário</th>
-                  <th>Transportadora</th>
-                  <th>Processo</th>
-                  <th>Placas</th>
-                  <th>Motorista</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody id="tbody-hoje">
-                <tr><td colspan="6" style="text-align:center;">Carregando agendamentos...</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
       <div class="tab-conteudo" id="tab-todos">
         <div class="card">
           <h3>Histórico Geral de Agendamentos</h3>
           
           <div style="display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
+            <div style="flex:2; min-width:200px;">
+              <label style="font-size:0.8rem; font-weight:600;">Buscar (empresa, placa ou motorista)</label>
+              <input type="text" id="filtro-busca-todos" placeholder="Ex: AAA0A00 ou nome da transportadora" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc;">
+            </div>
             <div style="flex:1; min-width:160px;">
               <label style="font-size:0.8rem; font-weight:600;">Data Início</label>
               <input type="date" id="filtro-data-inicio" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc;">
@@ -599,12 +581,14 @@
               <label style="font-size:0.8rem; font-weight:600;">Status</label>
               <select id="filtro-status" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc;">
                 <option value="">Todos</option>
-                <option value="Pendente">Pendente</option>
+                <option value="Pendente">Aguardando aprovação</option>
+                <option value="Sem Resposta">Sem resposta administrativa</option>
                 <option value="Aprovado">Aprovado</option>
-                <option value="Em Pátio">Em Pátio</option>
+                <option value="Em Pátio">Em pátio</option>
                 <option value="Concluído">Concluído</option>
-                <option value="No-Show">No-Show</option>
+                <option value="No-Show">Não compareceu (No-Show)</option>
                 <option value="Recusado">Recusado</option>
+                <option value="Expirado">Expirado</option>
                 <option value="Cancelado">Cancelado</option>
               </select>
             </div>
@@ -1066,13 +1050,17 @@
       idSlotHorario,
       normalizarBooking,
       situacaoResumoLabel,
+      situacaoDetalhadaLabel,
       aprovarSolicitacao,
       recusarSolicitacao,
       registrarCheckIn,
       registrarCheckOut,
       registrarNoShow,
       liberarVagasCanceladasPelaTransportadora,
-      mudarStatusBooking,
+      escutarBookings,
+      aplicarMascaraPlaca,
+      configurarMascaraPlaca,
+      placaCompleta,
       STATUS,
       APROVACAO,
       COMPARECIMENTO,
@@ -1083,20 +1071,18 @@
       calcularTempoPermanenciaMinutos,
       formatarPermanencia
     } from "./patioCore.js";
-    // BUGFIX: "mudarStatusBooking" e "STATUS" eram usados mais abaixo
-    // (registrarNoShowPortaria e responderSolicitacao) sem estarem
-    // importados aqui — isso disparava "mudarStatusBooking is not
-    // defined" ao Aprovar/Recusar solicitação ou marcar No-Show, e o
-    // agendamento nunca era de fato aprovado no Firestore. Isso, por
-    // tabela, também fazia o Check-in falhar depois (o booking
-    // continuava "Pendente" no banco mesmo a tela sugerindo que tinha
-    // sido aprovado).
+    // Máscara de placa, cálculo de disponibilidade, transições de
+    // estado e o listener em tempo real da lista de agendamentos vêm
+    // TODOS de patioCore.js — esta tela não deve reimplementar nenhuma
+    // dessas regras por conta própria (ver revisão estrutural).
 
     let usuarioLogado = null;
     let mapProcessos = {};
     let listaTransportadoras = [];
     let todosBookingsGerais = [];
     let filtroPortariaAtual = "todos";
+    let cancelarListenerBookings = null;
+    let abaAtivaAtual = "painel";
 
     /* ===================================================================
        DATA/HORA LOCAL — timezone-safe (BUGFIX)
@@ -1130,9 +1116,8 @@
        POPUP / MODAL CUSTOMIZADO (substitui alert() e confirm() nativos —
        mesmo padrão de transportadora-dashboard/admin-dashboard/cadastro).
        Único host de modal genérico da página — reaproveitado também
-       pelas ações do módulo Portaria abaixo (mudarStatusBooking, etc.),
-       que antes viviam num arquivo separado com sua PRÓPRIA cópia deste
-       mesmo bloco.
+       pelas ações do módulo Portaria abaixo, que antes viviam num
+       arquivo separado com sua PRÓPRIA cópia deste mesmo bloco.
        =================================================================== */
     function criarModalHost() {
       if (document.getElementById("modal-overlay")) return;
@@ -1280,12 +1265,10 @@
 
       inicializarAbas();
       inicializarMenuMobile();
-      await carregarDadosGerais();
-      
+      await varrerVagasCanceladas();
+      iniciarListenerBookings();
+
       renderizarTiraDias();
-      carregarPainelDoDia(hojeIso);
-      carregarSolicitacoesPendentes();
-      carregarAgendamentosHoje();
       inicializarFormularioOperacional();
       inicializarFormulariosPortaria();
     });
@@ -1315,11 +1298,11 @@
 
           btn.classList.add("ativo");
           document.getElementById(`tab-${target}`).classList.add("ativo");
+          abaAtivaAtual = target;
 
           if (target === "painel") carregarPainelDoDia(dataSelecionadaPainel);
-          if (target === "portaria") carregarPortaria();
-          if (target === "solicitacoes") carregarSolicitacoesPendentes();
-          if (target === "hoje") carregarAgendamentosHoje();
+          if (target === "portaria") renderizarTabelaPortaria();
+          if (target === "solicitacoes") renderizarSolicitacoesPendentes();
           if (target === "novo-operacional") atualizarHorariosOperacionais();
           if (target === "todos") carregarTodosAgendamentos();
           if (target === "kpis") atualizarPainelKPIs();
@@ -1334,9 +1317,24 @@
       });
 
       const tabParam = new URLSearchParams(window.location.search).get("tab");
-      if (tabParam) {
+      if (tabParam === "hoje") {
+        // "Agendamento de Hoje" foi removido por ser uma segunda
+        // implementação da mesma informação que "Todos os Agendamentos"
+        // já mostra com filtro de data = hoje. Qualquer link/favorito
+        // antigo para ?tab=hoje é redirecionado para lá, já filtrado.
+        const hojeIso = dataLocalStr();
+        document.getElementById("filtro-data-inicio").value = hojeIso;
+        document.getElementById("filtro-data-fim").value = hojeIso;
+        const alvoTodos = document.querySelector('.sidebar-item[data-tab="todos"]');
+        if (alvoTodos) alvoTodos.click();
+      } else if (tabParam) {
         const alvo = document.querySelector(`.sidebar-item[data-tab="${tabParam}"]`);
         if (alvo) alvo.click();
+      } else {
+        // Nenhuma aba pedida via URL — a aba "Painel do Dia" já está
+        // marcada ativa no HTML por padrão; só garante que os dados dela
+        // sejam carregados assim que o listener em tempo real ligar.
+        abaAtivaAtual = "painel";
       }
     }
 
@@ -1389,21 +1387,51 @@
       document.body.style.overflow = "";
     }
 
-    async function carregarDadosGerais() {
-      // Auto-cura de vagas presas por cancelamentos feitos pela própria
-      // Transportadora (ela só pode mudar o status do booking para
-      // "Cancelado" — nunca decrementar timeSlots.ocupados, ver
-      // firestore rules e liberarVagasCanceladasPelaTransportadora em
-      // patioCore.js). Rodar aqui — dentro de carregarDadosGerais(), que
-      // é chamada depois de TODA ação nesta tela (check-in, check-out,
-      // aprovar/recusar, novo agendamento operacional, encaixe, no-show)
-      // — em vez de só uma vez no carregamento inicial da página, fecha
-      // rápido a janela em que o contador `timeSlots.ocupados` (usado
-      // pelo dropdown "Novo Agendamento Operacional" e pelo formulário
-      // da Transportadora) poderia ficar temporariamente maior do que a
-      // contagem já refletida no Painel do Dia (que é recalculada ao
-      // vivo a partir dos próprios bookings, e por isso reage na hora a
-      // um cancelamento).
+    /**
+     * Liga (uma única vez) o listener em tempo real da coleção
+     * `bookings`. A partir daqui NENHUMA tela deste painel volta a
+     * chamar getDocs(collection(db,"bookings")) — todas leem de
+     * `todosBookingsGerais`, que este listener mantém sempre
+     * sincronizado com o Firestore. Qualquer alteração feita por
+     * qualquer usuário, em qualquer aparelho (nova solicitação,
+     * aprovação, check-in, check-out, no-show, cancelamento) chega
+     * aqui e re-renderiza a aba atualmente aberta sem precisar de F5.
+     */
+    function iniciarListenerBookings() {
+      if (cancelarListenerBookings) return;
+      let primeiraCarga = true;
+      cancelarListenerBookings = escutarBookings(
+        db,
+        async (bookings) => {
+          todosBookingsGerais = bookings;
+          preencherSelectEmpresasKPIs(todosBookingsGerais);
+          rerenderizarAbaAtiva();
+          if (!primeiraCarga) mostrarIndicadorTempoReal();
+          primeiraCarga = false;
+        },
+        (err) => {
+          mostrarToast("Falha na atualização em tempo real. Recarregue a página se os dados parecerem desatualizados.", { tipo: "erro", duracaoMs: 6000 });
+        }
+      );
+    }
+
+    let timeoutIndicadorTempoReal = null;
+    function mostrarIndicadorTempoReal() {
+      const indicador = document.getElementById("indicador-tempo-real");
+      if (!indicador) return;
+      indicador.classList.add("visivel");
+      clearTimeout(timeoutIndicadorTempoReal);
+      timeoutIndicadorTempoReal = setTimeout(() => indicador.classList.remove("visivel"), 2500);
+    }
+
+    // Auto-cura de vagas presas por cancelamentos feitos pela própria
+    // Transportadora (ela só pode mudar o status do booking para
+    // "Cancelado" — nunca decrementar timeSlots.ocupados, ver firestore
+    // rules e liberarVagasCanceladasPelaTransportadora em patioCore.js).
+    // Roda no carregamento inicial e é reaproveitada por qualquer ação
+    // manual que também precise disso; o listener em tempo real cuida
+    // de propagar o resultado para a tela sozinho.
+    async function varrerVagasCanceladas() {
       try {
         const totalLiberadas = await liberarVagasCanceladasPelaTransportadora(db, usuarioLogado);
         if (totalLiberadas > 0) {
@@ -1412,16 +1440,18 @@
       } catch (errSweep) {
         console.error("Erro na varredura de liberação de vagas canceladas:", errSweep);
       }
+    }
 
-      try {
-        const snap = await getDocs(collection(db, "bookings"));
-        // normalizarBooking() garante as 3 dimensões (aprovacaoStatus /
-        // comparecimentoStatus / operacionalStatus) mesmo em documentos
-        // antigos que só têm o campo único `status` legado.
-        todosBookingsGerais = snap.docs.map(d => normalizarBooking({ id: d.id, ...d.data() }));
-        preencherSelectEmpresasKPIs(todosBookingsGerais);
-      } catch (err) {
-        console.error("Erro ao carregar banco de agendamentos:", err);
+    // Re-renderiza só o que está de fato visível — evita trabalho de
+    // DOM desnecessário nas abas fechadas a cada evento do listener.
+    function rerenderizarAbaAtiva() {
+      switch (abaAtivaAtual) {
+        case "painel": carregarPainelDoDia(dataSelecionadaPainel); break;
+        case "portaria": renderizarTabelaPortaria(); break;
+        case "solicitacoes": renderizarSolicitacoesPendentes(); break;
+        case "todos": carregarTodosAgendamentos(); break;
+        case "kpis": atualizarPainelKPIs(); break;
+        default: break;
       }
     }
 
@@ -1593,13 +1623,12 @@
     /* ===================================================================
        MÓDULO PORTARIA (incorporado do antigo portaria.html)
 
-       Reaproveita "todosBookingsGerais" (já carregado por
-       carregarDadosGerais(), usado também pela aba "Agend. de Hoje") em
-       vez de fazer uma consulta própria ao Firestore — evita duplicar
-       leituras e mantém a lista sempre em sincronia com o resto do
-       painel. Depois de qualquer ação (check-in/check-out/no-show/
-       encaixe), o padrão é: gravar no Firestore -> recarregar
-       carregarDadosGerais() -> re-renderizar as telas afetadas.
+       Reaproveita "todosBookingsGerais" (mantido sempre atualizado pelo
+       listener em tempo real — ver iniciarListenerBookings()) em vez de
+       fazer uma consulta própria ao Firestore. Depois de qualquer ação
+       (check-in/check-out/no-show/encaixe), o padrão é: gravar no
+       Firestore -> o listener recebe a mudança sozinho -> a aba ativa é
+       re-renderizada automaticamente (rerenderizarAbaAtiva()).
        =================================================================== */
     function obterAgendamentosHojeOrdenados() {
       const hojeStr = dataLocalStr();
@@ -1615,33 +1644,45 @@
     // documento; isto é só a projeção usada para os contadores/badges.
     function atualizarContadoresPortaria(lista) {
       document.getElementById("count-p-todos").textContent = lista.length;
-      document.getElementById("count-p-aprovados").textContent = lista.filter(b => situacaoResumoLabel(b) === APROVACAO.APROVADO).length;
-      document.getElementById("count-p-empatio").textContent = lista.filter(b => situacaoResumoLabel(b) === OPERACIONAL.EM_PATIO).length;
-      document.getElementById("count-p-concluidos").textContent = lista.filter(b => situacaoResumoLabel(b) === OPERACIONAL.CONCLUIDO).length;
-      document.getElementById("count-p-noshow").textContent = lista.filter(b => situacaoResumoLabel(b) === "No-Show").length;
+      document.getElementById("count-p-aprovados").textContent = lista.filter(b => situacaoResumoLabel(b) === STATUS.APROVADO).length;
+      document.getElementById("count-p-semresposta").textContent = lista.filter(b => situacaoResumoLabel(b) === STATUS.SEM_RESPOSTA).length;
+      document.getElementById("count-p-empatio").textContent = lista.filter(b => situacaoResumoLabel(b) === STATUS.EM_PATIO).length;
+      document.getElementById("count-p-concluidos").textContent = lista.filter(b => situacaoResumoLabel(b) === STATUS.CONCLUIDO).length;
+      document.getElementById("count-p-noshow").textContent = lista.filter(b => situacaoResumoLabel(b) === STATUS.NO_SHOW).length;
     }
 
     function gerarBotoesAcaoPortaria(booking) {
-      // Aprovado + Sem Check-in + ainda não marcado como Não Compareceu -> pode dar entrada ou marcar No-Show
-      if (booking.aprovacaoStatus === APROVACAO.APROVADO
-          && booking.operacionalStatus === OPERACIONAL.SEM_CHECKIN
-          && booking.comparecimentoStatus !== COMPARECIMENTO.NAO_COMPARECEU) {
-        return `
-          <button class="btn-acao btn-checkin" data-id="${booking.id}">Check-in</button>
-          <button class="btn-acao btn-noshow" data-id="${booking.id}">No-Show</button>
-        `;
-      } else if (booking.operacionalStatus === OPERACIONAL.EM_PATIO) {
+      if (booking.operacionalStatus === OPERACIONAL.EM_PATIO) {
         return `<button class="btn-acao btn-checkout" data-id="${booking.id}">Check-out</button>`;
-      } else if (booking.operacionalStatus === OPERACIONAL.CONCLUIDO) {
+      }
+      if (booking.operacionalStatus === OPERACIONAL.CONCLUIDO) {
         const perf = booking.checkOut?.permanenciaMinutos !== undefined
           ? formatarPermanencia(booking.checkOut.permanenciaMinutos)
           : "-";
         return `<small style="color:#155724; font-weight:bold;">Permanência: ${perf}</small>`;
-      } else if (booking.comparecimentoStatus === COMPARECIMENTO.NAO_COMPARECEU) {
-        return `<small style="color:#721c24; font-weight:bold;">No-Show registrado</small>`;
-      } else {
-        return `<small style="color:#888;">Sem ações</small>`;
       }
+      if (booking.comparecimentoStatus === COMPARECIMENTO.NAO_COMPARECEU) {
+        return `<small style="color:#721c24; font-weight:bold;">No-Show registrado</small>`;
+      }
+      // REGRA CENTRAL: o check-in nunca fica bloqueado pela dimensão
+      // administrativa. Pendente, Sem Resposta e até Recusado ainda
+      // podem dar entrada — se o veículo está fisicamente no local, a
+      // Portaria precisa poder registrar isso (patioCore.registrarCheckIn
+      // resolve Pendente -> Sem Resposta automaticamente e preserva o
+      // histórico de recusa/sem-resposta). Só o Cancelado pela própria
+      // transportadora é bloqueado, com orientação para usar o Encaixe.
+      if (booking.aprovacaoStatus === APROVACAO.CANCELADO) {
+        return `<small style="color:#888;">Cancelado pela transportadora — use Encaixe se o veículo está no local</small>`;
+      }
+      const avisoRecusado = booking.aprovacaoStatus === APROVACAO.RECUSADO
+        ? '<br><small style="color:#a5680b;">Recusado — check-in ainda é possível</small>'
+        : "";
+      const podeMarcarNoShow = [APROVACAO.APROVADO, APROVACAO.SEM_RESPOSTA].includes(booking.aprovacaoStatus);
+      return `
+        <button class="btn-acao btn-checkin" data-id="${booking.id}">Check-in</button>
+        ${podeMarcarNoShow ? `<button class="btn-acao btn-noshow" data-id="${booking.id}">No-Show</button>` : ""}
+        ${avisoRecusado}
+      `;
     }
 
     function renderizarTabelaPortaria() {
@@ -1659,22 +1700,34 @@
         return;
       }
 
+      const CLASSE_POR_STATUS = {
+        [STATUS.APROVADO]: "status-aprovado",
+        [STATUS.SEM_RESPOSTA]: "status-semresposta",
+        [STATUS.PENDENTE]: "status-pendente",
+        [STATUS.RECUSADO]: "status-recusado",
+        [STATUS.CANCELADO]: "status-recusado",
+        [STATUS.EXPIRADO]: "status-recusado",
+        [STATUS.EM_PATIO]: "status-empatio",
+        [STATUS.CONCLUIDO]: "status-concluido",
+        [STATUS.NO_SHOW]: "status-noshow"
+      };
+      const COMPARECIMENTO_LABEL = {
+        [COMPARECIMENTO.COMPARECEU]: "Compareceu no horário",
+        [COMPARECIMENTO.COMPARECEU_ATRASADO]: "Compareceu atrasado",
+        [COMPARECIMENTO.NAO_COMPARECEU]: "Não compareceu"
+      };
+
       tbody.innerHTML = listaFiltrada.map(b => {
         const horaFormatada = b.horaInicio || "--:--";
         const nomeProcesso = mapProcessos[b.tipoProcessoId] || b.tipoProcessoId || "Não especificado";
         const rotulo = situacaoResumoLabel(b);
-        const badgeClasse = {
-          [APROVACAO.APROVADO]: "status-aprovado",
-          [OPERACIONAL.EM_PATIO]: "status-empatio",
-          [OPERACIONAL.CONCLUIDO]: "status-concluido",
-          "No-Show": "status-noshow"
-        }[rotulo] || "";
+        const badgeClasse = CLASSE_POR_STATUS[rotulo] || "";
 
         // Linha de comparecimento: só mostra quando já foi verificado
         // (comparecimentoStatus não é mais null) — dimensão independente
         // da aprovação, exibida lado a lado sem sobrescrever nenhuma delas.
         const linhaComparecimento = b.comparecimentoStatus
-          ? `<br><small style="font-size:0.75rem; color:#666;">${escapeHtml(b.comparecimentoStatus)}</small>`
+          ? `<br><small style="font-size:0.75rem; color:#666;">${escapeHtml(COMPARECIMENTO_LABEL[b.comparecimentoStatus] || b.comparecimentoStatus)}</small>`
           : (b.checkIn?.pontualidade ? `<br><small style="font-size:0.75rem; color:#666;">${escapeHtml(b.checkIn.pontualidade)}</small>` : "");
 
         return `
@@ -1809,11 +1862,9 @@
 
           await registrarAuditLog(id, "Check-In");
           fecharModaisPortaria();
-          await carregarDadosGerais();
-          renderizarTabelaPortaria();
-          if (dataSelecionadaPainel === dataLocalStr()) {
-            carregarPainelDoDia(dataSelecionadaPainel);
-          }
+          // O listener em tempo real cuida de re-renderizar Portaria e
+          // Painel do Dia sozinho assim que o Firestore confirmar a
+          // escrita — não é preciso recarregar nada manualmente aqui.
           mostrarToast("Check-in realizado.", { tipo: "sucesso" });
         } catch (err) {
           console.error("Erro ao realizar Check-in:", err);
@@ -1841,11 +1892,6 @@
 
           await registrarAuditLog(id, "Check-Out");
           fecharModaisPortaria();
-          await carregarDadosGerais();
-          renderizarTabelaPortaria();
-          if (dataSelecionadaPainel === dataLocalStr()) {
-            carregarPainelDoDia(dataSelecionadaPainel);
-          }
           mostrarToast("Check-out realizado.", { tipo: "sucesso" });
         } catch (err) {
           console.error("Erro ao realizar Check-out:", err);
@@ -1883,11 +1929,6 @@
           await registrarAuditLog(bookingId, "Entrada Encaixe Portaria");
 
           fecharModaisPortaria();
-          await carregarDadosGerais();
-          renderizarTabelaPortaria();
-          if (dataSelecionadaPainel === dataLocalStr()) {
-            carregarPainelDoDia(dataSelecionadaPainel);
-          }
           mostrarToast("Entrada de encaixe registrada.", { tipo: "sucesso" });
         } catch (err) {
           console.error("Erro ao registrar entrada sem agendamento:", err);
@@ -1898,16 +1939,13 @@
 
     async function registrarNoShowPortaria(booking) {
       try {
-        // mudarStatusBooking já libera a vaga em timeSlots.ocupados
-        // automaticamente (No-Show está em STATUS_LIBERA_VAGA).
-        await mudarStatusBooking(db, usuarioLogado, booking, STATUS.NO_SHOW);
+        // registrarNoShow() é a função central para esta transição —
+        // aceita Aprovado OU Sem Resposta como origem e já libera a
+        // vaga em timeSlots.ocupados automaticamente dentro da mesma
+        // transação.
+        await registrarNoShow(db, usuarioLogado, booking.id);
 
         await registrarAuditLog(booking.id, "No-Show");
-        await carregarDadosGerais();
-        renderizarTabelaPortaria();
-        if (dataSelecionadaPainel === dataLocalStr()) {
-          carregarPainelDoDia(dataSelecionadaPainel);
-        }
         mostrarToast("No-Show registrado.", { tipo: "sucesso" });
       } catch (err) {
         console.error("Erro ao registrar No-Show:", err);
@@ -1921,10 +1959,6 @@
 
     function fecharModaisPortaria() {
       document.querySelectorAll(".modal-overlay-portaria").forEach(m => m.classList.add("oculto"));
-    }
-
-    function carregarPortaria() {
-      renderizarTabelaPortaria();
     }
 
     async function registrarAuditLog(bookingId, acao) {
@@ -2028,8 +2062,6 @@
 
           mostrarToast("Agendamento Operacional criado com sucesso!", { tipo: "sucesso" });
           form.reset();
-          await carregarDadosGerais();
-          carregarPainelDoDia(dataSelecionadaPainel);
         } catch (err) {
           await mostrarAlerta(`Erro ao agendar: ${err.message}`, { titulo: "Erro", tipo: "erro" });
         } finally {
@@ -2072,131 +2104,101 @@
     /* ===================================================================
        CONSULTAS E AÇÕES
        =================================================================== */
-    async function carregarSolicitacoesPendentes() {
+    // Solicitações aguardando decisão administrativa = PENDENTE (nunca
+    // respondida) + SEM_RESPOSTA (o prazo/veículo já resolveu a parte
+    // física, mas a Logística ainda pode registrar uma decisão formal
+    // para fins de auditoria — cenário E da revisão: "sem resposta mas
+    // compareceu"). Lê direto de todosBookingsGerais (tempo real).
+    function renderizarSolicitacoesPendentes() {
       const tbody = document.getElementById("tbody-solicitacoes");
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Buscando pendentes...</td></tr>';
 
-      try {
-        // Sem orderBy() de propósito (mesmo motivo já documentado em outras
-        // consultas deste projeto): igualdade simples usa o índice automático
-        // de campo único, sem depender de índice composto.
-        const q = query(collection(db, "bookings"), where("status", "==", "Pendente"));
-        const snap = await getDocs(q);
-
-        const badge = document.getElementById("badge-solicitacoes");
-        if (badge) {
-          if (snap.empty) {
-            badge.style.display = "none";
-          } else {
-            badge.style.display = "inline-block";
-            badge.textContent = snap.size;
-          }
-        }
-
-        if (snap.empty) {
-          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#888;">Nenhuma solicitação pendente.</td></tr>';
-          return;
-        }
-
-        const docsOrdenados = snap.docs.slice().sort((docA, docB) => {
-          const a = docA.data();
-          const b = docB.data();
+      const pendentes = todosBookingsGerais
+        .filter(b => [APROVACAO.PENDENTE, APROVACAO.SEM_RESPOSTA].includes(b.aprovacaoStatus))
+        .sort((a, b) => {
           const cmpData = (a.dataAgendada || "").localeCompare(b.dataAgendada || "");
           if (cmpData !== 0) return cmpData;
           return (a.horaInicio || "").localeCompare(b.horaInicio || "");
         });
 
-        tbody.innerHTML = docsOrdenados.map(d => {
-          const b = d.data();
-          return `
-            <tr>
-              <td><b>${formatarData(b.dataAgendada)}</b><br><small>${b.horaInicio}</small></td>
-              <td>${escapeHtml(b.empresa)}</td>
-              <td>${escapeHtml(mapProcessos[b.tipoProcessoId] || b.tipoProcessoId)}</td>
-              <td>Cavalo: ${escapeHtml(b.placaCavalo)}<br><small>Motorista: ${escapeHtml(b.motorista)}</small></td>
-              <td><small>${b.criadoEm ? new Date(b.criadoEm.toDate()).toLocaleString() : '-'}</small></td>
-              <td>
-                <div style="display:flex; flex-direction:column; gap:6px; align-items:flex-start;">
-                  <button class="btn-primario" onclick="responderSolicitacao('${d.id}', 'Aprovado')" style="width:auto; padding:6px 14px; font-size:0.78rem; background:var(--verde);">Aprovar</button>
-                  <button class="btn-primario" onclick="responderSolicitacao('${d.id}', 'Recusado')" style="width:auto; padding:6px 14px; font-size:0.78rem; background:var(--vermelho);">Recusar</button>
-                </div>
-              </td>
-            </tr>
-          `;
-        }).join("");
-      } catch (err) {
-        console.error("Erro ao buscar solicitações pendentes:", err);
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Erro ao buscar solicitações.</td></tr>';
+      const badge = document.getElementById("badge-solicitacoes");
+      if (badge) {
+        if (pendentes.length === 0) {
+          badge.style.display = "none";
+        } else {
+          badge.style.display = "inline-block";
+          badge.textContent = pendentes.length;
+        }
       }
+
+      if (pendentes.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#888;">Nenhuma solicitação aguardando decisão.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = pendentes.map(b => {
+        const seloSemResposta = b.aprovacaoStatus === APROVACAO.SEM_RESPOSTA
+          ? '<br><span class="badge-status status-semresposta" style="margin-top:4px;">Sem resposta — veículo já compareceu</span>'
+          : "";
+        return `
+          <tr>
+            <td><b>${formatarData(b.dataAgendada)}</b><br><small>${escapeHtml(b.horaInicio || "-")}</small>${seloSemResposta}</td>
+            <td>${escapeHtml(b.empresa)}</td>
+            <td>${escapeHtml(mapProcessos[b.tipoProcessoId] || b.tipoProcessoId)}</td>
+            <td>Cavalo: ${escapeHtml(b.placaCavalo)}<br><small>Motorista: ${escapeHtml(b.motorista)}</small></td>
+            <td><small>${b.criadoEm ? new Date(b.criadoEm.toDate ? b.criadoEm.toDate() : b.criadoEm).toLocaleString() : '-'}</small></td>
+            <td>
+              <div style="display:flex; flex-direction:column; gap:6px; align-items:flex-start;">
+                <button class="btn-primario" onclick="responderSolicitacao('${b.id}', 'aprovar')" style="width:auto; padding:6px 14px; font-size:0.78rem; background:var(--verde);">Aprovar</button>
+                <button class="btn-primario" onclick="responderSolicitacao('${b.id}', 'recusar')" style="width:auto; padding:6px 14px; font-size:0.78rem; background:var(--vermelho);">Recusar</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join("");
     }
 
-    window.responderSolicitacao = async function(bookingId, novoStatus) {
+    window.responderSolicitacao = async function(bookingId, decisao) {
+      const rotuloDecisao = decisao === "aprovar" ? "Aprovado" : "Recusado";
       const confirmado = await mostrarConfirm(
-        `Confirmar alteração do agendamento para "${novoStatus}"?`,
+        `Confirmar alteração do agendamento para "${rotuloDecisao}"?`,
         { titulo: "Confirmar ação" }
       );
       if (!confirmado) return;
 
       try {
-        // mudarStatusBooking relê o booking direto do servidor (dentro da
-        // própria transação) e, se a transição for para "Recusado", já
-        // libera a vaga em timeSlots.ocupados automaticamente — antes
-        // disso, recusar um agendamento trocava só o status e a vaga
-        // ficava presa para sempre.
-        const { vagaLiberada } = await mudarStatusBooking(
-          db,
-          usuarioLogado,
-          { id: bookingId },
-          novoStatus
-        );
+        // aprovarSolicitacao/recusarSolicitacao são as funções centrais
+        // para a dimensão administrativa — validam o estado atual dentro
+        // da própria transação (aceitam Pendente OU Sem Resposta) e, ao
+        // recusar, liberam a vaga automaticamente.
+        const resultado = decisao === "aprovar"
+          ? await aprovarSolicitacao(db, usuarioLogado, bookingId)
+          : await recusarSolicitacao(db, usuarioLogado, bookingId);
 
         await addDoc(collection(db, "auditLogs"), {
           bookingId,
           usuarioId: usuarioLogado.uid,
-          acao: novoStatus === "Aprovado" ? "Aprovou" : "Recusou",
+          acao: decisao === "aprovar" ? "Aprovou" : "Recusou",
           dataHora: serverTimestamp()
         });
 
-        await carregarDadosGerais();
-        carregarSolicitacoesPendentes();
-        carregarPainelDoDia(dataSelecionadaPainel);
+        mostrarToast(`Agendamento ${rotuloDecisao.toLowerCase()} com sucesso.`, { tipo: "sucesso" });
 
-        mostrarToast(`Agendamento ${novoStatus === "Aprovado" ? "aprovado" : "recusado"} com sucesso.`, { tipo: "sucesso" });
-
-        if (vagaLiberada) {
+        if (resultado && resultado.vagaLiberada) {
           console.info(`Vaga liberada automaticamente ao recusar o agendamento ${bookingId}.`);
         }
+        // Não é preciso recarregar nada manualmente — o listener em
+        // tempo real (escutarBookings) já vai propagar esta mudança
+        // para Solicitações, Painel do Dia, Portaria e Todos os
+        // Agendamentos sozinho.
       } catch (err) {
         console.error("Erro ao atualizar o agendamento:", err);
         await mostrarAlerta(err.message || "Erro ao atualizar o agendamento.", { titulo: "Erro", tipo: "erro" });
       }
     };
 
-    async function carregarAgendamentosHoje() {
-      const tbody = document.getElementById("tbody-hoje");
-      const hojeStr = dataLocalStr();
-
-      const filtrados = todosBookingsGerais.filter(b => b.dataAgendada === hojeStr);
-
-      if (filtrados.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#888;">Nenhum agendamento para hoje.</td></tr>';
-        return;
-      }
-
-      tbody.innerHTML = filtrados.map(b => `
-        <tr>
-          <td><b>${b.horaInicio}</b></td>
-          <td>${escapeHtml(b.empresa)} ${b.tipoAgendamento === "Operacional" ? '<span class="tag-operacional">Op</span>' : ''}</td>
-          <td>${escapeHtml(mapProcessos[b.tipoProcessoId] || b.tipoProcessoId)}</td>
-          <td>${escapeHtml(b.placaCavalo)}</td>
-          <td>${escapeHtml(b.motorista)}</td>
-          <td><b>${escapeHtml(b.status)}</b></td>
-        </tr>
-      `).join("");
-    }
-
-    async function carregarTodosAgendamentos() {
+    function carregarTodosAgendamentos() {
       const tbody = document.getElementById("tbody-todos");
+      const termo = (document.getElementById("filtro-busca-todos").value || "").trim().toLowerCase();
       const dataInicio = document.getElementById("filtro-data-inicio").value;
       const dataFim = document.getElementById("filtro-data-fim").value;
       const statusFiltro = document.getElementById("filtro-status").value;
@@ -2205,27 +2207,43 @@
         if (dataInicio && b.dataAgendada < dataInicio) return false;
         if (dataFim && b.dataAgendada > dataFim) return false;
         if (statusFiltro && b.status !== statusFiltro) return false;
+        if (termo) {
+          const alvo = `${b.empresa || ""} ${b.placaCavalo || ""} ${b.placaCarreta || ""} ${b.motorista || ""}`.toLowerCase();
+          if (!alvo.includes(termo)) return false;
+        }
         return true;
       });
 
       if (filtrados.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#888;">Nenhum agendamento encontrado no período.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#888;">Nenhum agendamento encontrado com estes filtros.</td></tr>';
         return;
       }
 
-      tbody.innerHTML = filtrados.map(b => `
+      const ordenados = filtrados.slice().sort((a, b) => {
+        const cmpData = (b.dataAgendada || "").localeCompare(a.dataAgendada || "");
+        if (cmpData !== 0) return cmpData;
+        return (b.horaInicio || "").localeCompare(a.horaInicio || "");
+      });
+
+      tbody.innerHTML = ordenados.map(b => `
         <tr>
-          <td><b>${formatarData(b.dataAgendada)}</b> (${b.horaInicio})</td>
+          <td><b>${formatarData(b.dataAgendada)}</b> (${escapeHtml(b.horaInicio || "-")})</td>
           <td>${escapeHtml(b.empresa)}</td>
           <td>${escapeHtml(mapProcessos[b.tipoProcessoId] || b.tipoProcessoId)}</td>
-          <td>${escapeHtml(b.placaCavalo)}</td>
+          <td>${escapeHtml(b.placaCavalo)}${b.placaCarreta ? " / " + escapeHtml(b.placaCarreta) : ""}</td>
           <td>${escapeHtml(b.motorista)}</td>
-          <td><b>${escapeHtml(b.status)}</b></td>
+          <td><b>${escapeHtml(situacaoDetalhadaLabel(b))}</b></td>
         </tr>
       `).join("");
     }
 
     document.getElementById("btn-filtrar-todos").addEventListener("click", carregarTodosAgendamentos);
+    document.getElementById("filtro-busca-todos").addEventListener("input", () => {
+      // Filtro de texto reage ao digitar; os demais (data/status)
+      // continuam exigindo o botão "Filtrar" para não recalcular a
+      // cada tecla em bases maiores.
+      carregarTodosAgendamentos();
+    });
 
     /* ===================================================================
        ETAPA 4: LÓGICA DO PAINEL DE KPIS
@@ -2803,48 +2821,9 @@
       return `${dia}/${mes}/${ano}`;
     }
 
-    /* ===================================================================
-       MÁSCARA DE PLACA (aceita AAA-0000 e AAA0A00 / Mercosul)
-       Mesmo padrão já usado em transportadora-dashboard.html — replicado
-       aqui para os campos de placa da Logística/Portaria (Check-in e
-       Novo Agendamento Operacional), que até então aceitavam qualquer
-       texto sem formatação nem validação de tamanho.
-       Posições (sem contar o traço): 1-3 letras, 4º dígito,
-       5º dígito (formato antigo, insere traço) ou letra (Mercosul, sem
-       traço), 6-7 sempre dígitos.
-       =================================================================== */
-    function aplicarMascaraPlaca(valorBruto) {
-      const brutoLimpo = (valorBruto || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-      let alfanumerico = "";
-
-      for (let i = 0; i < brutoLimpo.length && alfanumerico.length < 7; i++) {
-        const ch = brutoLimpo[i];
-        const pos = alfanumerico.length;
-
-        if (pos < 3) {
-          if (/[A-Z]/.test(ch)) alfanumerico += ch;
-        } else if (pos === 3) {
-          if (/[0-9]/.test(ch)) alfanumerico += ch;
-        } else if (pos === 4) {
-          if (/[A-Z0-9]/.test(ch)) alfanumerico += ch;
-        } else {
-          if (/[0-9]/.test(ch)) alfanumerico += ch;
-        }
-      }
-
-      // O 5º caractere (índice 4) define o formato: dígito = antigo (com traço), letra = Mercosul (sem traço)
-      if (alfanumerico.length >= 5 && /[0-9]/.test(alfanumerico[4])) {
-        return alfanumerico.slice(0, 3) + "-" + alfanumerico.slice(3);
-      }
-      return alfanumerico;
-    }
-
-    function configurarMascaraPlaca(inputEl) {
-      if (!inputEl) return;
-      inputEl.addEventListener("input", () => {
-        inputEl.value = aplicarMascaraPlaca(inputEl.value);
-      });
-    }
+    // Máscara de placa: importada de patioCore.js (aplicarMascaraPlaca /
+    // configurarMascaraPlaca) — única implementação do sistema, usada
+    // também em transportadora-dashboard.html. Nenhuma cópia local aqui.
 
     function escapeHtml(texto) {
       if (!texto) return "";

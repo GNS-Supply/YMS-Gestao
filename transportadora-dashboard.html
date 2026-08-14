@@ -101,14 +101,33 @@
     import {
       collection,
       doc,
-      getDocs,
-      addDoc,
       updateDoc,
+      addDoc,
       query,
       where,
+      getDocs,
+      onSnapshot,
+      arrayUnion,
       serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-    import { buscarSlotsVirtuaisDoDia, idSlotHorario, criarAgendamentoTransportadora } from "./patioCore.js";
+    import {
+      buscarSlotsVirtuaisDoDia,
+      idSlotHorario,
+      criarAgendamentoTransportadora,
+      normalizarBooking,
+      aplicarMascaraPlaca,
+      configurarMascaraPlaca,
+      placaCompleta,
+      situacaoDetalhadaLabel
+    } from "./patioCore.js";
+    // Máscara de placa, disponibilidade e normalização de booking vêm
+    // TODOS de patioCore.js — a única implementação do sistema (ver
+    // revisão estrutural). O listener em tempo real desta tela usa
+    // onSnapshot diretamente (em vez do escutarBookings() genérico do
+    // núcleo) porque aqui a consulta PRECISA ser filtrada por
+    // usuarioId==uid — as Firestore Rules exigem que a própria query já
+    // venha restrita ao dono do documento; um listener sem filtro na
+    // coleção inteira seria rejeitado por permissão para este perfil.
 
     // AUTENTICAÇÃO / PROTEÇÃO DE PÁGINA: reaproveita a versão centralizada
     // em auth.js (exige status === "aprovado"). Esta tela tinha uma cópia
@@ -280,49 +299,8 @@
     const inputPlacaCavalo = document.getElementById("placaCavalo");
     const inputPlacaCarreta = document.getElementById("placaCarreta");
 
-    /* ===================================================================
-       MÁSCARA DE PLACA (aceita AAA-0000 e AAA0A00 / Mercosul)
-       Posições (sem contar o traço): 1-3 letras, 4 dígito,
-       5 dígito (formato antigo, insere traço) ou letra (Mercosul, sem traço),
-       6-7 sempre dígitos.
-       =================================================================== */
-    function aplicarMascaraPlaca(valorBruto) {
-      const brutoLimpo = (valorBruto || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-      let alfanumerico = "";
-
-      for (let i = 0; i < brutoLimpo.length && alfanumerico.length < 7; i++) {
-        const ch = brutoLimpo[i];
-        const pos = alfanumerico.length;
-
-        if (pos < 3) {
-          if (/[A-Z]/.test(ch)) alfanumerico += ch;
-        } else if (pos === 3) {
-          if (/[0-9]/.test(ch)) alfanumerico += ch;
-        } else if (pos === 4) {
-          if (/[A-Z0-9]/.test(ch)) alfanumerico += ch;
-        } else {
-          if (/[0-9]/.test(ch)) alfanumerico += ch;
-        }
-      }
-
-      // O 5º caractere (índice 4) define o formato: dígito = antigo (com traço), letra = Mercosul (sem traço)
-      if (alfanumerico.length >= 5 && /[0-9]/.test(alfanumerico[4])) {
-        return alfanumerico.slice(0, 3) + "-" + alfanumerico.slice(3);
-      }
-      return alfanumerico;
-    }
-
-    function placaCompleta(valorMascarado) {
-      return valorMascarado.replace("-", "").length === 7;
-    }
-
-    function configurarMascaraPlaca(inputEl) {
-      if (!inputEl) return;
-      inputEl.addEventListener("input", () => {
-        inputEl.value = aplicarMascaraPlaca(inputEl.value);
-      });
-    }
-
+    // Máscara de placa: importada de patioCore.js. Nenhuma cópia local
+    // aqui — ver logistica-dashboard.html, que usa a mesma implementação.
     configurarMascaraPlaca(inputPlacaCavalo);
     configurarMascaraPlaca(inputPlacaCarreta);
 
@@ -342,13 +320,13 @@
         document.getElementById(`tab-${btn.dataset.tab}`)?.classList.add("ativo");
 
         if (btn.dataset.tab === "meus") {
-          carregarMeusAgendamentos();
+          iniciarListenerMeusAgendamentos();
         }
       });
     });
 
     // ---------------- Proteção de Página (Apenas perfil Transportadora - Tipo 1) ----------------
-    protegerPagina([1], (user, perfil) => {
+    protegerPagina([1], async (user, perfil) => {
       usuarioAtual = user;
       perfilAtual = perfil;
 
@@ -362,6 +340,8 @@
         inputEmpresa.value = perfil.empresa;
       }
 
+      mapTiposProcessoCache = await obterTiposProcessoMap();
+      iniciarListenerMeusAgendamentos();
       carregarTiposProcessoAtivos();
     });
 
@@ -544,12 +524,17 @@
 
         // Leva o usuário direto para "Meus Agendamentos" com o novo item
         // destacado, em vez de deixar o formulário limpo parado na mesma
-        // aba — assim ele já vê a confirmação do que acabou de pedir.
+        // aba — assim ele já vê a confirmação do que acabou de pedir. O
+        // listener em tempo real já está ligado desde o carregamento da
+        // página, então só é preciso marcar qual item destacar quando o
+        // snapshot com o novo booking chegar (pode já ter chegado antes
+        // mesmo da navegação, daí re-renderizar na hora).
         document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("ativo"));
         document.querySelectorAll(".tab-conteudo").forEach(c => c.classList.remove("ativo"));
         document.querySelector('.tab-btn[data-tab="meus"]')?.classList.add("ativo");
         document.getElementById("tab-meus")?.classList.add("ativo");
-        await carregarMeusAgendamentos(resultado.bookingId);
+        idParaDestacarPendente = resultado.bookingId;
+        renderizarListaAgendamentos();
 
       } catch (err) {
         console.error("Erro na reserva:", err);
@@ -561,80 +546,99 @@
     });
 
     /* ===================================================================
-       4. MEUS AGENDAMENTOS
+       4. MEUS AGENDAMENTOS (tempo real)
+       Listener próprio (filtrado por usuarioId==uid, exigido pelas
+       Firestore Rules) — não usa getDocs pontual: qualquer decisão da
+       Logística (aprovar/recusar/check-in/check-out/no-show) aparece
+       aqui sozinho, sem precisar reabrir a aba.
        =================================================================== */
-    async function carregarMeusAgendamentos(idParaDestacar = null) {
-      if (!listaAgendamentos) return;
-      listaAgendamentos.innerHTML = '<div class="estado-vazio">Carregando seus agendamentos...</div>';
+    let meusAgendamentos = [];
+    let mapTiposProcessoCache = {};
+    let cancelarListenerMeusAgendamentos = null;
+    let idParaDestacarPendente = null;
 
-      try {
-        const tipos = await obterTiposProcessoMap();
-        const q = query(
-          collection(db, "bookings"),
-          where("usuarioId", "==", usuarioAtual.uid)
-        );
-
-        const snap = await getDocs(q);
-
-        if (snap.empty) {
-          listaAgendamentos.innerHTML = '<div class="estado-vazio">Você ainda não possui agendamentos cadastrados.</div>';
-          return;
-        }
-
-        const agendamentos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        agendamentos.sort((a, b) => (b.dataAgendada || "").localeCompare(a.dataAgendada || ""));
-
-        listaAgendamentos.innerHTML = "";
-        agendamentos.forEach(a => {
-          const div = document.createElement("div");
-          div.className = "item-agendamento";
-          div.dataset.id = a.id;
-
-          const statusClasse = {
-            Pendente: "pendente",
-            Aprovado: "aprovado",
-            Recusado: "recusado",
-            Expirado: "recusado",
-            Cancelado: "recusado"
-          }[a.status] || "pendente";
-
-          const podeCancelar = a.status === "Pendente" || a.status === "Aprovado";
-
-          div.innerHTML = `
-            <div class="linha-topo">
-              <span class="data-hora"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><line x1="3" y1="10" x2="21" y2="10"></line><line x1="8" y1="3" x2="8" y2="7"></line><line x1="16" y1="3" x2="16" y2="7"></line></svg> ${formatarData(a.dataAgendada)} às ${escapeHtml(a.horaInicio || "-")}</span>
-              <span class="badge ${statusClasse}">${escapeHtml(a.status || "Pendente")}</span>
-            </div>
-            <div class="detalhes">
-              Processo: <strong>${escapeHtml(tipos[a.tipoProcessoId] || "-")}</strong><br>
-              Placas: ${escapeHtml(a.placaCavalo || "-")}${a.placaCarreta ? " / " + escapeHtml(a.placaCarreta) : ""}<br>
-              Motorista: ${escapeHtml(a.motorista || "-")}
-              ${a.observacoes ? `<br>Obs.: ${escapeHtml(a.observacoes)}` : ""}
-            </div>
-            ${podeCancelar ? `
-              <div style="margin-top:10px;">
-                <button type="button" class="btn-acao btn-recusar btn-cancelar-agendamento" data-id="${a.id}">Cancelar Agendamento</button>
-              </div>
-            ` : ""}
-          `;
-          listaAgendamentos.appendChild(div);
-        });
-
-        listaAgendamentos.querySelectorAll(".btn-cancelar-agendamento").forEach(btn => {
-          btn.addEventListener("click", () => cancelarMeuAgendamento(btn.dataset.id, btn));
-        });
-
-        if (idParaDestacar) {
-          const itemNovo = listaAgendamentos.querySelector(`.item-agendamento[data-id="${idParaDestacar}"]`);
-          if (itemNovo) {
-            itemNovo.classList.add("destaque-novo");
-            itemNovo.scrollIntoView({ behavior: "smooth", block: "center" });
+    function iniciarListenerMeusAgendamentos() {
+      if (cancelarListenerMeusAgendamentos) return;
+      const q = query(collection(db, "bookings"), where("usuarioId", "==", usuarioAtual.uid));
+      cancelarListenerMeusAgendamentos = onSnapshot(
+        q,
+        (snap) => {
+          meusAgendamentos = snap.docs.map(d => normalizarBooking({ id: d.id, ...d.data() }));
+          renderizarListaAgendamentos();
+        },
+        (err) => {
+          console.error("Erro no listener de Meus Agendamentos:", err);
+          if (listaAgendamentos) {
+            listaAgendamentos.innerHTML = '<div class="estado-vazio">Erro ao carregar seus agendamentos.</div>';
           }
         }
+      );
+    }
 
-      } catch (err) {
-        console.error("Erro ao carregar agendamentos:", err);
-        listaAgendamentos.innerHTML = '<div class="estado-vazio">Erro ao carregar seus agendamentos.</div>';
+    const CLASSE_BADGE_TRANSPORTADORA = {
+      Pendente: "pendente",
+      "Sem Resposta": "pendente",
+      Aprovado: "aprovado",
+      "Em Pátio": "aprovado",
+      "Concluído": "aprovado",
+      Recusado: "recusado",
+      Expirado: "expirado",
+      Cancelado: "recusado",
+      "No-Show": "recusado"
+    };
+
+    function renderizarListaAgendamentos() {
+      if (!listaAgendamentos) return;
+
+      if (meusAgendamentos.length === 0) {
+        listaAgendamentos.innerHTML = '<div class="estado-vazio">Você ainda não possui agendamentos cadastrados.</div>';
+        return;
+      }
+
+      const agendamentos = meusAgendamentos.slice()
+        .sort((a, b) => (b.dataAgendada || "").localeCompare(a.dataAgendada || "") || (b.horaInicio || "").localeCompare(a.horaInicio || ""));
+
+      listaAgendamentos.innerHTML = "";
+      agendamentos.forEach(a => {
+        const div = document.createElement("div");
+        div.className = "item-agendamento";
+        div.dataset.id = a.id;
+
+        const rotulo = situacaoDetalhadaLabel(a);
+        const statusClasse = CLASSE_BADGE_TRANSPORTADORA[a.status] || "pendente";
+        const podeCancelar = (a.status === "Pendente" || a.status === "Aprovado") && a.operacionalStatus === "SEM_CHECKIN";
+
+        div.innerHTML = `
+          <div class="linha-topo">
+            <span class="data-hora"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><line x1="3" y1="10" x2="21" y2="10"></line><line x1="8" y1="3" x2="8" y2="7"></line><line x1="16" y1="3" x2="16" y2="7"></line></svg> ${formatarData(a.dataAgendada)} às ${escapeHtml(a.horaInicio || "-")}</span>
+            <span class="badge ${statusClasse}">${escapeHtml(rotulo)}</span>
+          </div>
+          <div class="detalhes">
+            Processo: <strong>${escapeHtml(mapTiposProcessoCache[a.tipoProcessoId] || "-")}</strong><br>
+            Placas: ${escapeHtml(a.placaCavalo || "-")}${a.placaCarreta ? " / " + escapeHtml(a.placaCarreta) : ""}<br>
+            Motorista: ${escapeHtml(a.motorista || "-")}
+            ${a.observacoes ? `<br>Obs.: ${escapeHtml(a.observacoes)}` : ""}
+          </div>
+          ${podeCancelar ? `
+            <div style="margin-top:10px;">
+              <button type="button" class="btn-acao btn-recusar btn-cancelar-agendamento" data-id="${a.id}">Cancelar Agendamento</button>
+            </div>
+          ` : ""}
+        `;
+        listaAgendamentos.appendChild(div);
+      });
+
+      listaAgendamentos.querySelectorAll(".btn-cancelar-agendamento").forEach(btn => {
+        btn.addEventListener("click", () => cancelarMeuAgendamento(btn.dataset.id, btn));
+      });
+
+      if (idParaDestacarPendente) {
+        const itemNovo = listaAgendamentos.querySelector(`.item-agendamento[data-id="${idParaDestacarPendente}"]`);
+        if (itemNovo) {
+          itemNovo.classList.add("destaque-novo");
+          itemNovo.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+        idParaDestacarPendente = null;
       }
     }
 
@@ -661,6 +665,14 @@
       try {
         await updateDoc(doc(db, "bookings", bookingId), {
           status: "Cancelado",
+          aprovacaoStatus: "CANCELADO",
+          historicoEstados: arrayUnion({
+            dataHora: new Date(),
+            dimensaoAlterada: "aprovacaoStatus",
+            valorAnterior: null,
+            novoValor: "CANCELADO",
+            usuarioId: usuarioAtual.uid
+          }),
           atualizadoEm: serverTimestamp(),
           atualizadoPor: usuarioAtual.uid
         });
@@ -677,7 +689,8 @@
         }
 
         mostrarToast("Agendamento cancelado.", { tipo: "sucesso" });
-        carregarMeusAgendamentos();
+        // O listener em tempo real re-renderiza sozinho; não é preciso
+        // recarregar a lista manualmente aqui.
       } catch (err) {
         console.error("Erro ao cancelar agendamento:", err);
         await mostrarAlerta("Erro ao cancelar o agendamento. Tente novamente.", { titulo: "Erro", tipo: "erro" });

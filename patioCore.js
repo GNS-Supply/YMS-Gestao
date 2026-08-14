@@ -1,55 +1,41 @@
 // =====================================================================
 // patioCore.js — Núcleo do Sistema de Agendamento de Pátio
 //
-// Arquivo unificado que reúne os módulos que antes viviam separados em:
-//   - bookingSchema.js          (status, máquina de estados, check-in/out)
-//   - disponibilidade.js        (motor de cálculo de horários/vagas)
-//   - agendamentoOperacional.js (criação de agendamento direto pela Logística)
-//   - kpiMetrics.js             (cálculo de KPIs e métricas operacionais)
+// ETAPA "REVISÃO ESTRUTURAL" — RESUMO DAS MUDANÇAS DESTA REVISÃO
+// (mantém tudo que já existia; adiciona o que faltava para o sistema
+// se comportar como UM organismo em vez de telas com regras próprias):
 //
-// ETAPA 1 (modelo tridimensional de estados) — RESUMO DA MUDANÇA:
-// Até esta revisão, cada booking tinha um único campo `status` (Pendente,
-// Aprovado, Recusado, Expirado, Cancelado, Em Pátio, Concluído, No-Show),
-// misturando 3 coisas conceitualmente diferentes: "foi autorizado?",
-// "o motorista apareceu?" e "está fisicamente no pátio agora?". Isso já
-// vinha dando problema (ex: um agendamento "Aprovado" que chegou atrasado
-// não tinha como registrar isso sem inventar um status novo).
+// 1) SEM_RESPOSTA deixou de ser só um "fallback de documento corrompido"
+//    e passou a ser um estado administrativo de verdade: quando um
+//    veículo com agendamento PENDENTE aparece fisicamente na Portaria,
+//    a dimensão de aprovação é resolvida automaticamente para
+//    SEM_RESPOSTA (ninguém decidiu a tempo, mas o check-in não pode
+//    ficar refém disso — ver registrarCheckIn).
 //
-// Esta revisão troca esse único campo por 3 campos INDEPENDENTES no
-// documento `bookings/{id}`:
+// 2) Check-in NUNCA mais é bloqueado pela dimensão administrativa.
+//    Antes, só dava para dar entrada em agendamentos "Aprovado". Agora
+//    a única coisa que bloqueia check-in é o próprio agendamento já ter
+//    tido check-in (dimensão operacional) ou ter sido Cancelado pela
+//    própria transportadora (nesse caso a orientação é usar Encaixe).
 //
-//   aprovacaoStatus:      PENDENTE | APROVADO | RECUSADO | EXPIRADO |
-//                         CANCELADO | SEM_RESPOSTA   (dimensão administrativa)
-//   comparecimentoStatus: null | NAO_COMPARECEU | COMPARECEU |
-//                         COMPARECEU_ATRASADO         (dimensão física — só
-//                         deixa de ser null quando o motorista é verificado
-//                         na Portaria, seja em check-in normal ou em No-Show)
-//   operacionalStatus:    SEM_CHECKIN | EM_PATIO | CONCLUIDO
-//                         (dimensão de ocupação física do pátio/doca)
+// 3) Máscara de placa centralizada aqui (aplicarMascaraPlaca /
+//    configurarMascaraPlaca / placaCompleta) — antes existiam 3 cópias
+//    quase idênticas espalhadas em transportadora-dashboard.html e
+//    logistica-dashboard.html.
 //
-// O campo antigo `status` (legado) CONTINUA sendo gravado em paralelo,
-// sempre derivado das 3 dimensões (ver `derivarStatusLegado`), porque
-// `transportadora-dashboard.html` e trechos do próprio `patioCore.js`
-// (KPIs, liberação de vaga por varredura) ainda leem só esse campo — a
-// instrução desta etapa foi "não alterar HTML/telas ainda", então nenhuma
-// tela precisou mudar: quem já lia `status` continua lendo `status`, quem
-// já foi escrito esperando as 3 dimensões (logistica-dashboard.html) já
-// encontra os campos novos.
+// 4) escutarBookings(): um único listener em tempo real (onSnapshot)
+//    para a coleção `bookings`, para ser reaproveitado por qualquer
+//    tela que precise da lista completa sempre atualizada, em vez de
+//    cada tela fazer sua própria leitura pontual (getDocs) e ficar
+//    desatualizada até a próxima ação do usuário.
 //
-// Toda mudança em qualquer uma das 3 dimensões é registrada em
-// `historicoEstados` (array no próprio booking, sem apagar entradas
-// anteriores): { dataHora, dimensaoAlterada, valorAnterior, novoValor,
-// usuarioId }. Observação técnica: o Firestore não aceita
-// `serverTimestamp()` dentro de um array usado com `arrayUnion` — por
-// isso `dataHora` aqui é um `Date` do cliente (só para exibição/auditoria
-// leve), diferente de `criadoEm`/`atualizadoEm` do booking, que continuam
-// usando `serverTimestamp()` normalmente.
-//
-// NENHUMA regra automática de No-Show/Expirado/Atraso foi implementada
-// nesta etapa (isso fica para depois — ver expirar-pendentes.yml/mjs,
-// que já existe separadamente para expiração por tempo). As funções aqui
-// só cobrem ações manuais disparadas pela tela (Portaria clicando em
-// Check-in/Check-out/No-Show, Logística clicando em Aprovar/Recusar).
+// 5) `status` legado ganhou o valor "Sem Resposta" e a função que o
+//    deriva (`derivarStatusLegado`) agora prioriza o que fisicamente
+//    aconteceu (Em Pátio/Concluído/No-Show) sobre a dimensão
+//    administrativa quando os dois divergem — é exatamente o cenário
+//    "recusado mas compareceu mesmo assim" ou "sem resposta mas
+//    compareceu": a Portaria e o Painel do Dia precisam mostrar a
+//    realidade física, não a burocracia parada.
 // =====================================================================
 
 import {
@@ -60,6 +46,7 @@ import {
   addDoc,
   query,
   where,
+  onSnapshot,
   serverTimestamp,
   runTransaction,
   arrayUnion
@@ -67,35 +54,7 @@ import {
 
 /* #######################################################################
    PARTE 1 — BOOKING SCHEMA (MODELO LEGADO — mantido por compatibilidade)
-   Status único, máquina de estados de transição, tipos de agendamento,
-   pontualidade de check-in, check-out e tempo de permanência.
-
-   Continua existindo porque `transportadora-dashboard.html` lê `a.status`
-   diretamente, e várias funções abaixo (KPIs, varredura de vagas
-   canceladas) ainda usam esses valores. Ver PARTE 1B logo abaixo para o
-   modelo novo (tridimensional), que é a fonte de verdade a partir de
-   agora — o campo `status` legado passa a ser sempre DERIVADO das 3
-   dimensões novas (nunca mais a origem do dado).
-
-   Campos do documento `bookings/{id}` (modelo atual, pós-Etapa 1):
-     usuarioId, empresa, tipoProcessoId, dataAgendada, horaInicio,
-     placaCavalo, placaCarreta, motorista, observacoes, criadoEm,
-     atualizadoEm, atualizadoPor, vagaLiberada, horaEntrada, horaSaida,
-     tipoAgendamento: "Antecipado" | "Portaria/Encaixe" | "Operacional"
-
-     -- Modelo novo (3 dimensões independentes — ver PARTE 1B) --
-     aprovacaoStatus, comparecimentoStatus, operacionalStatus,
-     historicoEstados: [{ dataHora, dimensaoAlterada, valorAnterior, novoValor, usuarioId }]
-
-     -- Legado, mantido em paralelo, sempre derivado das 3 dimensões --
-     status: "Pendente" | "Aprovado" | "Recusado" | "Expirado" |
-             "Cancelado" | "Em Pátio" | "Concluído" | "No-Show"
-
-     checkIn:  { dataHora: Timestamp, pontualidade, dadosConferidos, divergente }
-     checkOut: { dataHora: Timestamp, notaFiscal, observacoesSaida, permanenciaMinutos }
    ####################################################################### */
-
-// ---------------------- STATUS (LEGADO) ----------------------
 
 export const STATUS = {
   PENDENTE: "Pendente",
@@ -103,6 +62,7 @@ export const STATUS = {
   RECUSADO: "Recusado",
   EXPIRADO: "Expirado",
   CANCELADO: "Cancelado",
+  SEM_RESPOSTA: "Sem Resposta",
   EM_PATIO: "Em Pátio",
   CONCLUIDO: "Concluído",
   NO_SHOW: "No-Show"
@@ -111,19 +71,24 @@ export const STATUS = {
 export const TODOS_STATUS = Object.values(STATUS);
 
 export const STATUS_LEGADO = [
-  STATUS.PENDENTE, STATUS.APROVADO, STATUS.RECUSADO, STATUS.EXPIRADO, STATUS.CANCELADO
+  STATUS.PENDENTE, STATUS.APROVADO, STATUS.RECUSADO, STATUS.EXPIRADO,
+  STATUS.CANCELADO, STATUS.SEM_RESPOSTA
 ];
 export const STATUS_NOVO = [STATUS.EM_PATIO, STATUS.CONCLUIDO, STATUS.NO_SHOW];
 
-// Estados terminais (dimensão de aprovação): nenhuma transição sai deles.
+// Estados finais da dimensão administrativa (nenhuma transição sai deles
+// PELA VIA ADMINISTRATIVA — check-in continua podendo acontecer por
+// cima, ver registrarCheckIn, que é o próprio ponto desta revisão).
 export const STATUS_FINAIS = [
   STATUS.RECUSADO, STATUS.EXPIRADO, STATUS.CANCELADO, STATUS.CONCLUIDO, STATUS.NO_SHOW
 ];
 
 // Enquanto o booking está em um desses status (legado), ele continua
 // contando como vaga ocupada em timeSlots.ocupados (não foi liberada).
+// SEM_RESPOSTA entra aqui pelo mesmo motivo que PENDENTE: a vaga só é
+// liberada quando alguém decide (expira, cancela) ou o veículo conclui.
 export const STATUS_OCUPA_VAGA = [
-  STATUS.PENDENTE, STATUS.APROVADO, STATUS.EM_PATIO, STATUS.CONCLUIDO
+  STATUS.PENDENTE, STATUS.APROVADO, STATUS.SEM_RESPOSTA, STATUS.EM_PATIO, STATUS.CONCLUIDO
 ];
 
 // Ao entrar em qualquer um destes status (legado), a vaga em
@@ -133,12 +98,13 @@ export const STATUS_LIBERA_VAGA = [
 ];
 
 export const TRANSICOES_VALIDAS = {
-  [STATUS.PENDENTE]: [STATUS.APROVADO, STATUS.RECUSADO, STATUS.EXPIRADO, STATUS.CANCELADO],
+  [STATUS.PENDENTE]: [STATUS.APROVADO, STATUS.RECUSADO, STATUS.EXPIRADO, STATUS.CANCELADO, STATUS.SEM_RESPOSTA],
+  [STATUS.SEM_RESPOSTA]: [STATUS.APROVADO, STATUS.RECUSADO, STATUS.EXPIRADO, STATUS.CANCELADO],
   [STATUS.APROVADO]: [STATUS.EM_PATIO, STATUS.CANCELADO, STATUS.NO_SHOW],
-  [STATUS.EM_PATIO]: [STATUS.CONCLUIDO],
   [STATUS.RECUSADO]: [],
   [STATUS.EXPIRADO]: [],
   [STATUS.CANCELADO]: [],
+  [STATUS.EM_PATIO]: [STATUS.CONCLUIDO],
   [STATUS.CONCLUIDO]: [],
   [STATUS.NO_SHOW]: []
 };
@@ -188,22 +154,6 @@ export function calcularPontualidade(horaAgendada, dataHoraCheckIn, toleranciaMi
   return diferenca < 0 ? PONTUALIDADE.ADIANTADO : PONTUALIDADE.ATRASADO;
 }
 
-export function montarCheckIn(horaAgendada, dataHoraCheckIn = new Date(), opcoes = {}) {
-  const { dadosConferidos = false, toleranciaMin } = opcoes;
-  return {
-    dataHoraLocal: dataHoraCheckIn,
-    pontualidade: calcularPontualidade(horaAgendada, dataHoraCheckIn, toleranciaMin),
-    dadosConferidos: !!dadosConferidos
-  };
-}
-
-export function montarCheckOut(notaFiscal = "", dataHoraCheckOut = new Date()) {
-  return {
-    dataHoraLocal: dataHoraCheckOut,
-    notaFiscal: String(notaFiscal || "").trim()
-  };
-}
-
 export function paraDate(valor) {
   if (!valor) return null;
   if (typeof valor.toDate === "function") return valor.toDate();
@@ -239,11 +189,7 @@ export function checkOutValido(checkOut) {
 }
 
 /* #######################################################################
-   PARTE 1B — MODELO TRIDIMENSIONAL DE ESTADOS (ETAPA 1)
-   Fonte de verdade a partir desta revisão. 3 dimensões independentes que
-   coexistem no mesmo booking sem se sobrescrever, mais o histórico de
-   alterações e as funções de leitura/derivação que dão compatibilidade
-   com o modelo legado (`status` único).
+   PARTE 1B — MODELO TRIDIMENSIONAL DE ESTADOS (fonte de verdade)
    ####################################################################### */
 
 // ---- Dimensão 1: administrativa (foi autorizado?) ----
@@ -253,13 +199,18 @@ export const APROVACAO = {
   RECUSADO: "RECUSADO",
   EXPIRADO: "EXPIRADO",
   CANCELADO: "CANCELADO",
-  // Fallback para documentos antigos/incompletos cujo `status` legado não
-  // bate com nenhum valor conhecido — não deve aparecer em uso normal.
+  // Ninguém decidiu a tempo. Pode chegar aqui de duas formas: (a) a
+  // varredura de expiração roda e não converte para EXPIRADO porque o
+  // veículo já chegou fisicamente (checar operacionalStatus antes de
+  // expirar — ver expirar-pendentes.mjs), ou (b) o check-in acontece
+  // primeiro e resolve o PENDENTE para SEM_RESPOSTA na hora (ver
+  // registrarCheckIn). Também serve de fallback para documentos
+  // antigos/incompletos — não deveria aparecer em uso normal por esse
+  // segundo motivo.
   SEM_RESPOSTA: "SEM_RESPOSTA"
 };
 
 // ---- Dimensão 2: física (o motorista apareceu?) ----
-// `null` = ainda não verificado (nenhum check-in nem No-Show registrado).
 export const COMPARECIMENTO = {
   NAO_COMPARECEU: "NAO_COMPARECEU",
   COMPARECEU: "COMPARECEU",
@@ -277,13 +228,7 @@ export const TODAS_APROVACAO = Object.values(APROVACAO);
 export const TODOS_COMPARECIMENTO = Object.values(COMPARECIMENTO);
 export const TODOS_OPERACIONAL = Object.values(OPERACIONAL);
 
-/**
- * Monta uma entrada de histórico para `historicoEstados`. `dataHora` é um
- * Date do cliente (não serverTimestamp — Firestore não aceita
- * serverTimestamp() dentro de arrayUnion), só para trilha/exibição leve;
- * a ordenação/auditoria "de verdade" continua em `auditLogs`.
- * @private
- */
+/** @private */
 function _entradaHistorico(dimensaoAlterada, valorAnterior, novoValor, usuarioId) {
   return {
     dataHora: new Date(),
@@ -295,41 +240,33 @@ function _entradaHistorico(dimensaoAlterada, valorAnterior, novoValor, usuarioId
 }
 
 /**
- * Deriva o `status` legado (string única) a partir das 3 dimensões novas.
- * É a ÚNICA função que deveria decidir esse mapeamento — usada tanto para
- * gravar o campo `status` (compatibilidade com transportadora-dashboard.html
- * e outras leituras antigas) quanto por `situacaoResumoLabel`.
- *
- * @param {{aprovacaoStatus: string, comparecimentoStatus: string|null, operacionalStatus: string}} dims
- * @returns {string} um dos valores de STATUS
+ * Deriva o `status` legado (string única) a partir das 3 dimensões.
+ * ORDEM DE PRIORIDADE (revisada nesta etapa): o que fisicamente
+ * aconteceu no pátio (Concluído/Em Pátio/No-Show) tem prioridade sobre
+ * a dimensão administrativa — é assim que "recusado mas compareceu" ou
+ * "sem resposta mas está em pátio agora" ficam visíveis corretamente em
+ * telas que só leem este campo único (badges simples, filtros).
  */
 export function derivarStatusLegado(dims) {
   const { aprovacaoStatus, comparecimentoStatus, operacionalStatus } = dims;
 
+  if (operacionalStatus === OPERACIONAL.CONCLUIDO) return STATUS.CONCLUIDO;
+  if (operacionalStatus === OPERACIONAL.EM_PATIO) return STATUS.EM_PATIO;
+  if (comparecimentoStatus === COMPARECIMENTO.NAO_COMPARECEU) return STATUS.NO_SHOW;
+
   if (aprovacaoStatus === APROVACAO.RECUSADO) return STATUS.RECUSADO;
   if (aprovacaoStatus === APROVACAO.EXPIRADO) return STATUS.EXPIRADO;
   if (aprovacaoStatus === APROVACAO.CANCELADO) return STATUS.CANCELADO;
-
-  if (comparecimentoStatus === COMPARECIMENTO.NAO_COMPARECEU) return STATUS.NO_SHOW;
-  if (operacionalStatus === OPERACIONAL.CONCLUIDO) return STATUS.CONCLUIDO;
-  if (operacionalStatus === OPERACIONAL.EM_PATIO) return STATUS.EM_PATIO;
-
+  if (aprovacaoStatus === APROVACAO.SEM_RESPOSTA) return STATUS.SEM_RESPOSTA;
   if (aprovacaoStatus === APROVACAO.APROVADO) return STATUS.APROVADO;
   return STATUS.PENDENTE;
 }
 
 /**
- * Mesma ideia de `derivarStatusLegado`, mas devolve o rótulo "de
- * exibição" que `logistica-dashboard.html` já espera (usado em
- * `situacaoResumoLabel(b)` para badges/contadores da Portaria e do
- * Painel do Dia). Hoje os valores coincidem 1:1 com o status legado —
- * mantido como função própria (em vez de reaproveitar
- * `derivarStatusLegado` por fora) para permitir que rótulo de exibição e
- * status legado divirjam no futuro sem quebrar um pelo outro.
- *
- * @param {object} booking - precisa ter aprovacaoStatus/comparecimentoStatus/operacionalStatus
- *   (rode `normalizarBooking` antes se o documento pode ser antigo)
- * @returns {string}
+ * Rótulo de exibição "cru" (mesmos valores de `derivarStatusLegado` por
+ * enquanto) — mantido como função própria para permitir que o rótulo de
+ * tela e o status legado gravado no Firestore divirjam no futuro sem
+ * quebrar um pelo outro.
  */
 export function situacaoResumoLabel(booking) {
   return derivarStatusLegado({
@@ -340,16 +277,41 @@ export function situacaoResumoLabel(booking) {
 }
 
 /**
- * Deriva as 3 dimensões novas a partir de um `status` legado — usada por
- * `normalizarBooking` para "traduzir" documentos antigos on-the-fly, sem
- * precisar rodar uma migração em massa no Firestore antes de colocar as
- * telas novas no ar.
- *
- * @param {string} statusLegado - um dos valores de STATUS
- * @param {object} [booking] - booking original, usado só para reaproveitar
- *   `checkIn.pontualidade` (se existir) ao decidir entre COMPARECEU e
- *   COMPARECEU_ATRASADO
- * @returns {{aprovacaoStatus: string, comparecimentoStatus: string|null, operacionalStatus: string}}
+ * Rótulo em linguagem operacional (não-técnica), pensado para quem
+ * bate o olho na tela e precisa entender sem decifrar código. Cobre os
+ * cenários A–H descritos na revisão estrutural do sistema.
+ */
+export function situacaoDetalhadaLabel(booking) {
+  const a = booking.aprovacaoStatus;
+  const c = booking.comparecimentoStatus;
+  const o = booking.operacionalStatus;
+
+  if (o === OPERACIONAL.CONCLUIDO) {
+    if (a === APROVACAO.RECUSADO) return "Concluído (havia sido recusado)";
+    if (a === APROVACAO.SEM_RESPOSTA) return "Concluído (sem resposta administrativa)";
+    return "Concluído";
+  }
+  if (o === OPERACIONAL.EM_PATIO) {
+    const atraso = c === COMPARECIMENTO.COMPARECEU_ATRASADO ? " — chegou atrasado" : "";
+    if (a === APROVACAO.RECUSADO) return `Em pátio (recusado, compareceu mesmo assim)${atraso}`;
+    if (a === APROVACAO.SEM_RESPOSTA) return `Em pátio (sem resposta administrativa)${atraso}`;
+    return `Em pátio${atraso}`;
+  }
+  if (c === COMPARECIMENTO.NAO_COMPARECEU) {
+    if (a === APROVACAO.RECUSADO) return "Não compareceu (recusado)";
+    return "Não compareceu (No-Show)";
+  }
+  if (a === APROVACAO.RECUSADO) return "Recusado";
+  if (a === APROVACAO.EXPIRADO) return "Expirado — prazo de aprovação encerrado";
+  if (a === APROVACAO.CANCELADO) return "Cancelado";
+  if (a === APROVACAO.SEM_RESPOSTA) return "Sem resposta administrativa";
+  if (a === APROVACAO.APROVADO) return "Aprovado — aguardando chegada";
+  return "Aguardando aprovação";
+}
+
+/**
+ * Deriva as 3 dimensões a partir de um `status` legado — usada por
+ * `normalizarBooking` para "traduzir" documentos antigos on-the-fly.
  */
 export function derivarDimensoesDoStatusLegado(statusLegado, booking = {}) {
   switch (statusLegado) {
@@ -357,6 +319,8 @@ export function derivarDimensoesDoStatusLegado(statusLegado, booking = {}) {
       return { aprovacaoStatus: APROVACAO.PENDENTE, comparecimentoStatus: null, operacionalStatus: OPERACIONAL.SEM_CHECKIN };
     case STATUS.APROVADO:
       return { aprovacaoStatus: APROVACAO.APROVADO, comparecimentoStatus: null, operacionalStatus: OPERACIONAL.SEM_CHECKIN };
+    case STATUS.SEM_RESPOSTA:
+      return { aprovacaoStatus: APROVACAO.SEM_RESPOSTA, comparecimentoStatus: null, operacionalStatus: OPERACIONAL.SEM_CHECKIN };
     case STATUS.RECUSADO:
       return { aprovacaoStatus: APROVACAO.RECUSADO, comparecimentoStatus: null, operacionalStatus: OPERACIONAL.SEM_CHECKIN };
     case STATUS.EXPIRADO:
@@ -365,40 +329,26 @@ export function derivarDimensoesDoStatusLegado(statusLegado, booking = {}) {
       return { aprovacaoStatus: APROVACAO.CANCELADO, comparecimentoStatus: null, operacionalStatus: OPERACIONAL.SEM_CHECKIN };
     case STATUS.EM_PATIO: {
       const atrasado = booking.checkIn?.pontualidade === PONTUALIDADE.ATRASADO;
-      return { aprovacaoStatus: APROVACAO.APROVADO, comparecimentoStatus: atrasado ? COMPARECIMENTO.COMPARECEU_ATRASADO : COMPARECIMENTO.COMPARECEU, operacionalStatus: OPERACIONAL.EM_PATIO };
+      return { aprovacaoStatus: booking.aprovacaoStatus || APROVACAO.APROVADO, comparecimentoStatus: atrasado ? COMPARECIMENTO.COMPARECEU_ATRASADO : COMPARECIMENTO.COMPARECEU, operacionalStatus: OPERACIONAL.EM_PATIO };
     }
     case STATUS.CONCLUIDO: {
       const atrasado = booking.checkIn?.pontualidade === PONTUALIDADE.ATRASADO;
-      return { aprovacaoStatus: APROVACAO.APROVADO, comparecimentoStatus: atrasado ? COMPARECIMENTO.COMPARECEU_ATRASADO : COMPARECIMENTO.COMPARECEU, operacionalStatus: OPERACIONAL.CONCLUIDO };
+      return { aprovacaoStatus: booking.aprovacaoStatus || APROVACAO.APROVADO, comparecimentoStatus: atrasado ? COMPARECIMENTO.COMPARECEU_ATRASADO : COMPARECIMENTO.COMPARECEU, operacionalStatus: OPERACIONAL.CONCLUIDO };
     }
     case STATUS.NO_SHOW:
-      return { aprovacaoStatus: APROVACAO.APROVADO, comparecimentoStatus: COMPARECIMENTO.NAO_COMPARECEU, operacionalStatus: OPERACIONAL.SEM_CHECKIN };
+      return { aprovacaoStatus: booking.aprovacaoStatus || APROVACAO.APROVADO, comparecimentoStatus: COMPARECIMENTO.NAO_COMPARECEU, operacionalStatus: OPERACIONAL.SEM_CHECKIN };
     default:
-      // status ausente/desconhecido — fallback seguro, nunca deveria
-      // aparecer em uso normal (documento incompleto/corrompido).
       return { aprovacaoStatus: APROVACAO.SEM_RESPOSTA, comparecimentoStatus: null, operacionalStatus: OPERACIONAL.SEM_CHECKIN };
   }
 }
 
 /**
- * Garante que um booking (vindo de `getDocs`/`getDoc`, novo ou antigo)
- * tenha as 3 dimensões novas preenchidas, sem alterar nada no Firestore
- * (é uma tradução só em memória, para leitura pelas telas). Documentos
- * já gravados no modelo novo passam praticamente inalterados; documentos
- * só com `status` legado ganham os 3 campos derivados dele.
- *
- * `logistica-dashboard.html` chama isso em cada booking lido de
- * `carregarDadosGerais()`, então tanto agendamentos criados antes desta
- * revisão quanto os novos aparecem corretamente na tela sem precisar de
- * nenhuma migração manual dos dados existentes no Firestore.
- *
- * @param {object} booking - objeto já com `{ id, ...doc.data() }`
- * @returns {object} o mesmo booking, com aprovacaoStatus/comparecimentoStatus/operacionalStatus garantidos
+ * Garante que um booking (vindo de `getDocs`/`getDoc`/`onSnapshot`, novo
+ * ou antigo) tenha as 3 dimensões preenchidas, sem alterar nada no
+ * Firestore.
  */
 export function normalizarBooking(booking) {
   if (booking && booking.aprovacaoStatus) {
-    // Já está no modelo novo — só garante o histórico como array (nunca
-    // undefined) para quem for iterar sobre ele na tela.
     return { historicoEstados: [], ...booking };
   }
   const dims = derivarDimensoesDoStatusLegado(booking?.status, booking);
@@ -406,8 +356,87 @@ export function normalizarBooking(booking) {
 }
 
 /* #######################################################################
+   PARTE 1C — TEMPO REAL (fonte de dados única para todas as telas)
+   ####################################################################### */
+
+/**
+ * Listener único em tempo real para a coleção `bookings`, normalizado.
+ * Reaproveitado por todas as telas que precisam da lista completa
+ * sempre atualizada (Painel do Dia, Portaria, Solicitações, Todos os
+ * Agendamentos, KPIs) — evita que cada tela tenha sua própria cópia
+ * desatualizada até a próxima ação manual do usuário.
+ *
+ * @param {Firestore} db
+ * @param {(bookings: object[]) => void} callback chamado a cada mudança
+ * @param {(err: Error) => void} [onError]
+ * @returns {() => void} função para cancelar o listener (unsubscribe)
+ */
+export function escutarBookings(db, callback, onError) {
+  return onSnapshot(
+    collection(db, "bookings"),
+    (snap) => {
+      const bookings = snap.docs.map(d => normalizarBooking({ id: d.id, ...d.data() }));
+      callback(bookings);
+    },
+    (err) => {
+      console.error("Erro no listener em tempo real de bookings:", err);
+      if (onError) onError(err);
+    }
+  );
+}
+
+/* #######################################################################
+   PARTE 1D — MÁSCARA DE PLACA (CENTRALIZADA)
+   Aceita AAA-0000 (antigo) e AAA0A00 (Mercosul). Única implementação do
+   sistema — antes existiam cópias quase idênticas em
+   transportadora-dashboard.html e logistica-dashboard.html; qualquer
+   tela/formulário que peça placa deve importar daqui.
+   ####################################################################### */
+
+export function aplicarMascaraPlaca(valorBruto) {
+  const brutoLimpo = (valorBruto || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  let alfanumerico = "";
+
+  for (let i = 0; i < brutoLimpo.length && alfanumerico.length < 7; i++) {
+    const ch = brutoLimpo[i];
+    const pos = alfanumerico.length;
+
+    if (pos < 3) {
+      if (/[A-Z]/.test(ch)) alfanumerico += ch;
+    } else if (pos === 3) {
+      if (/[0-9]/.test(ch)) alfanumerico += ch;
+    } else if (pos === 4) {
+      if (/[A-Z0-9]/.test(ch)) alfanumerico += ch;
+    } else {
+      if (/[0-9]/.test(ch)) alfanumerico += ch;
+    }
+  }
+
+  // O 5º caractere (índice 4) define o formato: dígito = antigo (com
+  // traço), letra = Mercosul (sem traço).
+  if (alfanumerico.length >= 5 && /[0-9]/.test(alfanumerico[4])) {
+    return alfanumerico.slice(0, 3) + "-" + alfanumerico.slice(3);
+  }
+  return alfanumerico;
+}
+
+export function placaCompleta(valorMascarado) {
+  return (valorMascarado || "").replace("-", "").length === 7;
+}
+
+export function configurarMascaraPlaca(inputEl) {
+  if (!inputEl) return;
+  inputEl.addEventListener("input", () => {
+    inputEl.value = aplicarMascaraPlaca(inputEl.value);
+  });
+}
+
+/* #######################################################################
    PARTE 2 — DISPONIBILIDADE
-   Motor de cálculo de horários/vagas disponíveis (inalterado nesta etapa).
+   Regra master (timeSlotRules) -> Exceções recorrentes (timeSlotExceptions)
+   -> Ajuste pontual (timeSlots) = disponibilidade final. Esta é a ÚNICA
+   função de cálculo de horários do sistema; nenhuma tela deve calcular
+   disponibilidade por conta própria.
    ####################################################################### */
 
 export function horaParaMinutos(hhmm) {
@@ -446,6 +475,7 @@ export async function buscarSlotsVirtuaisDoDia(db, dataStr, opcoes = {}) {
   const diaSemana = diaSemanaDaData(dataStr);
   const mapa = {};
 
+  // 1) REGRA MASTER (Horários & Exceções -> Regra Padrão)
   const snapRegras = await getDocs(query(collection(db, "timeSlotRules"), where("ativo", "==", true)));
   snapRegras.docs.forEach(d => {
     const r = d.data();
@@ -455,6 +485,7 @@ export async function buscarSlotsVirtuaisDoDia(db, dataStr, opcoes = {}) {
     });
   });
 
+  // 2) EXCEÇÕES RECORRENTES (sobrescrevem a regra master no dia/horário)
   const snapExc = await getDocs(query(collection(db, "timeSlotExceptions"), where("ativo", "==", true)));
   snapExc.docs.forEach(d => {
     const ex = d.data();
@@ -462,6 +493,7 @@ export async function buscarSlotsVirtuaisDoDia(db, dataStr, opcoes = {}) {
     calcularBlocosHorario(ex).forEach(min => {
       const hora = minutosParaHora(min);
       if (Number(ex.capacidadePorHora) <= 0) {
+        // Capacidade 0 = bloqueado explicitamente, não "sem regra".
         delete mapa[hora];
       } else {
         mapa[hora] = { capacidadeMax: ex.capacidadePorHora, origem: "excecao" };
@@ -472,6 +504,8 @@ export async function buscarSlotsVirtuaisDoDia(db, dataStr, opcoes = {}) {
   const padraoAtual = {};
   Object.keys(mapa).forEach(hora => { padraoAtual[hora] = mapa[hora].capacidadeMax; });
 
+  // 3) GESTÃO DE VAGAS (ajuste pontual — só afeta esta data específica,
+  //    nunca sobrescreve a regra recorrente em si).
   const snapManual = await getDocs(query(collection(db, "timeSlots"), where("data", "==", dataStr)));
   const manuais = {};
   snapManual.docs.forEach(d => { manuais[d.data().horaInicio] = { id: d.id, ...d.data() }; });
@@ -519,10 +553,6 @@ export async function obterHorariosDisponiveis(db, dataStr, opcoes = {}) {
 
 /* #######################################################################
    PARTE 3 — AGENDAMENTO OPERACIONAL E DA TRANSPORTADORA
-   Ambas as funções agora gravam, além dos campos de sempre, as 3
-   dimensões novas (aprovacaoStatus/comparecimentoStatus/operacionalStatus)
-   E o `status` legado derivado delas (via derivarStatusLegado) — dois
-   formatos no mesmo documento, escritos juntos, na mesma transação.
    ####################################################################### */
 
 const REGEX_DATA = /^\d{4}-\d{2}-\d{2}$/;
@@ -581,12 +611,6 @@ async function buscarCapacidadeReferencia(db, dataAgendada, horaInicio) {
   return slot ? slot : null;
 }
 
-/**
- * Cria um agendamento OPERACIONAL: já nasce Aprovado (nas 3 dimensões:
- * aprovacaoStatus=APROVADO, comparecimentoStatus=null, operacionalStatus=
- * SEM_CHECKIN), registrado diretamente pela Logística/Admin.
- * @returns {Promise<{bookingId: string, slotId: string, capacidadeMax: number, ocupados: number, capacidadeForcada: boolean}>}
- */
 export async function criarAgendamentoOperacional(db, usuarioLogado, dados, opcoes = {}) {
   const { forcarAlemDaCapacidade = false, ignorarFechado = false } = opcoes;
 
@@ -678,13 +702,11 @@ export async function criarAgendamentoOperacional(db, usuarioLogado, dados, opco
       placaCarreta: dados.placaCarreta ? String(dados.placaCarreta).trim().toUpperCase() : "",
       motorista: String(dados.motorista).trim(),
       observacoes: dados.observacoes ? String(dados.observacoes).trim() : "",
-      // Modelo novo (fonte de verdade)
       ...dimsIniciais,
       historicoEstados: [
         _entradaHistorico("aprovacaoStatus", null, dimsIniciais.aprovacaoStatus, usuarioLogado.uid),
         _entradaHistorico("operacionalStatus", null, dimsIniciais.operacionalStatus, usuarioLogado.uid)
       ],
-      // Legado (compatibilidade — sempre derivado do bloco acima)
       status: derivarStatusLegado(dimsIniciais),
       tipoAgendamento: TIPO_AGENDAMENTO.OPERACIONAL,
       vagaLiberada: false,
@@ -715,12 +737,6 @@ export async function criarAgendamentoOperacional(db, usuarioLogado, dados, opco
   return { bookingId: bookingRef.id, slotId, capacidadeMax, ocupados, capacidadeForcada };
 }
 
-/**
- * Cria um agendamento enviado pela própria Transportadora (nasce
- * Pendente nas 3 dimensões: aprovacaoStatus=PENDENTE, comparecimentoStatus=
- * null, operacionalStatus=SEM_CHECKIN — aguardando aprovação da Logística).
- * @returns {Promise<{bookingId: string, slotId: string}>}
- */
 export async function criarAgendamentoTransportadora(db, usuarioAtual, dados, slotReferencia) {
   if (!usuarioAtual || !usuarioAtual.uid) {
     throw new Error("Usuário não identificado.");
@@ -810,9 +826,7 @@ export async function criarAgendamentoTransportadora(db, usuarioAtual, dados, sl
 }
 
 /* #######################################################################
-   PARTE 4 — KPI METRICS (inalterado — continua lendo o `status` legado,
-   que agora é sempre derivado das 3 dimensões novas, então os números
-   continuam corretos sem precisar tocar nesta parte nesta etapa).
+   PARTE 4 — KPI METRICS
    ####################################################################### */
 
 export function filtrarBookings(bookings, dataInicio, dataFim, empresa = "todas") {
@@ -872,12 +886,15 @@ export function calcularKPIs(bookingsFiltrados) {
     }
   });
 
+  const totalSemResposta = bookingsFiltrados.filter(b => b.aprovacaoStatus === APROVACAO.SEM_RESPOSTA).length;
+
   return {
     totalGeral,
     totalPrevistos,
     totalNoShow,
     taxaNoShow,
     totalCheckIns,
+    totalSemResposta,
     pontualidade: { noHorario, antecipado, atrasado, pctNoHorario, pctAntecipado, pctAtrasado },
     modalidade: { totalPrevio, totalEncaixes, pctPrevio, pctEncaixe },
     dwellTime: { mediaMinutos, formatado: dwellTimeFormatado, totalAtendidos: concluidos.length },
@@ -889,16 +906,6 @@ export function calcularKPIs(bookingsFiltrados) {
    PARTE 5 — LIBERAÇÃO DE VAGA (helper interno compartilhado)
    ####################################################################### */
 
-/**
- * Decrementa `timeSlots.ocupados` (nunca abaixo de 0) para o horário do
- * booking informado, DENTRO de uma transação já aberta pelo chamador
- * (precisa ser chamada depois de todos os `transaction.get()` da
- * transação, já que Firestore exige que toda leitura venha antes de
- * qualquer escrita). Reaproveitada por `recusarSolicitacao`,
- * `registrarNoShow` e `mudarStatusBooking` (legado) — um único lugar
- * decide como liberar vaga, em vez de 3 cópias divergentes.
- * @private
- */
 function _liberarVagaNaTransacao(transaction, slotSnap) {
   if (slotSnap && slotSnap.exists()) {
     const slotData = slotSnap.data();
@@ -909,16 +916,6 @@ function _liberarVagaNaTransacao(transaction, slotSnap) {
   }
 }
 
-/**
- * Muda o `status` legado de um booking (API antiga, mantida por
- * compatibilidade com qualquer código ainda não migrado para
- * `aprovarSolicitacao`/`recusarSolicitacao`/`registrarNoShow`). Atualiza
- * também as 3 dimensões novas de forma consistente, via
- * `derivarDimensoesDoStatusLegado`, para o documento nunca ficar com o
- * legado e o modelo novo divergindo entre si.
- *
- * @returns {Promise<{vagaLiberada: boolean}>}
- */
 export async function mudarStatusBooking(db, usuarioLogado, booking, novoStatus) {
   if (!usuarioLogado || !usuarioLogado.uid) {
     throw new Error("Usuário não identificado.");
@@ -980,18 +977,8 @@ export async function mudarStatusBooking(db, usuarioLogado, booking, novoStatus)
 
 /* #######################################################################
    PARTE 6 — AÇÕES DA LOGÍSTICA SOBRE A DIMENSÃO DE APROVAÇÃO
-   Substituem, para quem já migrou (logistica-dashboard.html), as
-   chamadas genéricas a `mudarStatusBooking(..., STATUS.APROVADO/RECUSADO)`
-   por funções que falam a língua do modelo novo diretamente.
    ####################################################################### */
 
-/**
- * Aprova uma solicitação Pendente. Não mexe em vaga (Pendente e Aprovado
- * já contam igualmente como vaga ocupada).
- * @param {Firestore} db
- * @param {{uid:string}} usuarioLogado
- * @param {string} bookingId
- */
 export async function aprovarSolicitacao(db, usuarioLogado, bookingId) {
   if (!usuarioLogado || !usuarioLogado.uid) throw new Error("Usuário não identificado.");
 
@@ -1000,36 +987,26 @@ export async function aprovarSolicitacao(db, usuarioLogado, bookingId) {
   await runTransaction(db, async (transaction) => {
     const snap = await transaction.get(bookingRef);
     if (!snap.exists()) throw new Error("Agendamento não encontrado (pode já ter sido removido).");
-    // BUGFIX: ver comentário equivalente em registrarCheckIn.
     const dadosAtuais = normalizarBooking(snap.data());
 
-    if (dadosAtuais.aprovacaoStatus !== APROVACAO.PENDENTE) {
-      throw new Error(`Este agendamento não está mais Pendente (situação atual: "${situacaoResumoLabel(dadosAtuais)}"). Atualize a lista e tente novamente.`);
+    if (![APROVACAO.PENDENTE, APROVACAO.SEM_RESPOSTA].includes(dadosAtuais.aprovacaoStatus)) {
+      throw new Error(`Este agendamento não está mais aguardando decisão (situação atual: "${situacaoDetalhadaLabel(dadosAtuais)}"). Atualize a lista e tente novamente.`);
     }
 
     const novasDims = { aprovacaoStatus: APROVACAO.APROVADO, comparecimentoStatus: dadosAtuais.comparecimentoStatus, operacionalStatus: dadosAtuais.operacionalStatus };
 
     transaction.update(bookingRef, {
-      // Grava as 3 dimensões por completo (auto-cura de documento antigo).
       aprovacaoStatus: APROVACAO.APROVADO,
       comparecimentoStatus: novasDims.comparecimentoStatus,
       operacionalStatus: novasDims.operacionalStatus,
       status: derivarStatusLegado(novasDims),
-      historicoEstados: arrayUnion(_entradaHistorico("aprovacaoStatus", APROVACAO.PENDENTE, APROVACAO.APROVADO, usuarioLogado.uid)),
+      historicoEstados: arrayUnion(_entradaHistorico("aprovacaoStatus", dadosAtuais.aprovacaoStatus, APROVACAO.APROVADO, usuarioLogado.uid)),
       atualizadoEm: serverTimestamp(),
       atualizadoPor: usuarioLogado.uid
     });
   });
 }
 
-/**
- * Recusa uma solicitação Pendente e libera a vaga automaticamente (na
- * mesma transação — ou os dois gravam juntos, ou nenhum grava).
- * @param {Firestore} db
- * @param {{uid:string}} usuarioLogado
- * @param {string} bookingId
- * @returns {Promise<{vagaLiberada: boolean}>}
- */
 export async function recusarSolicitacao(db, usuarioLogado, bookingId) {
   if (!usuarioLogado || !usuarioLogado.uid) throw new Error("Usuário não identificado.");
 
@@ -1039,11 +1016,13 @@ export async function recusarSolicitacao(db, usuarioLogado, bookingId) {
   await runTransaction(db, async (transaction) => {
     const snap = await transaction.get(bookingRef);
     if (!snap.exists()) throw new Error("Agendamento não encontrado (pode já ter sido removido).");
-    // BUGFIX: ver comentário equivalente em registrarCheckIn.
     const dadosAtuais = normalizarBooking(snap.data());
 
-    if (dadosAtuais.aprovacaoStatus !== APROVACAO.PENDENTE) {
-      throw new Error(`Este agendamento não está mais Pendente (situação atual: "${situacaoResumoLabel(dadosAtuais)}"). Atualize a lista e tente novamente.`);
+    if (![APROVACAO.PENDENTE, APROVACAO.SEM_RESPOSTA].includes(dadosAtuais.aprovacaoStatus)) {
+      throw new Error(`Este agendamento não está mais aguardando decisão (situação atual: "${situacaoDetalhadaLabel(dadosAtuais)}"). Atualize a lista e tente novamente.`);
+    }
+    if (dadosAtuais.operacionalStatus !== OPERACIONAL.SEM_CHECKIN) {
+      throw new Error(`Este veículo já tem movimentação registrada na Portaria (situação atual: "${situacaoDetalhadaLabel(dadosAtuais)}") — recusar não é mais aplicável.`);
     }
 
     const precisaLiberarVaga = dadosAtuais.vagaLiberada !== true;
@@ -1056,12 +1035,11 @@ export async function recusarSolicitacao(db, usuarioLogado, bookingId) {
     const novasDims = { aprovacaoStatus: APROVACAO.RECUSADO, comparecimentoStatus: dadosAtuais.comparecimentoStatus, operacionalStatus: dadosAtuais.operacionalStatus };
 
     const payload = {
-      // Grava as 3 dimensões por completo (auto-cura de documento antigo).
       aprovacaoStatus: APROVACAO.RECUSADO,
       comparecimentoStatus: novasDims.comparecimentoStatus,
       operacionalStatus: novasDims.operacionalStatus,
       status: derivarStatusLegado(novasDims),
-      historicoEstados: arrayUnion(_entradaHistorico("aprovacaoStatus", APROVACAO.PENDENTE, APROVACAO.RECUSADO, usuarioLogado.uid)),
+      historicoEstados: arrayUnion(_entradaHistorico("aprovacaoStatus", dadosAtuais.aprovacaoStatus, APROVACAO.RECUSADO, usuarioLogado.uid)),
       atualizadoEm: serverTimestamp(),
       atualizadoPor: usuarioLogado.uid
     };
@@ -1080,21 +1058,16 @@ export async function recusarSolicitacao(db, usuarioLogado, bookingId) {
 
 /* #######################################################################
    PARTE 7 — MÓDULO PORTARIA: CHECK-IN, CHECK-OUT, NO-SHOW, ENCAIXE
-   Ações manuais disparadas pela tela (sem regra automática — isso fica
-   para uma etapa futura). Cada função mexe só na(s) dimensão(ões) que
-   diz respeito à ação, sem tocar nas outras.
    ####################################################################### */
 
 /**
- * Registra o Check-in: dimensão comparecimento (null -> COMPARECEU ou
- * COMPARECEU_ATRASADO, conforme pontualidade) + dimensão operacional
- * (SEM_CHECKIN -> EM_PATIO). Não mexe em aprovacaoStatus.
- *
- * @param {Firestore} db
- * @param {{uid:string}} usuarioLogado
- * @param {string} bookingId
- * @param {{placaCavalo:string, placaCarreta?:string, motorista:string}} dadosConfirmados
- *   valores confirmados/corrigidos pela Portaria no momento da entrada
+ * Registra o Check-in. REGRA CENTRAL DESTA REVISÃO: o check-in NUNCA é
+ * bloqueado pela dimensão administrativa (Pendente/Recusado/Sem
+ * Resposta) — só é bloqueado se o agendamento já tiver check-in
+ * (dimensão operacional) ou tiver sido Cancelado pela própria
+ * transportadora. Se estava Pendente, a aprovação é resolvida
+ * automaticamente para "Sem Resposta" no mesmo movimento — preserva o
+ * fato de que ninguém decidiu a tempo, sem travar a Portaria.
  */
 export async function registrarCheckIn(db, usuarioLogado, bookingId, dadosConfirmados) {
   if (!usuarioLogado || !usuarioLogado.uid) throw new Error("Usuário não identificado.");
@@ -1104,21 +1077,13 @@ export async function registrarCheckIn(db, usuarioLogado, bookingId, dadosConfir
   await runTransaction(db, async (transaction) => {
     const snap = await transaction.get(bookingRef);
     if (!snap.exists()) throw new Error("Agendamento não encontrado (pode já ter sido removido).");
-    // BUGFIX: antes lia snap.data() "cru". Documentos criados/gravados
-    // antes da Etapa 1 (modelo tridimensional) podem não ter
-    // aprovacaoStatus/comparecimentoStatus/operacionalStatus gravados —
-    // sem normalizar, os campos vinham `undefined` e a checagem abaixo
-    // SEMPRE falhava com "situação atual: Pendente", mesmo o agendamento
-    // estando de fato Aprovado (a tela mostrava o botão de Check-in
-    // porque ela lê a lista já normalizada em memória; a transação lia o
-    // documento bruto direto do Firestore).
     const dadosAtuais = normalizarBooking(snap.data());
 
-    if (dadosAtuais.aprovacaoStatus !== APROVACAO.APROVADO) {
-      throw new Error(`Só é possível dar check-in em agendamentos Aprovados (situação atual: "${situacaoResumoLabel(dadosAtuais)}").`);
-    }
     if (dadosAtuais.operacionalStatus !== OPERACIONAL.SEM_CHECKIN) {
-      throw new Error(`Este agendamento já tem check-in registrado (situação atual: "${situacaoResumoLabel(dadosAtuais)}"). Atualize a lista e tente novamente.`);
+      throw new Error(`Este agendamento já tem check-in registrado (situação atual: "${situacaoDetalhadaLabel(dadosAtuais)}"). Atualize a lista e tente novamente.`);
+    }
+    if (dadosAtuais.aprovacaoStatus === APROVACAO.CANCELADO) {
+      throw new Error("Este agendamento foi cancelado pela transportadora. Se o veículo está fisicamente no local, registre-o pela Entrada Expressa (Encaixe).");
     }
 
     const agora = new Date();
@@ -1127,6 +1092,13 @@ export async function registrarCheckIn(db, usuarioLogado, bookingId, dadosConfir
       ? COMPARECIMENTO.COMPARECEU_ATRASADO
       : COMPARECIMENTO.COMPARECEU;
 
+    // Resolve automaticamente uma aprovação PENDENTE — o veículo chegou,
+    // e o check-in não pode ficar refém de uma decisão administrativa
+    // que não aconteceu a tempo.
+    const aprovacaoFinal = dadosAtuais.aprovacaoStatus === APROVACAO.PENDENTE
+      ? APROVACAO.SEM_RESPOSTA
+      : dadosAtuais.aprovacaoStatus;
+
     const placaCavalo = String(dadosConfirmados.placaCavalo || "").trim().toUpperCase();
     const placaCarreta = dadosConfirmados.placaCarreta ? String(dadosConfirmados.placaCarreta).trim().toUpperCase() : "";
     const motorista = String(dadosConfirmados.motorista || "").trim();
@@ -1134,15 +1106,21 @@ export async function registrarCheckIn(db, usuarioLogado, bookingId, dadosConfir
       || placaCarreta !== (dadosAtuais.placaCarreta || "")
       || motorista !== (dadosAtuais.motorista || "");
 
-    const novasDims = { aprovacaoStatus: dadosAtuais.aprovacaoStatus, comparecimentoStatus: novoComparecimento, operacionalStatus: OPERACIONAL.EM_PATIO };
+    const novasDims = { aprovacaoStatus: aprovacaoFinal, comparecimentoStatus: novoComparecimento, operacionalStatus: OPERACIONAL.EM_PATIO };
+
+    const historico = [
+      _entradaHistorico("comparecimentoStatus", null, novoComparecimento, usuarioLogado.uid),
+      _entradaHistorico("operacionalStatus", OPERACIONAL.SEM_CHECKIN, OPERACIONAL.EM_PATIO, usuarioLogado.uid)
+    ];
+    if (aprovacaoFinal !== dadosAtuais.aprovacaoStatus) {
+      historico.push(_entradaHistorico("aprovacaoStatus", dadosAtuais.aprovacaoStatus, aprovacaoFinal, usuarioLogado.uid));
+    }
 
     transaction.update(bookingRef, {
       placaCavalo,
       placaCarreta,
       motorista,
-      // Grava as 3 dimensões por completo (não só as que mudaram) —
-      // auto-cura o documento caso ele ainda estivesse no formato antigo.
-      aprovacaoStatus: novasDims.aprovacaoStatus,
+      aprovacaoStatus: aprovacaoFinal,
       comparecimentoStatus: novoComparecimento,
       operacionalStatus: OPERACIONAL.EM_PATIO,
       status: derivarStatusLegado(novasDims),
@@ -1152,25 +1130,13 @@ export async function registrarCheckIn(db, usuarioLogado, bookingId, dadosConfir
         dadosConferidos: true,
         divergente
       },
-      historicoEstados: arrayUnion(
-        _entradaHistorico("comparecimentoStatus", null, novoComparecimento, usuarioLogado.uid),
-        _entradaHistorico("operacionalStatus", OPERACIONAL.SEM_CHECKIN, OPERACIONAL.EM_PATIO, usuarioLogado.uid)
-      ),
+      historicoEstados: arrayUnion(...historico),
       atualizadoEm: serverTimestamp(),
       atualizadoPor: usuarioLogado.uid
     });
   });
 }
 
-/**
- * Registra o Check-out: dimensão operacional (EM_PATIO -> CONCLUIDO).
- * Não mexe em aprovacaoStatus nem comparecimentoStatus.
- *
- * @param {Firestore} db
- * @param {{uid:string}} usuarioLogado
- * @param {string} bookingId
- * @param {{notaFiscal:string, observacoesSaida?:string}} dados
- */
 export async function registrarCheckOut(db, usuarioLogado, bookingId, dados) {
   if (!usuarioLogado || !usuarioLogado.uid) throw new Error("Usuário não identificado.");
 
@@ -1179,12 +1145,10 @@ export async function registrarCheckOut(db, usuarioLogado, bookingId, dados) {
   await runTransaction(db, async (transaction) => {
     const snap = await transaction.get(bookingRef);
     if (!snap.exists()) throw new Error("Agendamento não encontrado (pode já ter sido removido).");
-    // BUGFIX: ver comentário equivalente em registrarCheckIn — normaliza
-    // o documento lido antes de checar o estado atual.
     const dadosAtuais = normalizarBooking(snap.data());
 
     if (dadosAtuais.operacionalStatus !== OPERACIONAL.EM_PATIO) {
-      throw new Error(`Só é possível dar check-out em veículos Em Pátio (situação atual: "${situacaoResumoLabel(dadosAtuais)}").`);
+      throw new Error(`Só é possível dar check-out em veículos Em Pátio (situação atual: "${situacaoDetalhadaLabel(dadosAtuais)}").`);
     }
 
     const notaFiscal = String(dados.notaFiscal || "").trim();
@@ -1196,7 +1160,6 @@ export async function registrarCheckOut(db, usuarioLogado, bookingId, dados) {
     const novasDims = { aprovacaoStatus: dadosAtuais.aprovacaoStatus, comparecimentoStatus: dadosAtuais.comparecimentoStatus, operacionalStatus: OPERACIONAL.CONCLUIDO };
 
     transaction.update(bookingRef, {
-      // Grava as 3 dimensões por completo (auto-cura de documento antigo).
       aprovacaoStatus: novasDims.aprovacaoStatus,
       comparecimentoStatus: novasDims.comparecimentoStatus,
       operacionalStatus: OPERACIONAL.CONCLUIDO,
@@ -1217,16 +1180,10 @@ export async function registrarCheckOut(db, usuarioLogado, bookingId, dados) {
 }
 
 /**
- * Registra No-Show: dimensão comparecimento (null -> NAO_COMPARECEU).
- * Libera a vaga automaticamente (mesmo princípio de Recusar — a vaga não
- * fica presa por alguém que nunca chegou). Não mexe em aprovacaoStatus
- * (o agendamento continua "Aprovado" administrativamente; só não
- * compareceu).
- *
- * @param {Firestore} db
- * @param {{uid:string}} usuarioLogado
- * @param {string} bookingId
- * @returns {Promise<{vagaLiberada: boolean}>}
+ * Registra No-Show. Aplicável a agendamentos Aprovados OU Sem Resposta
+ * que ainda não tiveram check-in — cobre tanto "confirmou e não veio"
+ * quanto "ninguém decidiu e também não veio" (a Portaria não precisa
+ * esperar a varredura automática de expiração para registrar isso).
  */
 export async function registrarNoShow(db, usuarioLogado, bookingId) {
   if (!usuarioLogado || !usuarioLogado.uid) throw new Error("Usuário não identificado.");
@@ -1237,11 +1194,11 @@ export async function registrarNoShow(db, usuarioLogado, bookingId) {
   await runTransaction(db, async (transaction) => {
     const snap = await transaction.get(bookingRef);
     if (!snap.exists()) throw new Error("Agendamento não encontrado (pode já ter sido removido).");
-    // BUGFIX: ver comentário equivalente em registrarCheckIn.
     const dadosAtuais = normalizarBooking(snap.data());
 
-    if (dadosAtuais.aprovacaoStatus !== APROVACAO.APROVADO || dadosAtuais.operacionalStatus !== OPERACIONAL.SEM_CHECKIN) {
-      throw new Error(`Só é possível marcar No-Show em agendamentos Aprovados sem check-in (situação atual: "${situacaoResumoLabel(dadosAtuais)}"). Atualize a lista e tente novamente.`);
+    const aprovacaoElegivel = [APROVACAO.APROVADO, APROVACAO.SEM_RESPOSTA].includes(dadosAtuais.aprovacaoStatus);
+    if (!aprovacaoElegivel || dadosAtuais.operacionalStatus !== OPERACIONAL.SEM_CHECKIN) {
+      throw new Error(`Só é possível marcar No-Show em agendamentos Aprovados/Sem Resposta que ainda não tiveram check-in (situação atual: "${situacaoDetalhadaLabel(dadosAtuais)}"). Atualize a lista e tente novamente.`);
     }
 
     const precisaLiberarVaga = dadosAtuais.vagaLiberada !== true;
@@ -1254,7 +1211,6 @@ export async function registrarNoShow(db, usuarioLogado, bookingId) {
     const novasDims = { aprovacaoStatus: dadosAtuais.aprovacaoStatus, comparecimentoStatus: COMPARECIMENTO.NAO_COMPARECEU, operacionalStatus: dadosAtuais.operacionalStatus };
 
     const payload = {
-      // Grava as 3 dimensões por completo (auto-cura de documento antigo).
       aprovacaoStatus: novasDims.aprovacaoStatus,
       comparecimentoStatus: COMPARECIMENTO.NAO_COMPARECEU,
       operacionalStatus: novasDims.operacionalStatus,
@@ -1276,24 +1232,6 @@ export async function registrarNoShow(db, usuarioLogado, bookingId) {
   return { vagaLiberada: vagaFoiLiberada };
 }
 
-/**
- * Cria uma entrada de ENCAIXE (veículo sem agendamento prévio, recebido
- * direto na Portaria). Nasce já com as 3 dimensões "no fim da linha de
- * chegada": Aprovado + Compareceu + Em Pátio — não passa pelas etapas
- * anteriores porque, por definição, o veículo já está fisicamente no
- * pátio no momento em que o registro é criado.
- *
- * Não consome vaga de `timeSlots` de propósito: encaixe é, por natureza,
- * fora da grade de capacidade normal (é a válvula de escape para
- * emergências), então não teria sentido competir pela mesma vaga que um
- * agendamento prévio reservou.
- *
- * @param {Firestore} db
- * @param {{uid:string}} usuarioLogado
- * @param {object} dados - empresa, tipoProcessoId, dataAgendada, horaInicio,
- *   placaCavalo, placaCarreta, motorista, observacoes
- * @returns {Promise<{bookingId: string}>}
- */
 export async function criarEntradaEncaixe(db, usuarioLogado, dados) {
   if (!usuarioLogado || !usuarioLogado.uid) throw new Error("Usuário não identificado.");
   validarCamposObrigatorios(dados);
@@ -1342,11 +1280,6 @@ export async function criarEntradaEncaixe(db, usuarioLogado, dados) {
 
 /* #######################################################################
    PARTE 8 — VARREDURA DE VAGAS PRESAS POR CANCELAMENTO DA TRANSPORTADORA
-   `transportadora-dashboard.html` (ainda não migrado) grava só o `status`
-   legado ("Cancelado") ao cancelar — por isso a varredura abaixo continua
-   buscando por `status == "Cancelado"`. Ao liberar, ela também grava
-   `aprovacaoStatus: CANCELADO` no mesmo documento, "curando" o registro
-   para o modelo novo na primeira vez que a Logística abrir o painel.
    ####################################################################### */
 
 async function liberarVagaSemMudarStatus(db, usuarioLogado, booking) {
@@ -1363,8 +1296,6 @@ async function liberarVagaSemMudarStatus(db, usuarioLogado, booking) {
 
     transaction.update(bookingRef, {
       vagaLiberada: true,
-      // Auto-cura para o modelo novo — só se o documento ainda não tinha
-      // sido migrado (não sobrescreve se já estava correto).
       aprovacaoStatus: APROVACAO.CANCELADO,
       comparecimentoStatus: null,
       operacionalStatus: OPERACIONAL.SEM_CHECKIN,
@@ -1374,12 +1305,6 @@ async function liberarVagaSemMudarStatus(db, usuarioLogado, booking) {
   });
 }
 
-/**
- * Varredura: busca todos os bookings "Cancelado" (status legado) que
- * ainda não tiveram a vaga liberada. Pensada para rodar automaticamente
- * ao abrir o Painel de Logística.
- * @returns {Promise<number>} quantidade de vagas liberadas nesta varredura
- */
 export async function liberarVagasCanceladasPelaTransportadora(db, usuarioLogado) {
   const snap = await getDocs(query(collection(db, "bookings"), where("status", "==", STATUS.CANCELADO)));
 

@@ -1203,6 +1203,38 @@ button:focus-visible,
   }
 }
 
+/* ---------- Indicador discreto de atualização em tempo real ----------
+   Uso: aparece por alguns segundos perto do cabeçalho quando o listener
+   em tempo real recebe uma mudança, sem interromper o usuário com um
+   modal/pop-up — só um sinal visual periférico de "isto acabou de
+   mudar". ---------- */
+.indicador-tempo-real {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--verde);
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity .25s ease, transform .25s ease;
+  pointer-events: none;
+}
+.indicador-tempo-real.visivel { opacity: 1; transform: translateY(0); }
+.indicador-tempo-real .ponto-pulso {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--verde);
+  animation: pulsoIndicador 1.2s ease-in-out infinite;
+}
+@keyframes pulsoIndicador {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .4; transform: scale(1.3); }
+}
+
+
+
 /* =====================================================================
    TIPOGRAFIA DE DADOS + ÍCONES (revisão de paleta/ícones/botões)
    ===================================================================== */
