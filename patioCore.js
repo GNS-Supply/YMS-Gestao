@@ -49,7 +49,9 @@ import {
   onSnapshot,
   serverTimestamp,
   runTransaction,
-  arrayUnion
+  arrayUnion,
+  updateDoc,
+  deleteDoc
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 /* #######################################################################
@@ -709,6 +711,10 @@ export async function criarAgendamentoOperacional(db, usuarioLogado, dados, opco
       ],
       status: derivarStatusLegado(dimsIniciais),
       tipoAgendamento: TIPO_AGENDAMENTO.OPERACIONAL,
+      // Presente apenas quando este booking foi gerado automaticamente
+      // por uma regra de recorrência semanal (ver PARTE 9 mais abaixo).
+      // null em qualquer agendamento operacional avulso normal.
+      origemRecorrenciaId: dados.origemRecorrenciaId || null,
       vagaLiberada: false,
       criadoEm: serverTimestamp(),
       criadoPor: usuarioLogado.uid,
@@ -1323,4 +1329,219 @@ export async function liberarVagasCanceladasPelaTransportadora(db, usuarioLogado
   }
 
   return totalLiberadas;
+}
+
+/* #######################################################################
+   PARTE 9 — RECORRÊNCIA SEMANAL (CLIENTES FIXOS / "MILK RUN")
+
+   Em vez de escolher uma data exata, a Logística/Admin escolhe um ou
+   mais dias da semana + um horário fixo (ex: toda Terça e Quinta às
+   14:00). A regra fica salva em `recorrencias/{id}` e, a partir dela,
+   este módulo GERA agendamentos operacionais de verdade — mesma
+   coleção `bookings`, mesma função `criarAgendamentoOperacional`,
+   mesma transação atômica de capacidade — para um horizonte de
+   algumas semanas à frente.
+
+   Cada ocorrência gerada carrega `origemRecorrenciaId` apontando para
+   a regra que a originou. Isso serve para duas coisas:
+     (a) não gerar a mesma data duas vezes (idempotência), e
+     (b) permitir rastrear quais bookings vieram de uma recorrência.
+
+   PLACA/MOTORISTA: no Milk Run o veículo que faz a rota pode variar
+   semana a semana, então a regra aceita valores "padrão" (ex: "A
+   DEFINIR" / "A definir") — e cada ocorrência gerada continua 100%
+   editável normalmente pela Portaria no momento do Check-in (ver
+   registrarCheckIn, que já permite corrigir placaCavalo/placaCarreta/
+   motorista nesse momento, sem travar o fluxo).
+
+   GERAÇÃO SEM JOB NOVO: chamada sempre que o Painel de Logística
+   carrega (ver logistica-dashboard.html -> garantirTodasRecorrencias),
+   em vez de depender de um cron/Action adicional. Cada regra guarda
+   `ultimaGeracaoAte` (até qual data já foi gerada) para a geração ser
+   incremental e barata — abrir o painel de novo no mesmo dia não
+   repete trabalho nem gera nada duplicado.
+   ####################################################################### */
+
+export const HORIZONTE_RECORRENCIA_SEMANAS = 8;
+
+function _dataLocalStrDe(d) {
+  const ano = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+}
+
+function _somarDiasData(dataStr, dias) {
+  const [ano, mes, dia] = dataStr.split("-").map(Number);
+  const d = new Date(ano, mes - 1, dia);
+  d.setDate(d.getDate() + dias);
+  return _dataLocalStrDe(d);
+}
+
+function _diasSemanaValidosLocal(lista) {
+  return Array.isArray(lista) && lista.length >= 1 && lista.length <= 7
+    && lista.every(d => Number.isInteger(d) && d >= 0 && d <= 6);
+}
+
+function _validarDadosRecorrencia(dados) {
+  const erros = [];
+  if (!_diasSemanaValidosLocal(dados.diasSemana)) erros.push("Selecione ao menos um dia da semana.");
+  if (!REGEX_HORA.test(dados.horaInicio || "")) erros.push("Horário inválido (use o formato HH:MM).");
+  if (!dados.empresa || !String(dados.empresa).trim()) erros.push("Nome da empresa é obrigatório.");
+  if (!dados.tipoProcessoId) erros.push("Tipo de processo é obrigatório.");
+  if (erros.length > 0) throw new Error(erros.join(" "));
+}
+
+/**
+ * Cria a regra de recorrência e já gera, na hora, as primeiras
+ * ocorrências dentro do horizonte padrão — o agendamento aparece
+ * imediatamente no Painel do Dia / Portaria, sem esperar nada.
+ */
+export async function criarRegraRecorrencia(db, usuarioLogado, dados) {
+  if (!usuarioLogado || !usuarioLogado.uid) throw new Error("Usuário da Logística/Admin não identificado.");
+  _validarDadosRecorrencia(dados);
+
+  const payload = {
+    diasSemana: dados.diasSemana.slice().sort((a, b) => a - b),
+    horaInicio: dados.horaInicio,
+    transportadoraId: dados.transportadoraId || null,
+    empresa: String(dados.empresa).trim(),
+    tipoProcessoId: dados.tipoProcessoId,
+    placaCavaloPadrao: dados.placaCavaloPadrao ? String(dados.placaCavaloPadrao).trim().toUpperCase() : "A DEFINIR",
+    placaCarretaPadrao: dados.placaCarretaPadrao ? String(dados.placaCarretaPadrao).trim().toUpperCase() : "",
+    motoristaPadrao: dados.motoristaPadrao ? String(dados.motoristaPadrao).trim() : "A definir",
+    observacoes: dados.observacoes ? String(dados.observacoes).trim() : "",
+    ativo: true,
+    ultimaGeracaoAte: null,
+    criadoEm: serverTimestamp(),
+    criadoPor: usuarioLogado.uid,
+    atualizadoEm: serverTimestamp(),
+    atualizadoPor: usuarioLogado.uid
+  };
+
+  const regraRef = await addDoc(collection(db, "recorrencias"), payload);
+  const resultadoGeracao = await garantirOcorrenciasRecorrencia(db, usuarioLogado, { id: regraRef.id, ...payload });
+
+  try {
+    await addDoc(collection(db, "auditLogs"), {
+      bookingId: regraRef.id,
+      usuarioId: usuarioLogado.uid,
+      acao: "Solicitou",
+      dataHora: serverTimestamp()
+    });
+  } catch (errAudit) {
+    console.error("Erro ao registrar log de auditoria da recorrência:", errAudit);
+  }
+
+  return { id: regraRef.id, ...resultadoGeracao };
+}
+
+export async function listarRegrasRecorrencia(db) {
+  const snap = await getDocs(collection(db, "recorrencias"));
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
+}
+
+export async function alternarAtivoRecorrencia(db, usuarioLogado, id, ativo) {
+  if (!usuarioLogado || !usuarioLogado.uid) throw new Error("Usuário não identificado.");
+  await updateDoc(doc(db, "recorrencias", id), {
+    ativo,
+    atualizadoEm: serverTimestamp(),
+    atualizadoPor: usuarioLogado.uid
+  });
+}
+
+/**
+ * Exclui só a REGRA. As ocorrências (bookings) já geradas por ela
+ * continuam existindo normalmente — viram agendamentos operacionais
+ * "avulsos", sem mais nenhuma regra ativa gerando novas datas a partir
+ * delas. Isso evita apagar histórico/agenda futura já confirmada por
+ * engano.
+ */
+export async function excluirRegraRecorrencia(db, id) {
+  await deleteDoc(doc(db, "recorrencias", id));
+}
+
+/**
+ * Gera (se ainda não existirem) os bookings de UMA regra de
+ * recorrência para todos os dias da semana configurados, do dia de
+ * hoje (ou de onde a última geração parou) até `horizonteSemanas` à
+ * frente. Idempotente: chamar de novo no mesmo dia não duplica nada.
+ */
+export async function garantirOcorrenciasRecorrencia(db, usuarioLogado, regra, horizonteSemanas = HORIZONTE_RECORRENCIA_SEMANAS) {
+  if (!regra.ativo) return { criadas: 0, puladas: 0 };
+
+  const hojeStr = _dataLocalStrDe(new Date());
+  const horizonteStr = _somarDiasData(hojeStr, horizonteSemanas * 7);
+  const inicioStr = (regra.ultimaGeracaoAte && regra.ultimaGeracaoAte > hojeStr) ? regra.ultimaGeracaoAte : hojeStr;
+
+  if (inicioStr > horizonteStr) return { criadas: 0, puladas: 0 };
+
+  // Datas já geradas por esta regra — consulta única, evita duplicar
+  // ao rodar de novo (ex: painel aberto em duas abas/aparelhos).
+  const snapExistentes = await getDocs(query(collection(db, "bookings"), where("origemRecorrenciaId", "==", regra.id)));
+  const datasExistentes = new Set(snapExistentes.docs.map(d => d.data().dataAgendada));
+
+  let criadas = 0;
+  let puladas = 0;
+  let cursor = inicioStr;
+
+  while (cursor <= horizonteStr) {
+    const diaSemana = diaSemanaDaData(cursor);
+    if (regra.diasSemana.includes(diaSemana) && !datasExistentes.has(cursor)) {
+      try {
+        await criarAgendamentoOperacional(db, usuarioLogado, {
+          transportadoraId: regra.transportadoraId,
+          empresa: regra.empresa,
+          tipoProcessoId: regra.tipoProcessoId,
+          dataAgendada: cursor,
+          horaInicio: regra.horaInicio,
+          placaCavalo: regra.placaCavaloPadrao || "A DEFINIR",
+          placaCarreta: regra.placaCarretaPadrao || "",
+          motorista: regra.motoristaPadrao || "A definir",
+          observacoes: `[RECORRÊNCIA SEMANAL]${regra.observacoes ? " " + regra.observacoes : ""}`,
+          origemRecorrenciaId: regra.id
+        });
+        criadas++;
+      } catch (errGeracao) {
+        // Motivo mais comum: a data ficou sem vaga (alguém já ocupou o
+        // horário com outro agendamento). Não interrompe as demais
+        // datas do horizonte — só registra e segue para a próxima.
+        console.warn(`Recorrência ${regra.id}: não foi possível gerar ${cursor} (${errGeracao.message}).`);
+        puladas++;
+      }
+    }
+    cursor = _somarDiasData(cursor, 1);
+  }
+
+  await updateDoc(doc(db, "recorrencias", regra.id), {
+    ultimaGeracaoAte: horizonteStr,
+    atualizadoEm: serverTimestamp()
+  });
+
+  return { criadas, puladas };
+}
+
+/**
+ * Roda a geração acima para TODAS as regras ativas. Chamada uma vez no
+ * carregamento do Painel de Logística — mantém o horizonte de
+ * recorrências sempre preenchido sem depender de nenhum job/cron
+ * adicional (diferente de expirar-pendentes, que roda via GitHub
+ * Actions porque precisa rodar mesmo sem ninguém logado).
+ */
+export async function garantirTodasRecorrencias(db, usuarioLogado, horizonteSemanas = HORIZONTE_RECORRENCIA_SEMANAS) {
+  const regras = await listarRegrasRecorrencia(db);
+  const ativas = regras.filter(r => r.ativo);
+
+  let totalCriadas = 0;
+  for (const regra of ativas) {
+    try {
+      const { criadas } = await garantirOcorrenciasRecorrencia(db, usuarioLogado, regra, horizonteSemanas);
+      totalCriadas += criadas;
+    } catch (err) {
+      console.error(`Erro ao garantir ocorrências da recorrência ${regra.id}:`, err);
+    }
+  }
+  return { totalCriadas, totalRegrasAtivas: ativas.length };
 }

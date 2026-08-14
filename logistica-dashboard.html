@@ -398,6 +398,57 @@
     .btn-checkin { background: #28a745; color: white; }
     .btn-checkout { background: #007bff; color: white; }
     .btn-noshow { background: #dc3545; color: white; }
+
+    /* =====================================================================
+       RECORRÊNCIA SEMANAL — toggle "Agendamento Único" x "Recorrência" e
+       tabela de regras cadastradas (aba "Novo Agendamento")
+       ===================================================================== */
+    .toggle-modo-agendamento {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    /* =====================================================================
+       PAINEL DO DIA — DESTAQUE DA HORA ATUAL
+       Diferencia visualmente o que já passou, o que está acontecendo
+       agora e o que ainda vai acontecer, sem depender de nenhum dado
+       novo — é só um recorte de tempo sobre os mesmos horários já
+       calculados pelo núcleo (patioCore.js).
+       ===================================================================== */
+    .faixa-horario.horario-passado {
+      opacity: 0.5;
+    }
+    .faixa-horario.horario-atual {
+      border-left-width: 6px;
+      border-left-color: var(--laranja);
+      background: #fff8ec;
+      box-shadow: 0 0 0 2px rgba(232, 163, 61, 0.3);
+    }
+    .badge-agora {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      background: var(--laranja);
+      color: #fff;
+      font-family: var(--fonte-mono, monospace);
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .badge-agora .ponto-pulso {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #fff;
+      animation: pulsoIndicador 1.2s ease-in-out infinite;
+    }
   </style>
 </head>
 <body>
@@ -621,8 +672,17 @@
         <div class="card">
           <h3><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg> Novo Agendamento Direto (Operacional)</h3>
           <p style="font-size:0.85rem; color:#666; margin-bottom:16px;">
-            Crie um agendamento direto para atender emergências ou encaixes. Este registro nascerá automaticamente como <strong>Aprovado</strong>.
+            Crie um agendamento direto para atender emergências, encaixes ou clientes fixos com horário recorrente. Nasce automaticamente como <strong>Aprovado</strong>.
           </p>
+
+          <div class="toggle-modo-agendamento">
+            <button type="button" class="btn-filtro ativo" id="btn-modo-unico" data-modo="unico">
+              <svg width="14" height="14" class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg> Agendamento Único
+            </button>
+            <button type="button" class="btn-filtro" id="btn-modo-recorrente" data-modo="recorrente">
+              <svg width="14" height="14" class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"></line><circle cx="9" cy="6" r="2"></circle><line x1="4" y1="12" x2="20" y2="12"></line><circle cx="15" cy="12" r="2"></circle><line x1="4" y1="18" x2="20" y2="18"></line><circle cx="11" cy="18" r="2"></circle></svg> Recorrência Semanal (Milk Run)
+            </button>
+          </div>
 
           <form id="form-agendamento-operacional">
             <div class="campo">
@@ -681,6 +741,97 @@
 
             <button type="submit" id="btn-salvar-operacional" class="btn-primario" style="margin-top:10px;">Salvar Agendamento Direto</button>
           </form>
+
+          <!-- ================================================================
+               FORM RECORRÊNCIA SEMANAL — em vez de uma data exata, define
+               dias da semana + horário fixo. Ao salvar, já gera as
+               próximas ocorrências (ver garantirOcorrenciasRecorrencia em
+               patioCore.js); a partir daí, toda semana nesses dias/hora já
+               nasce reservada automaticamente, sem precisar repetir o
+               cadastro.
+               ================================================================ -->
+          <form id="form-recorrencia" style="display:none;">
+            <div class="aviso-suporte">
+              Defina os dias da semana e o horário fixo (ex: toda Terça e Quinta às 14:00 tem Milk Run deste cliente). A partir de agora, esse horário já fica reservado automaticamente nas próximas semanas. Placa e motorista podem ficar como "A definir" e ser corrigidos na Portaria, no momento do Check-in de cada semana.
+            </div>
+
+            <div class="campo">
+              <label for="rec-transportadora-select">Transportadora Parceira</label>
+              <select id="rec-transportadora-select" required>
+                <option value="">Carregando transportadoras...</option>
+              </select>
+            </div>
+
+            <div class="campo" id="wrap-rec-empresa-externa" style="display:none;">
+              <label for="rec-empresa-externa">Nome da Empresa / Parceiro Externo</label>
+              <input type="text" id="rec-empresa-externa" placeholder="Ex: Cliente Milk Run LTDA">
+            </div>
+
+            <div class="campo">
+              <label>Dias da Semana</label>
+              <div class="campo-dias-semana" id="rec-dias-semana"></div>
+            </div>
+
+            <div style="display:flex; gap:15px; flex-wrap:wrap;">
+              <div class="campo" style="flex:1; min-width:160px;">
+                <label for="rec-horario">Horário Fixo</label>
+                <input type="time" id="rec-horario" required>
+              </div>
+              <div class="campo" style="flex:2; min-width:200px;">
+                <label for="rec-processo">Tipo de Processo</label>
+                <select id="rec-processo" required>
+                  <option value="">Selecione o tipo de processo...</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="display:flex; gap:15px; flex-wrap:wrap;">
+              <div class="campo" style="flex:1; min-width:140px;">
+                <label for="rec-placa-cavalo">Placa Cavalo (opcional)</label>
+                <input type="text" id="rec-placa-cavalo" maxlength="8" placeholder="Em branco = A DEFINIR" style="text-transform:uppercase;" inputmode="text" autocomplete="off">
+              </div>
+              <div class="campo" style="flex:1; min-width:140px;">
+                <label for="rec-placa-carreta">Placa Carreta (opcional)</label>
+                <input type="text" id="rec-placa-carreta" maxlength="8" style="text-transform:uppercase;" inputmode="text" autocomplete="off">
+              </div>
+            </div>
+
+            <div class="campo">
+              <label for="rec-motorista">Nome do Motorista (opcional)</label>
+              <input type="text" id="rec-motorista" placeholder="Em branco = A definir">
+            </div>
+
+            <div class="campo">
+              <label for="rec-observacoes">Observações (opcional)</label>
+              <textarea id="rec-observacoes" rows="2"></textarea>
+            </div>
+
+            <button type="submit" id="btn-salvar-recorrencia" class="btn-primario" style="margin-top:10px; background:#6f3fa0;">Criar Recorrência Semanal</button>
+          </form>
+        </div>
+
+        <div class="card" id="card-recorrencias-cadastradas">
+          <h3><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"></line><circle cx="9" cy="6" r="2"></circle><line x1="4" y1="12" x2="20" y2="12"></line><circle cx="15" cy="12" r="2"></circle><line x1="4" y1="18" x2="20" y2="18"></line><circle cx="11" cy="18" r="2"></circle></svg> Recorrências Semanais Cadastradas</h3>
+          <p style="font-size:0.85rem; color:#666; margin-bottom:16px;">
+            Cada regra ativa mantém automaticamente as próximas semanas geradas na agenda sempre que este painel é aberto — não é preciso repetir o cadastro toda semana.
+          </p>
+          <div style="overflow-x:auto;">
+            <table class="tabela-padrao">
+              <thead>
+                <tr>
+                  <th>Dias</th>
+                  <th>Horário</th>
+                  <th>Empresa</th>
+                  <th>Processo</th>
+                  <th>Status</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-recorrencias">
+                <tr><td colspan="6" style="text-align:center;">Carregando recorrências...</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -1069,7 +1220,14 @@
       PONTUALIDADE,
       calcularPontualidade,
       calcularTempoPermanenciaMinutos,
-      formatarPermanencia
+      formatarPermanencia,
+      criarRegraRecorrencia,
+      listarRegrasRecorrencia,
+      alternarAtivoRecorrencia,
+      excluirRegraRecorrencia,
+      garantirOcorrenciasRecorrencia,
+      garantirTodasRecorrencias,
+      HORIZONTE_RECORRENCIA_SEMANAS
     } from "./patioCore.js";
     // Máscara de placa, cálculo de disponibilidade, transições de
     // estado e o listener em tempo real da lista de agendamentos vêm
@@ -1111,6 +1269,28 @@
     }
 
     let dataSelecionadaPainel = dataLocalStr();
+
+    /* ===================================================================
+       HORA ATUAL (fuso local) — usada para destacar, no Painel do Dia,
+       qual faixa de horário está acontecendo agora, o que já passou e o
+       que ainda está por vir. Mesmo princípio de dataLocalStr(): nunca
+       toISOString(), sempre getHours()/getMinutes() locais.
+       =================================================================== */
+    function horaAtualStr() {
+      const agora = new Date();
+      const h = String(agora.getHours()).padStart(2, "0");
+      const m = String(agora.getMinutes()).padStart(2, "0");
+      return `${h}:${m}`;
+    }
+
+    // Compara "agora" com o intervalo [inicio, fim) de uma faixa. Trata
+    // o caso do último bloco do dia (ex: 23:00 às 00:00), em que horaFim
+    // "some volta" para 00:00 — nesse caso o intervalo não fecha antes
+    // da meia-noite, então basta checar se "agora" já passou do início.
+    function horaDentroDoIntervalo(agora, inicio, fim) {
+      if (fim > inicio) return agora >= inicio && agora < fim;
+      return agora >= inicio;
+    }
 
     /* ===================================================================
        POPUP / MODAL CUSTOMIZADO (substitui alert() e confirm() nativos —
@@ -1270,7 +1450,21 @@
 
       renderizarTiraDias();
       inicializarFormularioOperacional();
+      inicializarToggleModoAgendamento();
+      inicializarFormularioRecorrencia();
       inicializarFormulariosPortaria();
+
+      // Mantém o horizonte de recorrências semanais sempre preenchido —
+      // roda toda vez que a Logística/Admin abre o painel, sem depender
+      // de nenhum job/cron adicional (ver garantirTodasRecorrencias em
+      // patioCore.js). Feito depois do listener de bookings já estar de
+      // pé, para os novos agendamentos gerados aparecerem na hora.
+      garantirTodasRecorrencias(db, usuarioLogado).then(({ totalCriadas }) => {
+        if (totalCriadas > 0) {
+          console.info(`${totalCriadas} ocorrência(s) de recorrência semanal gerada(s) automaticamente.`);
+        }
+      }).catch(err => console.error("Erro ao garantir recorrências:", err));
+      carregarRecorrencias();
     });
 
     document.getElementById("btn-logout").addEventListener("click", logout);
@@ -1303,7 +1497,7 @@
           if (target === "painel") carregarPainelDoDia(dataSelecionadaPainel);
           if (target === "portaria") renderizarTabelaPortaria();
           if (target === "solicitacoes") renderizarSolicitacoesPendentes();
-          if (target === "novo-operacional") atualizarHorariosOperacionais();
+          if (target === "novo-operacional") { atualizarHorariosOperacionais(); carregarRecorrencias(); }
           if (target === "todos") carregarTodosAgendamentos();
           if (target === "kpis") atualizarPainelKPIs();
           if (target === "regras") { carregarRegras(); carregarExcecoes(); }
@@ -1527,6 +1721,12 @@
 
         container.innerHTML = "";
 
+        // Destaque de tempo (passado/atual) só faz sentido quando a data
+        // exibida no painel é HOJE — datas futuras/passadas não têm
+        // "agora" dentro delas.
+        const ehHoje = dataIso === dataLocalStr();
+        const agoraStr = horaAtualStr();
+
         slots.forEach(slot => {
           const reservasHorario = agendamentosDia.filter(b => b.horaInicio === slot.horaInicio);
           const ocupados = reservasHorario.length;
@@ -1540,8 +1740,24 @@
 
           const pct = max > 0 ? Math.min(100, Math.round((ocupados / max) * 100)) : 100;
 
+          // Classe de tempo: "horario-atual" (destacada, com selo "Agora")
+          // ou "horario-passado" (esmaecida) — ajuda a bater o olho e
+          // saber na hora o que já aconteceu e o que ainda está por vir.
+          let classeTempo = "";
+          let ehAtual = false;
+          if (ehHoje) {
+            if (horaDentroDoIntervalo(agoraStr, slot.horaInicio, slot.horaFim)) {
+              classeTempo = " horario-atual";
+              ehAtual = true;
+            } else if (slot.horaFim > slot.horaInicio && agoraStr >= slot.horaFim) {
+              classeTempo = " horario-passado";
+            }
+          }
+
           const faixa = document.createElement("div");
-          faixa.className = `faixa-horario ${nivelClasse}${pendentesHorario > 0 ? " tem-pendente" : ""}`;
+          faixa.className = `faixa-horario ${nivelClasse}${pendentesHorario > 0 ? " tem-pendente" : ""}${classeTempo}`;
+          faixa.dataset.hora = slot.horaInicio;
+          faixa.dataset.horaFim = slot.horaFim;
 
           // Sinalização diferenciada: um horário pode estar com vagas
           // livres (barra verde) e AINDA assim ter uma solicitação parada
@@ -1551,9 +1767,17 @@
             ? `<span class="badge-pendente-horario"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12"></path><path d="M6 21h12"></path><path d="M7 3c0 5 4 6.5 5 8-1 1.5-5 3-5 8"></path><path d="M17 3c0 5-4 6.5-5 8 1 1.5 5 3 5 8"></path></svg> ${pendentesHorario} aguardando</span>`
             : "";
 
+          // Selo "Agora": independente do selo de pendência acima — os
+          // dois podem coexistir (um horário pode estar rolando agora E
+          // ter uma solicitação parada esperando aprovação).
+          const seloAgora = ehAtual
+            ? `<span class="badge-agora"><span class="ponto-pulso"></span> Agora</span>`
+            : "";
+
           faixa.innerHTML = `
             <button class="faixa-horario-cabecalho" type="button">
               <span class="faixa-horario-hora">${slot.horaInicio} às ${slot.horaFim}</span>
+              ${seloAgora}
               ${seloPendente}
               <div class="faixa-horario-barra">
                 <div class="faixa-horario-barra-preenchida" style="width: ${pct}%;"></div>
@@ -1578,6 +1802,41 @@
         container.innerHTML = '<p style="text-align:center; color:red; padding:20px;">Erro ao carregar horários do pátio.</p>';
       }
     }
+
+    /**
+     * Reaplica só as classes de tempo (horario-atual/horario-passado) e
+     * o selo "Agora" nas faixas já renderizadas, sem refazer nenhuma
+     * consulta ao Firestore — chamada a cada minuto (ver setInterval
+     * logo abaixo) para o destaque acompanhar o relógio mesmo que nada
+     * mude nos agendamentos nesse meio tempo.
+     */
+    function atualizarDestaqueHoraAtual() {
+      if (abaAtivaAtual !== "painel" || dataSelecionadaPainel !== dataLocalStr()) return;
+      const agoraStr = horaAtualStr();
+
+      document.querySelectorAll("#linha-tempo-container .faixa-horario[data-hora]").forEach(faixa => {
+        const inicio = faixa.dataset.hora;
+        const fim = faixa.dataset.horaFim;
+        const cabecalho = faixa.querySelector(".faixa-horario-cabecalho");
+        const seloExistente = faixa.querySelector(".badge-agora");
+
+        faixa.classList.remove("horario-atual", "horario-passado");
+
+        if (horaDentroDoIntervalo(agoraStr, inicio, fim)) {
+          faixa.classList.add("horario-atual");
+          if (!seloExistente && cabecalho) {
+            const selo = document.createElement("span");
+            selo.className = "badge-agora";
+            selo.innerHTML = '<span class="ponto-pulso"></span> Agora';
+            cabecalho.insertBefore(selo, cabecalho.querySelector(".faixa-horario-barra"));
+          }
+        } else {
+          if (seloExistente) seloExistente.remove();
+          if (fim > inicio && agoraStr >= fim) faixa.classList.add("horario-passado");
+        }
+      });
+    }
+    setInterval(atualizarDestaqueHoraAtual, 60 * 1000);
 
     function gerarListaReservasHorarioHTML(reservas) {
       if (reservas.length === 0) {
@@ -1987,7 +2246,9 @@
        =================================================================== */
     async function carregarTransportadoras() {
       const select = document.getElementById("op-transportadora-select");
+      const selectRec = document.getElementById("rec-transportadora-select");
       select.innerHTML = '<option value="">Carregando...</option>';
+      if (selectRec) selectRec.innerHTML = '<option value="">Carregando...</option>';
 
       try {
         const q = query(collection(db, "users"), where("tipo", "==", 1), where("status", "==", "aprovado"));
@@ -1996,11 +2257,12 @@
         listaTransportadoras = snap.docs.map(d => ({ id: d.id, empresa: d.data().empresa || d.data().nome }));
         listaTransportadoras.sort((a, b) => a.empresa.localeCompare(b.empresa));
 
-        select.innerHTML = '<option value="">Selecione a transportadora...</option>';
-        listaTransportadoras.forEach(t => {
-          select.innerHTML += `<option value="${t.id}">${escapeHtml(t.empresa)}</option>`;
-        });
-        select.innerHTML += '<option value="__OUTRA__">+ Outra / Empresa Externa (Digitar)</option>';
+        const opcoesHtml = '<option value="">Selecione a transportadora...</option>'
+          + listaTransportadoras.map(t => `<option value="${t.id}">${escapeHtml(t.empresa)}</option>`).join("")
+          + '<option value="__OUTRA__">+ Outra / Empresa Externa (Digitar)</option>';
+
+        select.innerHTML = opcoesHtml;
+        if (selectRec) selectRec.innerHTML = opcoesHtml;
       } catch (err) {
         console.error("Erro ao carregar transportadoras:", err);
       }
@@ -2068,6 +2330,215 @@
           btnSalvar.disabled = false;
           btnSalvar.textContent = "Salvar Agendamento Direto";
         }
+      });
+    }
+
+    /* ===================================================================
+       TOGGLE "AGENDAMENTO ÚNICO" x "RECORRÊNCIA SEMANAL"
+       Alterna qual dos dois formulários fica visível — o mecanismo de
+       criação em si é totalmente independente (form-agendamento-
+       operacional continua criando 1 booking; form-recorrencia cria uma
+       regra que gera vários bookings automaticamente).
+       =================================================================== */
+    function inicializarToggleModoAgendamento() {
+      const btnUnico = document.getElementById("btn-modo-unico");
+      const btnRecorrente = document.getElementById("btn-modo-recorrente");
+      const formUnico = document.getElementById("form-agendamento-operacional");
+      const formRecorrencia = document.getElementById("form-recorrencia");
+
+      btnUnico.addEventListener("click", () => {
+        btnUnico.classList.add("ativo");
+        btnRecorrente.classList.remove("ativo");
+        formUnico.style.display = "block";
+        formRecorrencia.style.display = "none";
+      });
+
+      btnRecorrente.addEventListener("click", () => {
+        btnRecorrente.classList.add("ativo");
+        btnUnico.classList.remove("ativo");
+        formRecorrencia.style.display = "block";
+        formUnico.style.display = "none";
+      });
+    }
+
+    /* ===================================================================
+       FORMULÁRIO DE RECORRÊNCIA SEMANAL
+       =================================================================== */
+    function inicializarFormularioRecorrencia() {
+      const selectTransp = document.getElementById("rec-transportadora-select");
+      const wrapExterna = document.getElementById("wrap-rec-empresa-externa");
+      const inputExterna = document.getElementById("rec-empresa-externa");
+      const form = document.getElementById("form-recorrencia");
+
+      configurarMascaraPlaca(document.getElementById("rec-placa-cavalo"));
+      configurarMascaraPlaca(document.getElementById("rec-placa-carreta"));
+
+      selectTransp.addEventListener("change", () => {
+        if (selectTransp.value === "__OUTRA__") {
+          wrapExterna.style.display = "block";
+          inputExterna.required = true;
+        } else {
+          wrapExterna.style.display = "none";
+          inputExterna.required = false;
+        }
+      });
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const btnSalvar = document.getElementById("btn-salvar-recorrencia");
+
+        const diasSemana = lerDiasSelecionados("rec-dias-semana");
+        if (diasSemana.length === 0) {
+          mostrarToast("Selecione ao menos um dia da semana.", { tipo: "erro" });
+          return;
+        }
+
+        let usuarioId = selectTransp.value === "__OUTRA__" ? null : selectTransp.value;
+        let empresa = selectTransp.value === "__OUTRA__"
+          ? inputExterna.value.trim()
+          : listaTransportadoras.find(t => t.id === usuarioId)?.empresa || "";
+
+        if (!empresa) {
+          mostrarToast("Selecione a transportadora ou informe o nome da empresa externa.", { tipo: "erro" });
+          return;
+        }
+
+        const placaCavalo = aplicarMascaraPlaca(document.getElementById("rec-placa-cavalo").value);
+        const placaCarreta = aplicarMascaraPlaca(document.getElementById("rec-placa-carreta").value);
+        document.getElementById("rec-placa-cavalo").value = placaCavalo;
+        document.getElementById("rec-placa-carreta").value = placaCarreta;
+
+        btnSalvar.disabled = true;
+        btnSalvar.textContent = "Criando recorrência...";
+
+        try {
+          const resultado = await criarRegraRecorrencia(db, usuarioLogado, {
+            diasSemana,
+            horaInicio: document.getElementById("rec-horario").value,
+            transportadoraId: usuarioId,
+            empresa,
+            tipoProcessoId: document.getElementById("rec-processo").value,
+            placaCavaloPadrao: placaCavalo,
+            placaCarretaPadrao: placaCarreta,
+            motoristaPadrao: document.getElementById("rec-motorista").value.trim(),
+            observacoes: document.getElementById("rec-observacoes").value.trim()
+          });
+
+          mostrarToast(
+            `Recorrência criada! ${resultado.criadas} agendamento(s) já gerado(s) nas próximas ${HORIZONTE_RECORRENCIA_SEMANAS} semanas.`,
+            { tipo: "sucesso" }
+          );
+          form.reset();
+          wrapExterna.style.display = "none";
+          await carregarRecorrencias();
+        } catch (err) {
+          await mostrarAlerta(`Erro ao criar recorrência: ${err.message}`, { titulo: "Erro", tipo: "erro" });
+        } finally {
+          btnSalvar.disabled = false;
+          btnSalvar.textContent = "Criar Recorrência Semanal";
+        }
+      });
+    }
+
+    /**
+     * Renderiza a tabela de regras de recorrência cadastradas, com ações
+     * de pausar/reativar, gerar ocorrências na hora e excluir a regra.
+     */
+    async function carregarRecorrencias() {
+      const tbody = document.getElementById("tbody-recorrencias");
+      if (!tbody) return;
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Carregando recorrências...</td></tr>';
+
+      try {
+        const regras = await listarRegrasRecorrencia(db);
+
+        if (regras.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#888;">Nenhuma recorrência cadastrada ainda.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = regras.map(r => `
+          <tr data-id="${r.id}">
+            <td>${(r.diasSemana || []).map(d => DIAS_SEMANA_LABELS[d]).join(", ")}</td>
+            <td>${escapeHtml(r.horaInicio || "-")}</td>
+            <td>${escapeHtml(r.empresa || "-")}</td>
+            <td>${escapeHtml(mapProcessos[r.tipoProcessoId] || r.tipoProcessoId || "-")}</td>
+            <td>${r.ativo ? '<span class="badge aprovado">Ativa</span>' : '<span class="badge recusado">Pausada</span>'}</td>
+            <td>
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <button type="button" class="btn-acao btn-gerar-recorrencia" style="background:var(--azul,#1a5f9e); color:#fff;">Gerar Agora</button>
+                <button type="button" class="btn-acao btn-toggle-recorrencia" style="background:${r.ativo ? "#dc3545" : "#28a745"}; color:#fff;">${r.ativo ? "Pausar" : "Reativar"}</button>
+                <button type="button" class="btn-acao btn-excluir-recorrencia" style="background:#fff; color:#333; border:1px solid var(--cinza-borda,#ccc);">Excluir</button>
+              </div>
+            </td>
+          </tr>
+        `).join("");
+
+        vincularEventosRecorrencias(regras);
+      } catch (err) {
+        console.error("Erro ao carregar recorrências:", err);
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Erro ao carregar as recorrências.</td></tr>';
+      }
+    }
+
+    function vincularEventosRecorrencias(regras) {
+      document.querySelectorAll(".btn-gerar-recorrencia").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.closest("tr").dataset.id;
+          const regra = regras.find(x => x.id === id);
+          if (!regra) return;
+          btn.disabled = true;
+          btn.textContent = "Gerando...";
+          try {
+            const { criadas, puladas } = await garantirOcorrenciasRecorrencia(db, usuarioLogado, regra);
+            mostrarToast(
+              criadas > 0
+                ? `${criadas} novo(s) agendamento(s) gerado(s).${puladas > 0 ? ` ${puladas} data(s) sem vaga foram puladas.` : ""}`
+                : "Nenhuma ocorrência nova — o horizonte já estava completo.",
+              { tipo: "sucesso" }
+            );
+          } catch (err) {
+            await mostrarAlerta("Erro ao gerar ocorrências: " + err.message, { titulo: "Erro", tipo: "erro" });
+          } finally {
+            btn.disabled = false;
+            btn.textContent = "Gerar Agora";
+          }
+        });
+      });
+
+      document.querySelectorAll(".btn-toggle-recorrencia").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.closest("tr").dataset.id;
+          const regra = regras.find(x => x.id === id);
+          if (!regra) return;
+          btn.disabled = true;
+          try {
+            await alternarAtivoRecorrencia(db, usuarioLogado, id, !regra.ativo);
+            mostrarToast(`Recorrência ${regra.ativo ? "pausada" : "reativada"}.`, { tipo: "sucesso" });
+            await carregarRecorrencias();
+          } catch (err) {
+            await mostrarAlerta("Erro ao alterar a recorrência: " + err.message, { titulo: "Erro", tipo: "erro" });
+            btn.disabled = false;
+          }
+        });
+      });
+
+      document.querySelectorAll(".btn-excluir-recorrencia").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.closest("tr").dataset.id;
+          const confirmado = await mostrarConfirm(
+            "Excluir esta recorrência? Os agendamentos já gerados por ela permanecem na agenda normalmente — só a regra que gera novas semanas é removida.",
+            { titulo: "Excluir recorrência", perigo: true, textoConfirmar: "Excluir" }
+          );
+          if (!confirmado) return;
+          try {
+            await excluirRegraRecorrencia(db, id);
+            mostrarToast("Recorrência excluída.", { tipo: "sucesso" });
+            await carregarRecorrencias();
+          } catch (err) {
+            await mostrarAlerta("Erro ao excluir a recorrência: " + err.message, { titulo: "Erro", tipo: "erro" });
+          }
+        });
       });
     }
 
@@ -2308,6 +2779,7 @@
     }
     montarCheckboxesDias("regra-dias-semana");
     montarCheckboxesDias("excecao-dias-semana");
+    montarCheckboxesDias("rec-dias-semana");
 
     function lerDiasSelecionados(containerId) {
       return Array.from(document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`))
@@ -2808,11 +3280,12 @@
     }
 
     function preencherSelectProcessos() {
+      const opcoesHtml = '<option value="">Selecione o tipo...</option>'
+        + Object.keys(mapProcessos).map(id => `<option value="${id}">${escapeHtml(mapProcessos[id])}</option>`).join("");
       const select = document.getElementById("op-processo");
-      select.innerHTML = '<option value="">Selecione o tipo...</option>';
-      Object.keys(mapProcessos).forEach(id => {
-        select.innerHTML += `<option value="${id}">${escapeHtml(mapProcessos[id])}</option>`;
-      });
+      select.innerHTML = opcoesHtml;
+      const selectRec = document.getElementById("rec-processo");
+      if (selectRec) selectRec.innerHTML = opcoesHtml;
     }
 
     function formatarData(dataStr) {
