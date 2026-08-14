@@ -396,34 +396,102 @@ export function escutarBookings(db, callback, onError) {
    ####################################################################### */
 
 export function aplicarMascaraPlaca(valorBruto) {
-  const brutoLimpo = (valorBruto || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-  let alfanumerico = "";
+  const valor = String(valorBruto || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
 
-  for (let i = 0; i < brutoLimpo.length && alfanumerico.length < 7; i++) {
-    const ch = brutoLimpo[i];
-    const pos = alfanumerico.length;
+  // Limita a placa a 7 caracteres alfanuméricos.
+  const placa = valor.slice(0, 7);
 
-    if (pos < 3) {
-      if (/[A-Z]/.test(ch)) alfanumerico += ch;
-    } else if (pos === 3) {
-      if (/[0-9]/.test(ch)) alfanumerico += ch;
-    } else if (pos === 4) {
-      if (/[A-Z0-9]/.test(ch)) alfanumerico += ch;
-    } else {
-      if (/[0-9]/.test(ch)) alfanumerico += ch;
-    }
+  // ============================================================
+  // PRIMEIRAS 3 POSIÇÕES
+  // Devem ser letras.
+  // ============================================================
+
+  if (placa.length <= 3) {
+    return placa.replace(/[^A-Z]/g, "");
   }
 
-  // O 5º caractere (índice 4) define o formato: dígito = antigo (com
-  // traço), letra = Mercosul (sem traço).
-  if (alfanumerico.length >= 5 && /[0-9]/.test(alfanumerico[4])) {
-    return alfanumerico.slice(0, 3) + "-" + alfanumerico.slice(3);
+  const letras = placa.slice(0, 3);
+
+  // Se alguma das três primeiras posições não for letra,
+  // mantém apenas as letras iniciais válidas.
+  if (!/^[A-Z]{3}$/.test(letras)) {
+    return letras.replace(/[^A-Z]/g, "");
   }
-  return alfanumerico;
+
+  const restante = placa.slice(3);
+
+  // ============================================================
+  // FORMATO ANTIGO
+  // AAA-000
+  //
+  // Exemplo:
+  // ABC123 -> ABC-123
+  //
+  // ============================================================
+
+  // Se temos somente números depois das três letras,
+  // trata como formato antigo.
+  if (/^[0-9]+$/.test(restante)) {
+    const numeros = restante.slice(0, 3);
+
+    return letras + "-" + numeros;
+  }
+
+  // ============================================================
+  // FORMATO MERCOSUL
+  // AAA0A00
+  //
+  // Exemplo:
+  // ABC1D23 -> ABC1D23
+  //
+  // ============================================================
+
+  // Quarto caractere precisa ser número.
+  if (!/^[0-9]/.test(restante)) {
+    return letras;
+  }
+
+  // Se o quinto caractere for letra, temos Mercosul.
+  if (restante.length >= 2 && /[A-Z]/.test(restante[1])) {
+    const numeroInicial = restante[0];
+    const letra = restante[1];
+    const numerosFinais = restante
+      .slice(2)
+      .replace(/[^0-9]/g, "")
+      .slice(0, 2);
+
+    return letras + numeroInicial + letra + numerosFinais;
+  }
+
+  // Enquanto o usuário ainda está digitando o formato Mercosul,
+  // ainda não sabemos se será AAA-000 ou AAA0A00.
+  //
+  // Portanto, mantemos provisoriamente o formato antigo.
+  const numeros = restante
+    .replace(/[^0-9]/g, "")
+    .slice(0, 3);
+
+  return letras + "-" + numeros;
 }
 
 export function placaCompleta(valorMascarado) {
-  return (valorMascarado || "").replace("-", "").length === 7;
+  const placa = String(valorMascarado || "")
+    .toUpperCase()
+    .trim();
+
+  // Formato antigo: AAA-0000
+  if (/^[A-Z]{3}-[0-9]{4}$/.test(placa)) {
+    return true;
+  }
+
+  // Formato Mercosul: AAA0A00
+  if (/^[A-Z]{3}[0-9][A-Z][0-9]{2}$/.test(placa)) {
+    return true;
+  }
+
+  return false;
 }
 
 export function configurarMascaraPlaca(inputEl) {
