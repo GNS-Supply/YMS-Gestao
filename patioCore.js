@@ -396,47 +396,37 @@ export function escutarBookings(db, callback, onError) {
    ####################################################################### */
 
 export function aplicarMascaraPlaca(valorBruto) {
-  const valor = String(valorBruto || "")
+  const brutoLimpo = String(valorBruto || "")
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "");
 
-  // Limita a placa a 7 caracteres alfanuméricos.
-  const placa = valor.slice(0, 7);
+  // A parte alfanumérica da placa sempre possui 7 caracteres:
+  //
+  // Antiga:   ABC1234  -> ABC-1234
+  // Mercosul: ABC1D23  -> ABC1D23
+  //
+  // O hífen da placa antiga NÃO entra nessa contagem.
+  const alfanumerico = brutoLimpo.slice(0, 7);
 
   // ============================================================
   // PRIMEIRAS 3 POSIÇÕES
   // Devem ser letras.
   // ============================================================
 
-  if (placa.length <= 3) {
-    return placa.replace(/[^A-Z]/g, "");
+  if (alfanumerico.length <= 3) {
+    return alfanumerico.replace(/[^A-Z]/g, "");
   }
 
-  const letras = placa.slice(0, 3);
+  const letras = alfanumerico.slice(0, 3);
 
-  // Se alguma das três primeiras posições não for letra,
-  // mantém apenas as letras iniciais válidas.
   if (!/^[A-Z]{3}$/.test(letras)) {
     return letras.replace(/[^A-Z]/g, "");
   }
 
-  const restante = placa.slice(3);
+  const restante = alfanumerico.slice(3);
 
-  // ============================================================
-  // FORMATO ANTIGO
-  // AAA-0000
-  //
-  // Exemplo:
-  // ABC1234 -> ABC-1234
-  //
-  // ============================================================
-
-  // Se temos somente números depois das três letras,
-  // trata como formato antigo.
-  if (/^[0-9]+$/.test(restante)) {
-    const numeros = restante.slice(0, 4);
-
-    return letras + "-" + numeros;
+  if (!restante) {
+    return letras;
   }
 
   // ============================================================
@@ -444,19 +434,22 @@ export function aplicarMascaraPlaca(valorBruto) {
   // AAA0A00
   //
   // Exemplo:
-  // ABC1D23 -> ABC1D23
+  // ABC1D23
   //
+  // Estrutura:
+  // ABC | 1 | D | 23
+  //     letras número letra números
   // ============================================================
 
-  // Quarto caractere precisa ser número.
-  if (!/^[0-9]/.test(restante)) {
-    return letras;
-  }
-
-  // Se o quinto caractere for letra, temos Mercosul.
-  if (restante.length >= 2 && /[A-Z]/.test(restante[1])) {
+  // A partir do momento em que o quinto caractere é uma letra,
+  // temos certeza de que a placa é Mercosul.
+  if (
+    restante.length >= 2 &&
+    /^[0-9][A-Z]/.test(restante)
+  ) {
     const numeroInicial = restante[0];
     const letra = restante[1];
+
     const numerosFinais = restante
       .slice(2)
       .replace(/[^0-9]/g, "")
@@ -465,15 +458,24 @@ export function aplicarMascaraPlaca(valorBruto) {
     return letras + numeroInicial + letra + numerosFinais;
   }
 
-  // Enquanto o usuário ainda está digitando o formato Mercosul,
-  // ainda não sabemos se será AAA-000 ou AAA0A00.
+  // ============================================================
+  // FORMATO ANTIGO
+  // AAA-0000
   //
-  // Portanto, mantemos provisoriamente o formato antigo.
+  // Exemplo:
+  // ABC1234
+  //
+  // Resultado:
+  // ABC-1234
+  //
+  // São permitidos 4 números depois das 3 letras.
+  // ============================================================
+
   const numeros = restante
     .replace(/[^0-9]/g, "")
-    .slice(0, 3);
+    .slice(0, 4);
 
-  return letras + "-" + numeros;
+  return letras + (numeros ? "-" + numeros : "");
 }
 
 export function placaCompleta(valorMascarado) {
@@ -496,6 +498,7 @@ export function placaCompleta(valorMascarado) {
 
 export function configurarMascaraPlaca(inputEl) {
   if (!inputEl) return;
+
   inputEl.addEventListener("input", () => {
     inputEl.value = aplicarMascaraPlaca(inputEl.value);
   });
