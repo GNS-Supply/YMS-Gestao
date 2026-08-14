@@ -458,21 +458,26 @@ export function aplicarMascaraPlaca(valorBruto) {
     return letras + numeroInicial + letra + numerosFinais;
   }
 
-   // ============================================================
+  // ============================================================
   // FORMATO ANTIGO
   // AAA-0000
   //
   // Exemplo:
-  // ABC1234 -> ABC-1234
+  // ABC1234
+  //
+  // Resultado:
+  // ABC-1234
   //
   // São permitidos 4 números depois das 3 letras.
   // ============================================================
 
   const numeros = restante
-    .replace(/[^0-9]/g, "");
+    .replace(/[^0-9]/g, "")
+    .slice(0, 4);
 
-  return letras + (numeros ? "-" + numeros.slice(0, 4) : "");
-  
+  return letras + (numeros ? "-" + numeros : "");
+}
+
 export function placaCompleta(valorMascarado) {
   const placa = String(valorMascarado || "")
     .toUpperCase()
