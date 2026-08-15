@@ -9,65 +9,152 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <style>
+    /* Estilos específicos desta tela — o layout de menu lateral (ERP),
+       compartilhado com logistica-dashboard.html, vive em style.css
+       (seção "LAYOUT ERP — SIDEBAR"). Aqui só o que é exclusivo desta
+       página: o cartão de cada cadastro pendente na aba de Aprovações. */
+    .cartao-pendente {
+      border: 1px solid var(--cinza-borda);
+      border-left: 4px solid var(--laranja);
+      border-radius: var(--raio-sm);
+      padding: 16px 18px;
+      margin-bottom: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: flex-end;
+      background: var(--branco);
+    }
+    .cartao-pendente:last-child { margin-bottom: 0; }
+    .cartao-pendente-info { flex: 1 1 260px; min-width: 220px; }
+    .cartao-pendente-nome { font-weight: 700; font-size: 1rem; color: var(--azul-escuro); }
+    .cartao-pendente-meta { font-size: 0.82rem; color: var(--texto-suave); line-height: 1.6; margin-top: 4px; }
+    .cartao-pendente-acoes { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+    .cartao-pendente-acoes .campo { margin: 0; }
+    .cartao-pendente-acoes select { min-width: 190px; }
+    .tag-vinculo {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      background: #eaf2fb;
+      color: var(--azul);
+      margin-left: 6px;
+    }
+  </style>
 </head>
 <body>
 
   <div class="topbar">
-    <div class="marca"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 13a7.97 7.97 0 0 0 0-2l2.1-1.6-2-3.4-2.5 1a8 8 0 0 0-1.7-1L14.9 3h-4l-.4 2.9a8 8 0 0 0-1.7 1l-2.5-1-2 3.4L6.4 11a8 8 0 0 0 0 2l-2.1 1.6 2 3.4 2.5-1a8 8 0 0 0 1.7 1l.4 2.9h4l.4-2.9a8 8 0 0 0 1.7-1l2.5 1 2-3.4L19.4 13z"></path></svg> Painel Administrativo Exclusivo</div>
-    <div style="display:flex; align-items:center; gap:12px;">
-      <a href="logistica-dashboard.html" style="color:var(--branco); font-size:0.85rem; opacity:.9; text-decoration:underline; display:inline-flex; align-items:center; gap:4px;">
-        <svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="9"></rect><path d="M14 10h4l3 3v3h-7z"></path><circle cx="6" cy="18" r="2"></circle><circle cx="17" cy="18" r="2"></circle></svg> Painel de Logística
-      </a>
-      <a href="logistica-dashboard.html?tab=portaria" style="color:var(--branco); font-size:0.85rem; opacity:.9; text-decoration:underline; display:inline-flex; align-items:center; gap:4px;">
-        <svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"></path><polyline points="9 12 11 14 15 10"></polyline></svg> Módulo Portaria
-      </a>
-      <span id="user-empresa" style="font-size:0.9rem; opacity:.85;"></span>
+    <div class="topbar-esquerda">
+      <button id="btn-hamburguer" class="btn-hamburguer" type="button" aria-label="Abrir menu" aria-expanded="false" aria-controls="sidebar-erp">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+      <div class="marca">
+        <svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 13a7.97 7.97 0 0 0 0-2l2.1-1.6-2-3.4-2.5 1a8 8 0 0 0-1.7-1L14.9 3h-4l-.4 2.9a8 8 0 0 0-1.7 1l-2.5-1-2 3.4L6.4 11a8 8 0 0 0 0 2l-2.1 1.6 2 3.4 2.5-1a8 8 0 0 0 1.7 1l.4 2.9h4l.4-2.9a8 8 0 0 0 1.7-1l2.5 1 2-3.4L19.4 13z"></path></svg>
+        <span class="marca-texto-completo">Agendamento de Pátio — Painel Administrativo</span>
+        <span class="marca-texto-curto">Painel Admin</span>
+      </div>
+      <span class="indicador-tempo-real" id="indicador-tempo-real"><span class="ponto-pulso"></span>Atualizado agora</span>
+    </div>
+    <div class="topbar-direita">
+      <div class="info-usuario">
+        <div id="user-nome" style="font-weight: 600;">--</div>
+        <div id="user-tipo" style="opacity: 0.75; font-size: 0.75rem;">Administrador Master</div>
+      </div>
       <button id="btn-logout">Sair</button>
     </div>
   </div>
 
-  <div class="container">
+  <div class="layout-erp">
 
-    <div class="card">
-      <h3>Gestão Completa de Usuários</h3>
-      <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:12px;">
-        Altere o tipo de acesso, ative/suspenda contas e corrija o nome da empresa parceira de qualquer usuário do sistema.
-      </p>
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
 
-      <div class="aviso-suporte" id="aviso-pendentes" style="display:none; margin-bottom:16px;"></div>
-
-      <div style="display: flex; gap: 12px; margin-bottom: 15px; flex-wrap: wrap;">
-        <input type="text" id="filtro-busca" placeholder="Buscar por nome, e-mail ou empresa..." style="flex: 1; min-width: 200px; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--cinza-borda, #ccc);">
-        <select id="filtro-status" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--cinza-borda, #ccc);">
-          <option value="todos">Todos os Status</option>
-          <option value="pendente_aprovacao">Pendentes de Aprovação</option>
-          <option value="aprovado">Ativos / Aprovados</option>
-          <option value="suspenso">Suspensos</option>
-          <option value="recusado">Recusados</option>
-        </select>
+    <nav class="sidebar-erp" id="sidebar-erp">
+      <div class="sidebar-cabecalho-mobile">
+        <span>Menu</span>
+        <button id="btn-fechar-sidebar" class="btn-fechar-sidebar" type="button" aria-label="Fechar menu">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="5" x2="19" y2="19"></line><line x1="19" y1="5" x2="5" y2="19"></line></svg>
+        </button>
       </div>
 
-      <div class="tabela-wrapper">
-        <table class="tabela-padrao">
-          <thead>
-            <tr>
-              <th>Nome</th>
-              <th>E-mail</th>
-              <th>Vínculo / Empresa</th>
-              <th>Tipo de Acesso</th>
-              <th>Status da Conta</th>
-              <th>Ações</th>
-            </tr>
-          </thead>
-          <tbody id="tb-todos-usuarios">
-            <tr>
-              <td colspan="6" class="estado-vazio">Carregando usuários...</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+      <button class="sidebar-item ativo" data-tab="aprovacoes">
+        <span class="sidebar-icone"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12"></path><path d="M6 21h12"></path><path d="M7 3c0 5 4 6.5 5 8-1 1.5-5 3-5 8"></path><path d="M17 3c0 5-4 6.5-5 8 1 1.5 5 3 5 8"></path></svg></span><span class="sidebar-label">Aprovações Pendentes</span>
+        <span class="sidebar-badge" id="badge-aprovacoes">0</span>
+      </button>
+      <button class="sidebar-item" data-tab="usuarios">
+        <span class="sidebar-icone"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></span><span class="sidebar-label">Gestão de Usuários</span>
+      </button>
 
+      <div class="sidebar-grupo-externo">
+        <a href="logistica-dashboard.html" class="sidebar-item">
+          <span class="sidebar-icone"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="9"></rect><path d="M14 10h4l3 3v3h-7z"></path><circle cx="6" cy="18" r="2"></circle><circle cx="17" cy="18" r="2"></circle></svg></span><span class="sidebar-label">Painel de Logística</span>
+        </a>
+        <a href="logistica-dashboard.html?tab=portaria" class="sidebar-item">
+          <span class="sidebar-icone"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"></path><polyline points="9 12 11 14 15 10"></polyline></svg></span><span class="sidebar-label">Módulo Portaria</span>
+        </a>
+      </div>
+    </nav>
+
+    <main class="conteudo-erp">
+
+      <div class="tab-conteudo ativo" id="tab-aprovacoes">
+        <div class="card">
+          <h3>Aprovações Pendentes</h3>
+          <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:18px;">
+            Novos cadastros de colaboradores internos aguardam aqui até que um Tipo de Acesso seja definido e a conta seja aprovada. Esta lista é atualizada sozinha, em tempo real — não é preciso recarregar a página nem fazer login novamente para vê-la.
+          </p>
+          <div id="lista-aprovacoes">
+            <div class="estado-vazio">Carregando cadastros pendentes...</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-conteudo" id="tab-usuarios">
+        <div class="card">
+          <h3>Gestão Completa de Usuários</h3>
+          <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:12px;">
+            Altere o tipo de acesso, ative/suspenda contas e corrija o nome da empresa parceira de qualquer usuário do sistema.
+          </p>
+
+          <div style="display: flex; gap: 12px; margin-bottom: 15px; flex-wrap: wrap;">
+            <input type="text" id="filtro-busca" placeholder="Buscar por nome, e-mail ou empresa..." style="flex: 1; min-width: 200px; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--cinza-borda, #ccc);">
+            <select id="filtro-status" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--cinza-borda, #ccc);">
+              <option value="todos">Todos os Status</option>
+              <option value="pendente_aprovacao">Pendentes de Aprovação</option>
+              <option value="aprovado">Ativos / Aprovados</option>
+              <option value="suspenso">Suspensos</option>
+              <option value="recusado">Recusados</option>
+            </select>
+          </div>
+
+          <div class="tabela-wrapper">
+            <table class="tabela-padrao">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>E-mail</th>
+                  <th>Vínculo / Empresa</th>
+                  <th>Tipo de Acesso</th>
+                  <th>Status da Conta</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tb-todos-usuarios">
+                <tr>
+                  <td colspan="6" class="estado-vazio">Carregando usuários...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </main>
   </div>
 
   <script type="module">
@@ -87,14 +174,10 @@
     let usuarioAtual = null;
     let todosUsuarios = [];
     let cancelarListenerPendentes = null;
-
-    // PROTEÇÃO DE PÁGINA (Apenas Admin Master - Tipo 3): reaproveita a
-    // versão centralizada em auth.js, que exige status === "aprovado"
-    // (a versão antiga, duplicada aqui, só bloqueava "pendente_aprovacao"
-    // e deixava contas "suspenso"/"recusado" logarem normalmente).
+    let abaAtivaAdmin = "aprovacoes";
 
     /* ===================================================================
-       MODAL DE ALERTA CUSTOMIZADO
+       MODAL DE ALERTA / CONFIRMAÇÃO CUSTOMIZADO
        =================================================================== */
     function criarModalHost() {
       if (document.getElementById("modal-overlay")) return;
@@ -141,6 +224,37 @@
       });
     }
 
+    function mostrarConfirm(mensagem, opcoes = {}) {
+      const { titulo = "Confirmar ação", textoConfirmar = "Confirmar", textoCancelar = "Cancelar", perigo = false } = opcoes;
+      return new Promise((resolve) => {
+        const overlay = document.getElementById("modal-overlay");
+        const caixa = document.getElementById("modal-caixa");
+        caixa.className = "modal-caixa modal-pergunta";
+        document.getElementById("modal-icone").innerHTML = perigo ? '<svg width="26" height="26" class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 L21.5 20 L2.5 20 Z"></path><line x1="12" y1="9.5" x2="12" y2="14"></line><circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none"></circle></svg>' : '<svg width="26" height="26" class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1.3 1-1.3 1.9"></path><circle cx="12" cy="16.5" r="0.6" fill="currentColor" stroke="none"></circle></svg>';
+        document.getElementById("modal-titulo").textContent = titulo;
+        document.getElementById("modal-mensagem").textContent = mensagem;
+        document.getElementById("modal-botoes").innerHTML = `
+          <button type="button" class="modal-btn-secundario" id="modal-btn-cancelar">${textoCancelar}</button>
+          <button type="button" class="modal-btn-primario ${perigo ? "perigo" : ""}" id="modal-btn-confirmar">${textoConfirmar}</button>
+        `;
+        overlay.classList.add("aberto");
+
+        const btnConfirmar = document.getElementById("modal-btn-confirmar");
+        const btnCancelar = document.getElementById("modal-btn-cancelar");
+        function limpar(resultado) {
+          overlay.classList.remove("aberto");
+          btnConfirmar.removeEventListener("click", onConfirmar);
+          btnCancelar.removeEventListener("click", onCancelar);
+          resolve(resultado);
+        }
+        function onConfirmar() { limpar(true); }
+        function onCancelar() { limpar(false); }
+        btnConfirmar.addEventListener("click", onConfirmar);
+        btnCancelar.addEventListener("click", onCancelar);
+        btnCancelar.focus();
+      });
+    }
+
     function criarToastHost() {
       if (document.getElementById("toast-container")) return;
       const container = document.createElement("div");
@@ -184,11 +298,15 @@
 
     document.getElementById("btn-logout").addEventListener("click", logout);
 
-    // Proteção de Acesso
+    // Proteção de Acesso — só Admin Master (Tipo 3). Página exclusiva
+    // dele: nem Logística (Tipo 2) acessa esta tela.
     protegerPagina([3], (user, perfil) => {
       usuarioAtual = user;
-      document.getElementById("user-empresa").textContent = `${perfil.nome || user.email} (Admin)`;
+      document.getElementById("user-nome").textContent = perfil.nome || user.email;
+      document.getElementById("user-tipo").textContent = "Administrador Master";
 
+      inicializarAbas();
+      inicializarMenuMobile();
       carregarTodosUsuarios();
       iniciarListenerPendentes();
 
@@ -197,10 +315,10 @@
       // do admin a cada mudança concorrente de qualquer usuário no
       // sistema (ex: outro admin aprovando alguém em paralelo),
       // apagando o que estivesse sendo digitado. Em vez disso, uma
-      // atualização automática limitada a cada 5 minutos — o fallback
-      // que a revisão estrutural do sistema permite explicitamente
-      // quando o tempo real puro não é apropriado — e só dispara se
-      // nenhum campo desta tabela estiver com foco no momento.
+      // atualização automática limitada a cada 5 minutos — e só dispara
+      // se nenhum campo desta tabela estiver com foco no momento. A aba
+      // de Aprovações Pendentes não tem esse problema (ações são
+      // botões/selects, não texto livre), por isso é 100% tempo real.
       setInterval(() => {
         const focoAtual = document.activeElement;
         const dentroDaTabela = focoAtual && focoAtual.closest && focoAtual.closest("#tb-todos-usuarios");
@@ -210,32 +328,223 @@
       }, 5 * 60 * 1000);
     });
 
+    /* ===================================================================
+       MENU LATERAL (ERP) — troca de aba + gaveta mobile
+       Mesmo mecanismo usado em logistica-dashboard.html: classes
+       ".sidebar-item"/".tab-conteudo" e as mesmas funções de
+       abrir/fechar a gaveta no mobile.
+       =================================================================== */
+    function inicializarAbas() {
+      const btns = document.querySelectorAll(".sidebar-item[data-tab]");
+      const conteudos = document.querySelectorAll(".tab-conteudo");
+
+      btns.forEach(btn => {
+        btn.addEventListener("click", () => {
+          const alvo = btn.dataset.tab;
+          btns.forEach(b => b.classList.remove("ativo"));
+          conteudos.forEach(c => c.classList.remove("ativo"));
+
+          btn.classList.add("ativo");
+          document.getElementById(`tab-${alvo}`).classList.add("ativo");
+          abaAtivaAdmin = alvo;
+
+          fecharMenuMobile();
+        });
+      });
+    }
+
+    function inicializarMenuMobile() {
+      const btnHamburguer = document.getElementById("btn-hamburguer");
+      const btnFechar = document.getElementById("btn-fechar-sidebar");
+      const overlay = document.getElementById("sidebar-overlay");
+      const sidebar = document.getElementById("sidebar-erp");
+      if (!btnHamburguer || !sidebar || !overlay) return;
+
+      btnHamburguer.addEventListener("click", () => {
+        const abrindo = !sidebar.classList.contains("aberto");
+        sidebar.classList.toggle("aberto", abrindo);
+        overlay.classList.toggle("aberto", abrindo);
+        btnHamburguer.setAttribute("aria-expanded", String(abrindo));
+        document.body.style.overflow = abrindo ? "hidden" : "";
+      });
+
+      btnFechar?.addEventListener("click", fecharMenuMobile);
+      overlay.addEventListener("click", fecharMenuMobile);
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") fecharMenuMobile();
+      });
+
+      window.addEventListener("resize", () => {
+        if (window.innerWidth > 900) fecharMenuMobile();
+      });
+    }
+
+    function fecharMenuMobile() {
+      const overlay = document.getElementById("sidebar-overlay");
+      const sidebar = document.getElementById("sidebar-erp");
+      const btnHamburguer = document.getElementById("btn-hamburguer");
+      sidebar?.classList.remove("aberto");
+      overlay?.classList.remove("aberto");
+      btnHamburguer?.setAttribute("aria-expanded", "false");
+      document.body.style.overflow = "";
+    }
+
+    let timeoutIndicadorTempoReal = null;
+    function mostrarIndicadorTempoReal() {
+      const indicador = document.getElementById("indicador-tempo-real");
+      if (!indicador) return;
+      indicador.classList.add("visivel");
+      clearTimeout(timeoutIndicadorTempoReal);
+      timeoutIndicadorTempoReal = setTimeout(() => indicador.classList.remove("visivel"), 2500);
+    }
+
     /* ==========================================================================
-       AVISO DE COLABORADORES PENDENTES (tempo real — é só leitura,
-       então não tem o risco de interromper edição que a tabela abaixo
-       tem)
+       APROVAÇÕES PENDENTES — aba fixa, sempre disponível no menu (não
+       depende mais de nenhum banner que só aparecia no momento do
+       login). O listener é o mesmo tanto para o contador no menu lateral
+       quanto para a lista de cartões desta aba.
        ========================================================================== */
+    const LABEL_TIPO_ACESSO = { 1: "Transportadora", 2: "Logística", 3: "Administrador" };
+    const LABEL_VINCULO = { interno: "Colaborador Interno", externo: "Empresa Parceira" };
+
     function iniciarListenerPendentes() {
-      const aviso = document.getElementById("aviso-pendentes");
-      if (!aviso || cancelarListenerPendentes) return;
+      if (cancelarListenerPendentes) return;
+      let primeiraCarga = true;
 
       cancelarListenerPendentes = onSnapshot(
         query(collection(db, "users"), where("status", "==", "pendente_aprovacao")),
         (snap) => {
-          if (snap.empty) {
-            aviso.style.display = "none";
-            return;
-          }
-          aviso.style.display = "block";
-          aviso.innerHTML = `Há <strong>${snap.size}</strong> colaborador(es) aguardando aprovação de acesso.
-            Aprove ou recuse diretamente na tabela abaixo.`;
+          const pendentes = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => {
+              const ca = a.criadoEm?.toDate ? a.criadoEm.toDate().getTime() : 0;
+              const cb = b.criadoEm?.toDate ? b.criadoEm.toDate().getTime() : 0;
+              return ca - cb; // mais antigos primeiro — fila de espera
+            });
+
+          atualizarBadgeAprovacoes(pendentes.length);
+          renderizarListaAprovacoes(pendentes);
+
+          if (!primeiraCarga) mostrarIndicadorTempoReal();
+          primeiraCarga = false;
         },
-        (err) => console.error("Erro no listener de colaboradores pendentes:", err)
+        (err) => {
+          console.error("Erro no listener de aprovações pendentes:", err);
+          document.getElementById("lista-aprovacoes").innerHTML =
+            '<div class="estado-vazio">Erro ao carregar cadastros pendentes.</div>';
+        }
       );
     }
 
+    function atualizarBadgeAprovacoes(total) {
+      const badge = document.getElementById("badge-aprovacoes");
+      if (!badge) return;
+      if (total === 0) {
+        badge.style.display = "none";
+      } else {
+        badge.style.display = "inline-block";
+        badge.textContent = total;
+      }
+    }
+
+    function renderizarListaAprovacoes(pendentes) {
+      const container = document.getElementById("lista-aprovacoes");
+      if (!container) return;
+
+      if (pendentes.length === 0) {
+        container.innerHTML = '<div class="estado-vazio">Nenhum cadastro aguardando aprovação no momento.</div>';
+        return;
+      }
+
+      container.innerHTML = pendentes.map(u => `
+        <div class="cartao-pendente" data-id="${u.id}">
+          <div class="cartao-pendente-info">
+            <div class="cartao-pendente-nome">
+              ${escapeHtml(u.nome || "(sem nome)")}
+              ${u.vinculo ? `<span class="tag-vinculo">${escapeHtml(LABEL_VINCULO[u.vinculo] || u.vinculo)}</span>` : ""}
+            </div>
+            <div class="cartao-pendente-meta">
+              ${escapeHtml(u.email || "-")}
+              ${u.empresa ? `<br>Empresa: ${escapeHtml(u.empresa)}` : ""}
+              ${u.criadoEm?.toDate ? `<br>Cadastrado em: ${u.criadoEm.toDate().toLocaleString("pt-BR")}` : ""}
+            </div>
+          </div>
+          <div class="cartao-pendente-acoes">
+            <div class="campo">
+              <label style="font-size:0.75rem;">Tipo de Acesso</label>
+              <select class="select-tipo-pendente campo-select">
+                <option value="" selected disabled>Selecione...</option>
+                <option value="1">Transportadora (1)</option>
+                <option value="2">Logística (2)</option>
+                <option value="3">Administrador (3)</option>
+              </select>
+            </div>
+            <button type="button" class="btn-acao btn-aprovar btn-decidir-pendente" data-decisao="aprovado">
+              <svg width="16" height="16" class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Aprovar
+            </button>
+            <button type="button" class="btn-acao btn-recusar btn-decidir-pendente" data-decisao="recusado">
+              <svg width="16" height="16" class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg> Recusar
+            </button>
+          </div>
+        </div>
+      `).join("");
+
+      container.querySelectorAll(".btn-decidir-pendente").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const cartao = btn.closest(".cartao-pendente");
+          decidirPendente(cartao.dataset.id, btn.dataset.decisao, cartao);
+        });
+      });
+    }
+
+    async function decidirPendente(userId, decisao, cartaoEl) {
+      const selectTipo = cartaoEl.querySelector(".select-tipo-pendente");
+      const tipo = Number(selectTipo.value);
+
+      if (!tipo) {
+        mostrarToast("Selecione o Tipo de Acesso antes de aprovar ou recusar.", { tipo: "erro" });
+        selectTipo.focus();
+        return;
+      }
+
+      const ehAprovacao = decisao === "aprovado";
+      const confirmado = await mostrarConfirm(
+        ehAprovacao
+          ? `Aprovar este cadastro como "${LABEL_TIPO_ACESSO[tipo]}"? O usuário passará a ter acesso ao sistema.`
+          : "Recusar este cadastro? O usuário não conseguirá acessar o sistema.",
+        {
+          titulo: ehAprovacao ? "Aprovar Cadastro" : "Recusar Cadastro",
+          perigo: !ehAprovacao,
+          textoConfirmar: ehAprovacao ? "Aprovar" : "Recusar"
+        }
+      );
+      if (!confirmado) return;
+
+      const elementosInterativos = cartaoEl.querySelectorAll("button, select");
+      elementosInterativos.forEach(el => (el.disabled = true));
+
+      try {
+        await updateDoc(doc(db, "users", userId), {
+          tipo,
+          status: decisao,
+          aprovadoEm: ehAprovacao ? serverTimestamp() : null,
+          aprovadoPor: ehAprovacao ? usuarioAtual.uid : null,
+          atualizadoEm: serverTimestamp(),
+          atualizadoPor: usuarioAtual.uid
+        });
+
+        mostrarToast(ehAprovacao ? "Cadastro aprovado com sucesso!" : "Cadastro recusado.", { tipo: "sucesso" });
+        // O listener em tempo real remove o cartão sozinho assim que o
+        // Firestore confirmar a mudança de status — nada a fazer aqui.
+      } catch (err) {
+        console.error("Erro ao decidir cadastro pendente:", err);
+        await mostrarAlerta("Erro ao atualizar o cadastro. Tente novamente.", { titulo: "Erro", tipo: "erro" });
+        elementosInterativos.forEach(el => (el.disabled = false));
+      }
+    }
+
     /* ==========================================================================
-       CARREGAR E FILTRAR USUÁRIOS
+       GESTÃO COMPLETA DE USUÁRIOS (tabela com busca/filtro/edição)
        ========================================================================== */
     async function carregarTodosUsuarios() {
       const tbody = document.getElementById("tb-todos-usuarios");
@@ -324,9 +633,6 @@
       });
     }
 
-    /* ==========================================================================
-       SALVAR ALTERAÇÕES DO USUÁRIO
-       ========================================================================== */
     async function salvarUsuario(idUser, tbody, btn) {
       const selectTipo = tbody.querySelector(`.select-alterar-tipo[data-id="${idUser}"]`);
       const selectStatus = tbody.querySelector(`.select-alterar-status[data-id="${idUser}"]`);
@@ -338,7 +644,7 @@
 
       const linha = btn.closest("tr");
       linha.querySelectorAll("button, select, input").forEach(el => (el.disabled = true));
-      btn.textContent = "Salvando...";
+      btn.classList.add("carregando");
 
       try {
         await updateDoc(doc(db, "users", idUser), {
@@ -350,24 +656,20 @@
 
         mostrarToast("Usuário atualizado com sucesso!", { tipo: "sucesso" });
         await carregarTodosUsuarios();
-        // O aviso de pendentes é um listener em tempo real — atualiza
-        // sozinho, sem precisar de chamada manual aqui.
+        // O contador/lista de Aprovações Pendentes é tempo real —
+        // atualiza sozinho, sem precisar de chamada manual aqui.
       } catch (err) {
         console.error(err);
         await mostrarAlerta("Erro ao atualizar o usuário.", { titulo: "Erro", tipo: "erro" });
       } finally {
         linha.querySelectorAll("button, select, input").forEach(el => (el.disabled = false));
-        btn.textContent = "Salvar";
+        btn.classList.remove("carregando");
       }
     }
 
-    // Ouvintes dos filtros
     document.getElementById("filtro-busca").addEventListener("input", renderizarTabela);
     document.getElementById("filtro-status").addEventListener("change", renderizarTabela);
 
-    /* ==========================================================================
-       UTILITÁRIOS
-       ========================================================================== */
     function escapeHtml(texto) {
       const div = document.createElement("div");
       div.textContent = texto ?? "";

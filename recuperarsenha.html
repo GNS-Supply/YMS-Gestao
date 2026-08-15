@@ -12,23 +12,57 @@
 </head>
 <body>
 
-  <div class="login-wrap">
-    <div class="login-card">
-      <div class="logo"><svg width="26" height="26" class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"></circle><path d="M11 12L21 2"></path><path d="M17 6l3 3"></path><path d="M14 9l3 3"></path></svg> Recuperar Senha</div>
-      <div class="subtitulo">Informe seu e-mail para receber o link de redefinição</div>
+  <div class="auth-shell">
 
-      <form id="recuperar-form">
-        <div class="campo">
-          <label for="email">E-mail</label>
-          <input type="email" id="email" required autocomplete="username">
+    <!-- Painel de marca — só em telas maiores (ver .auth-brand no CSS) -->
+    <aside class="auth-brand">
+      <div class="auth-brand-logo">
+        <svg width="22" height="22" class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="9"></rect><path d="M14 10h4l3 3v3h-7z"></path><circle cx="6" cy="18" r="2"></circle><circle cx="17" cy="18" r="2"></circle></svg>
+        Agendamento de Pátio
+      </div>
+      <h1 class="auth-brand-titulo">Sem problema, acontece.</h1>
+      <p class="auth-brand-subtitulo">
+        Informe o e-mail cadastrado e enviamos um link seguro para você definir uma nova senha e voltar a acessar sua conta.
+      </p>
+      <div class="auth-brand-lista">
+        <div class="auth-brand-item">
+          <svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+          <span>O link de redefinição é enviado só para o e-mail já cadastrado no sistema</span>
         </div>
-        <button type="submit" class="btn-primario">Enviar Link de Redefinição</button>
-        <div class="erro" id="recuperar-error"></div>
-        <div class="sucesso" id="recuperar-sucesso"></div>
-      </form>
+        <div class="auth-brand-item">
+          <svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15.5 14"></polyline></svg>
+          <span>Costuma chegar em poucos instantes — confira também a caixa de spam</span>
+        </div>
+      </div>
+    </aside>
 
-      <div class="login-links">
-        <a href="index.html">Voltar para o login</a>
+    <!-- Cabeçalho compacto de marca — só no mobile -->
+    <div class="auth-brand-mobile">
+      <svg width="20" height="20" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="9"></rect><path d="M14 10h4l3 3v3h-7z"></path><circle cx="6" cy="18" r="2"></circle><circle cx="17" cy="18" r="2"></circle></svg>
+      Agendamento de Pátio
+    </div>
+
+    <div class="auth-form-side">
+      <div class="login-card">
+        <div class="logo"><svg width="26" height="26" class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"></circle><path d="M11 12L21 2"></path><path d="M17 6l3 3"></path><path d="M14 9l3 3"></path></svg> Recuperar Senha</div>
+        <div class="subtitulo">Informe seu e-mail para receber o link de redefinição</div>
+
+        <form id="recuperar-form">
+          <div class="campo">
+            <label for="email">E-mail</label>
+            <input type="email" id="email" required autocomplete="username" autofocus>
+          </div>
+          <button type="submit" class="btn-primario">Enviar Link de Redefinição</button>
+          <div class="erro" id="recuperar-error"></div>
+          <div class="sucesso" id="recuperar-sucesso"></div>
+        </form>
+
+        <div class="login-links">
+          <a href="index.html">
+            <svg width="14" height="14" class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.1em; margin-right:2px;"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            Voltar para o login
+          </a>
+        </div>
       </div>
     </div>
   </div>
@@ -49,7 +83,7 @@
       const email = document.getElementById("email").value.trim();
       const btn = form.querySelector("button[type=submit]");
       btn.disabled = true;
-      btn.textContent = "Enviando...";
+      btn.classList.add("carregando");
 
       try {
         await sendPasswordResetEmail(auth, email);
@@ -60,7 +94,7 @@
       } finally {
         sucessoBox.textContent = "Se este e-mail estiver cadastrado, você receberá um link para redefinir a senha em instantes.";
         btn.disabled = false;
-        btn.textContent = "Enviar Link de Redefinição";
+        btn.classList.remove("carregando");
         form.reset();
       }
     });

@@ -12,31 +12,66 @@
 </head>
 <body>
 
-  <div class="login-wrap">
-    <div class="login-card">
-      <div class="logo"><svg width="26" height="26" class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="9"></rect><path d="M14 10h4l3 3v3h-7z"></path><circle cx="6" cy="18" r="2"></circle><circle cx="17" cy="18" r="2"></circle></svg> Agendamento de Pátio</div>
-      <div class="subtitulo">Entre com seu e-mail e senha cadastrados</div>
+  <div class="auth-shell">
 
-      <form id="login-form">
-        <div class="campo">
-          <label for="email">E-mail</label>
-          <input type="email" id="email" required autocomplete="username">
+    <!-- Painel de marca — só em telas maiores (ver .auth-brand no CSS) -->
+    <aside class="auth-brand">
+      <div class="auth-brand-logo">
+        <svg width="22" height="22" class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="9"></rect><path d="M14 10h4l3 3v3h-7z"></path><circle cx="6" cy="18" r="2"></circle><circle cx="17" cy="18" r="2"></circle></svg>
+        Agendamento de Pátio
+      </div>
+      <h1 class="auth-brand-titulo">Operação de pátio sem filas nem planilhas soltas.</h1>
+      <p class="auth-brand-subtitulo">
+        Transportadoras agendam o próprio horário, a Logística aprova e acompanha tudo em tempo real, e a Portaria dá entrada e saída sem retrabalho.
+      </p>
+      <div class="auth-brand-lista">
+        <div class="auth-brand-item">
+          <svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><line x1="3" y1="10" x2="21" y2="10"></line><line x1="8" y1="3" x2="8" y2="7"></line><line x1="16" y1="3" x2="16" y2="7"></line></svg>
+          <span>Agendamento por horário com controle de vagas em tempo real</span>
         </div>
-        <div class="campo">
-          <label for="senha">Senha</label>
-          <div class="campo-senha-wrap">
-            <input type="password" id="senha" required autocomplete="current-password">
-            <button type="button" class="btn-toggle-senha" data-target="senha" aria-label="Mostrar senha"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
+        <div class="auth-brand-item">
+          <svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12"></path><path d="M6 21h12"></path><path d="M7 3c0 5 4 6.5 5 8-1 1.5-5 3-5 8"></path><path d="M17 3c0 5-4 6.5-5 8 1 1.5 5 3 5 8"></path></svg>
+          <span>Aprovação de solicitações direto pelo painel da Logística</span>
+        </div>
+        <div class="auth-brand-item">
+          <svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>
+          <span>Check-in e check-out de Portaria integrados ao mesmo painel</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Cabeçalho compacto de marca — só no mobile -->
+    <div class="auth-brand-mobile">
+      <svg width="20" height="20" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="9"></rect><path d="M14 10h4l3 3v3h-7z"></path><circle cx="6" cy="18" r="2"></circle><circle cx="17" cy="18" r="2"></circle></svg>
+      Agendamento de Pátio
+    </div>
+
+    <div class="auth-form-side">
+      <div class="login-card">
+        <div class="logo"><svg width="26" height="26" class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="9"></rect><path d="M14 10h4l3 3v3h-7z"></path><circle cx="6" cy="18" r="2"></circle><circle cx="17" cy="18" r="2"></circle></svg> Entrar</div>
+        <div class="subtitulo">Informe seu e-mail e senha cadastrados para acessar</div>
+
+        <form id="login-form">
+          <div class="campo">
+            <label for="email">E-mail</label>
+            <input type="email" id="email" required autocomplete="username" autofocus>
           </div>
-        </div>
-        <button type="submit" class="btn-primario">Entrar</button>
-        <div class="erro" id="login-error"></div>
-      </form>
+          <div class="campo">
+            <label for="senha">Senha</label>
+            <div class="campo-senha-wrap">
+              <input type="password" id="senha" required autocomplete="current-password">
+              <button type="button" class="btn-toggle-senha" data-target="senha" aria-label="Mostrar senha"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
+            </div>
+          </div>
+          <button type="submit" class="btn-primario">Entrar</button>
+          <div class="erro" id="login-error"></div>
+        </form>
 
-      <div class="login-links">
-        <a href="cadastro.html">Criar conta</a>
-        <span class="separador">·</span>
-        <a href="recuperarsenha.html">Esqueci minha senha</a>
+        <div class="login-links">
+          <a href="cadastro.html">Criar conta</a>
+          <span class="separador">·</span>
+          <a href="recuperarsenha.html">Esqueci minha senha</a>
+        </div>
       </div>
     </div>
   </div>
@@ -84,7 +119,7 @@
       const senha = document.getElementById("senha").value;
       const btn = form.querySelector("button[type=submit]");
       btn.disabled = true;
-      btn.textContent = "Entrando...";
+      btn.classList.add("carregando");
 
       try {
         const cred = await signInWithEmailAndPassword(auth, email, senha);
@@ -123,9 +158,8 @@
       } catch (err) {
         console.error(err);
         errorBox.textContent = traduzErro(err.code) || err.message;
-      } finally {
         btn.disabled = false;
-        btn.textContent = "Entrar";
+        btn.classList.remove("carregando");
       }
     });
 

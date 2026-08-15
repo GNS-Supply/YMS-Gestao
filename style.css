@@ -69,6 +69,130 @@ h1, h2, h3, h4, .marca, .logo {
   padding: 20px;
 }
 
+/* =====================================================================
+   AUTENTICAÇÃO — LAYOUT DIVIDIDO (branding + formulário)
+   Usado por index.html (login) e recuperarsenha.html — e recomendado
+   para cadastro.html, seguindo o mesmo padrão. Substitui o antigo
+   ".login-wrap" (que ainda existe acima, intacto, por compatibilidade
+   com qualquer tela que continue usando só o cartão centralizado) por
+   uma composição de duas colunas: um painel de marca à esquerda
+   (contexto do produto, sempre visível em telas maiores) e o
+   formulário à direita, sobre o mesmo fundo neutro (--cinza-bg) usado
+   dentro dos painéis internos do sistema — reforça que login/cadastro/
+   recuperação já fazem parte da mesma identidade visual do produto, e
+   não são páginas "à parte". No mobile, o painel de marca vira um
+   cabeçalho compacto (só logo + título) para não empurrar o formulário
+   para baixo da dobra.
+   ===================================================================== */
+.auth-shell {
+  min-height: 100vh;
+  display: flex;
+}
+
+.auth-brand {
+  flex: 1 1 42%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 26px;
+  padding: 56px 48px;
+  background: linear-gradient(160deg, var(--azul-escuro), var(--azul));
+  color: var(--branco);
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-brand::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 12% 12%, rgba(255,255,255,0.09), transparent 45%),
+    radial-gradient(circle at 88% 88%, rgba(255,255,255,0.07), transparent 42%);
+  pointer-events: none;
+}
+
+.auth-brand > * { position: relative; z-index: 1; }
+
+.auth-brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--fonte-display);
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.auth-brand-titulo {
+  font-family: var(--fonte-display);
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1.28;
+  max-width: 420px;
+}
+
+.auth-brand-subtitulo {
+  font-size: 0.92rem;
+  opacity: 0.82;
+  max-width: 380px;
+  line-height: 1.65;
+}
+
+.auth-brand-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 6px;
+}
+
+.auth-brand-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 0.87rem;
+  opacity: 0.94;
+  line-height: 1.4;
+}
+
+.auth-brand-item .icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--laranja);
+}
+
+.auth-form-side {
+  flex: 1 1 58%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  background: var(--cinza-bg);
+}
+
+/* Cabeçalho de marca compacto, exclusivo do mobile (a versão completa
+   ".auth-brand" acima é escondida em telas estreitas — ver media query
+   abaixo — e substituída por esta barra fina no topo). */
+.auth-brand-mobile {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 20px;
+  background: var(--azul-escuro);
+  color: var(--branco);
+  font-family: var(--fonte-display);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 880px) {
+  .auth-shell { flex-direction: column; }
+  .auth-brand { display: none; }
+  .auth-brand-mobile { display: flex; }
+  .auth-form-side { flex: 1; padding: 24px 16px calc(24px + env(safe-area-inset-bottom, 0px)); }
+}
+
 .login-card {
   background: var(--branco);
   border-radius: var(--raio);
@@ -1234,6 +1358,257 @@ button:focus-visible,
 }
 
 
+
+/* =====================================================================
+   LAYOUT ERP — SIDEBAR (compartilhado entre painéis internos)
+   Menu lateral fixo estilo ERP, usado por qualquer painel interno do
+   sistema (Logística/Admin) — nasceu em logistica-dashboard.html e foi
+   promovido para cá nesta revisão para ser reaproveitado também por
+   admin-dashboard.html, mantendo o mesmo visual/comportamento em
+   qualquer painel sem duplicar CSS entre arquivos. Mantém o MESMO
+   mecanismo de troca de aba usado em todo o sistema (classes
+   ".tab-conteudo"/".ativo" nos containers de conteúdo) — só o menu que
+   aciona a troca é uma coluna fixa à esquerda, no estilo ERP.
+   ===================================================================== */
+.layout-erp {
+  display: flex;
+  align-items: flex-start;
+}
+
+.sidebar-erp {
+  flex: 0 0 232px;
+  width: 232px;
+  background: var(--azul-escuro);
+  min-height: calc(100vh - 60px);
+  position: sticky;
+  top: 60px;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 0;
+  gap: 2px;
+}
+
+/* .sidebar-item funciona tanto em <button> (troca de aba) quanto em
+   <a> (navegação para outra página, ex: link cruzado entre painéis) —
+   por isso zera text-decoration/text-align, que só se aplicam a links. */
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.75);
+  padding: 12px 18px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  font-family: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background .15s, color .15s;
+  touch-action: manipulation;
+}
+.sidebar-item .sidebar-icone { font-size: 1.05rem; flex-shrink: 0; line-height: 1; display: inline-flex; }
+.sidebar-item .sidebar-label { flex: 1; }
+.sidebar-item:hover { background: rgba(255,255,255,0.07); color: #fff; }
+.sidebar-item.ativo {
+  background: rgba(255,255,255,0.11);
+  color: #fff;
+  border-left-color: var(--laranja);
+}
+
+/* Grupo de links de navegação cruzada entre painéis (ex: "Painel de
+   Logística" / "Módulo Portaria" dentro do menu do Admin) — fica
+   separado visualmente dos itens de troca de aba por uma régua fina,
+   e sempre no rodapé do menu (margin-top:auto empurra para baixo
+   dentro do flex-column do .sidebar-erp). */
+.sidebar-grupo-externo {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.12);
+}
+
+.sidebar-badge {
+  background: var(--laranja);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 20px;
+  display: none;
+  flex-shrink: 0;
+}
+
+.conteudo-erp {
+  flex: 1;
+  min-width: 0;
+  padding: 24px 28px;
+}
+
+@media (min-width: 1800px) {
+  .conteudo-erp { max-width: 1720px; }
+}
+
+/* ---------- Botão hambúrguer (só existe/aparece no mobile) ---------- */
+.btn-hamburguer {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.35);
+  color: var(--branco);
+  padding: 7px;
+  border-radius: 7px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.btn-hamburguer:hover { background: rgba(255,255,255,0.08); }
+
+/* ---------- Cabeçalho do menu no mobile (título + botão fechar) ----------
+   Fica oculto no desktop; só aparece dentro do painel deslizante. */
+.sidebar-cabecalho-mobile {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 18px 16px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+.sidebar-cabecalho-mobile span {
+  color: var(--branco);
+  font-family: var(--fonte-display);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.85rem;
+}
+.btn-fechar-sidebar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.35);
+  color: var(--branco);
+  padding: 6px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+/* ---------- Topbar: grupos esquerda/direita (substituem estilos
+   inline nos divs — evita que a regra genérica
+   ".topbar > div[style*=\"display:flex\"]" capture estes elementos e
+   force um wrap indesejado no mobile) ---------- */
+.topbar-esquerda {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.topbar-direita {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.info-usuario { text-align: right; font-size: 0.85rem; }
+.marca-texto-curto { display: none; }
+
+/* ---------- Overlay escurecido atrás do painel (fecha ao tocar fora) ---------- */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 25, 34, 0.55);
+  z-index: 199;
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+.sidebar-overlay.aberto { display: block; opacity: 1; }
+
+@media (max-width: 900px) {
+  .layout-erp { flex-direction: column; }
+
+  .btn-hamburguer { display: inline-flex; }
+  .sidebar-cabecalho-mobile { display: flex; }
+
+  /* Topbar mobile reorganizado numa única linha, mais baixo:
+     [hambúrguer] [ícone + "Painel"]  ....  [nome] [Sair]
+     Em vez do texto completo empilhando com o nome do usuário embaixo
+     (wrap forçado herdado da regra genérica do topbar), tudo fica
+     compacto numa linha só. */
+  .topbar {
+    flex-wrap: nowrap;
+    padding-top: calc(8px + env(safe-area-inset-top));
+    padding-bottom: 8px;
+    padding-left: 14px;
+    padding-right: 14px;
+    gap: 8px;
+  }
+  .topbar-esquerda { flex: 1 1 auto; min-width: 0; }
+  .topbar-direita { gap: 8px; }
+
+  .marca-texto-completo { display: none; }
+  .marca-texto-curto { display: inline; }
+  .topbar .marca {
+    font-size: 0.9rem;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Nome/cargo do usuário: só o nome cabe numa linha só ao lado do
+     botão Sair; o cargo (2ª linha) some no mobile pra não empilhar. */
+  .info-usuario { text-align: left; }
+  #user-tipo { display: none; }
+  #user-nome {
+    font-size: 0.78rem;
+    max-width: 24vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #btn-logout { padding: 6px 10px; font-size: 0.78rem; }
+
+  /* Painel do menu vira uma gaveta (drawer) fixa que desliza da
+     esquerda por cima do conteúdo — estilo aplicativo — em vez de
+     empurrar/comprimir a tela. Fechada por padrão (translateX -100%),
+     abre com a classe ".aberto" (aplicada via JS pelo botão hambúrguer). */
+  .sidebar-erp {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 200;
+    width: 78vw;
+    max-width: 300px;
+    min-height: 100vh;
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 0 20px;
+    gap: 2px;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    box-shadow: var(--sombra-lg);
+  }
+  .sidebar-erp.aberto { transform: translateX(0); }
+
+  .sidebar-item {
+    flex: 0 0 auto;
+    width: 100%;
+    border-left: 3px solid transparent;
+    border-bottom: none;
+    padding: 14px 18px;
+    white-space: normal;
+    font-size: 0.92rem;
+  }
+  .sidebar-item.ativo { border-left-color: var(--laranja); border-bottom: none; }
+  .conteudo-erp { padding: 14px; width: 100%; }
+}
 
 /* =====================================================================
    TIPOGRAFIA DE DADOS + ÍCONES (revisão de paleta/ícones/botões)
