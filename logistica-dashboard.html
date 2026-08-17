@@ -263,9 +263,6 @@
     <nav class="sidebar-erp" id="sidebar-erp">
       <div class="sidebar-cabecalho-mobile">
         <span>Menu</span>
-<nav class="sidebar-erp" id="sidebar-erp">
-      <div class="sidebar-cabecalho-mobile">
-        <span>Menu</span>
         <button id="btn-fechar-sidebar" class="btn-fechar-sidebar" type="button" aria-label="Fechar menu">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="5" x2="19" y2="19"></line><line x1="19" y1="5" x2="5" y2="19"></line></svg>
         </button>
@@ -1255,7 +1252,7 @@
       document.getElementById("user-tipo").textContent = dadosUser.tipo === 3 ? "Administrador Master" : "Operador Logística";
       
 // Exibe o botão de retorno ao Painel Admin se o tipo de usuário for Administrador (3)
-      if (perfil.tipo === 3) {
+      if (Number(dadosUser.tipo) === 3) {
         const btnAdmin = document.getElementById("btn-menu-admin");
         if (btnAdmin) {
           btnAdmin.style.display = "flex";
@@ -1314,7 +1311,7 @@
        "?tab=portaria" em vez de ser uma página própria.
        =================================================================== */
     function inicializarAbas() {
-      const btns = document.querySelectorAll(".sidebar-item");
+      const btns = document.querySelectorAll(".sidebar-item[data-tab]");
       const conteudos = document.querySelectorAll(".tab-conteudo");
 
       btns.forEach(btn => {
