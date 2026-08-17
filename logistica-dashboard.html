@@ -1253,7 +1253,15 @@
       usuarioLogado = { uid: user.uid, ...dadosUser };
       document.getElementById("user-nome").textContent = dadosUser.nome || user.email;
       document.getElementById("user-tipo").textContent = dadosUser.tipo === 3 ? "Administrador Master" : "Operador Logística";
-
+      
+// Exibe o botão de retorno ao Painel Admin se o tipo de usuário for Administrador (3)
+      if (perfil.tipo === 3) {
+        const btnAdmin = document.getElementById("btn-menu-admin");
+        if (btnAdmin) {
+          btnAdmin.style.display = "flex";
+        }
+      }
+      
       const hojeIso = dataLocalStr();
       document.getElementById("picker-data-painel").value = hojeIso;
       document.getElementById("op-data").value = hojeIso;
