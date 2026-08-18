@@ -156,6 +156,36 @@
     let perfilAtual = null;
 
     /* ===================================================================
+       CAMPO "EMPRESA" — PREENCHIMENTO A PARTIR DO PERFIL (BUGFIX)
+
+       Extraído para função própria porque precisa ser chamado em DOIS
+       momentos: (1) no carregamento da página, e (2) depois de QUALQUER
+       form.reset() — form.reset() devolve o campo ao valor original do
+       HTML (vazio, já que este input nunca teve um atributo value= no
+       markup, só recebeu valor via JS), não ao valor preenchido pelo
+       perfil. Sem isso, no vínculo "externo" o campo fica readOnly E
+       vazio ao mesmo tempo depois do primeiro agendamento — o usuário
+       não consegue digitar (readOnly) nem confirmar (campo obrigatório
+       vazio), travando qualquer agendamento seguinte.
+       =================================================================== */
+    function preencherCampoEmpresa(perfil) {
+      const inputEmpresa = document.getElementById("empresa");
+      if (!inputEmpresa || !perfil || !perfil.empresa) return;
+
+      inputEmpresa.value = perfil.empresa;
+      // Parceiro externo: nome da empresa vem fixo do cadastro e não
+      // pode ser alterado no formulário (readOnly em vez de disabled
+      // para o valor continuar sendo lido normalmente por
+      // document.getElementById("empresa").value.trim() na submissão).
+      if (perfil.vinculo === "externo") {
+        inputEmpresa.readOnly = true;
+        inputEmpresa.style.background = "#eee";
+        inputEmpresa.style.cursor = "not-allowed";
+        inputEmpresa.title = "Empresa vinculada ao seu cadastro — não pode ser alterada aqui. Contate a Logística para corrigir.";
+      }
+    }
+
+    /* ===================================================================
        POPUP / MODAL CUSTOMIZADO (substitui alert() e confirm() nativos)
        =================================================================== */
     function criarModalHost() {
@@ -353,20 +383,7 @@
         userEmpresaEl.textContent = perfil.empresa || perfil.nome || user.email;
       }
 
-      const inputEmpresa = document.getElementById("empresa");
-      if (inputEmpresa && perfil.empresa) {
-        inputEmpresa.value = perfil.empresa;
-        // Parceiro externo: nome da empresa vem fixo do cadastro e não
-        // pode ser alterado no formulário (readOnly em vez de disabled
-        // para o valor continuar sendo lido normalmente por
-        // document.getElementById("empresa").value.trim() na submissão).
-        if (perfil.vinculo === "externo") {
-          inputEmpresa.readOnly = true;
-          inputEmpresa.style.background = "#eee";
-          inputEmpresa.style.cursor = "not-allowed";
-          inputEmpresa.title = "Empresa vinculada ao seu cadastro — não pode ser alterada aqui. Contate a Logística para corrigir.";
-        }
-      }
+      preencherCampoEmpresa(perfil);
 
       mapTiposProcessoCache = await obterTiposProcessoMap();
       iniciarListenerMeusAgendamentos();
@@ -546,6 +563,11 @@
 
         mostrarToast("Solicitação de agendamento enviada com sucesso!", { tipo: "sucesso" });
         form.reset();
+        // BUGFIX: form.reset() limpa o campo "empresa" (ele nunca teve
+        // value= no HTML, só foi preenchido via JS a partir do perfil) —
+        // sem esta linha, o campo ficava vazio E readOnly (vínculo
+        // externo) ao mesmo tempo, travando qualquer agendamento seguinte.
+        preencherCampoEmpresa(perfilAtual);
         inputHoraSelecionada.value = "";
         slotsGrid.innerHTML = "";
         slotsMsg.textContent = "Selecione uma data para consultar os horários.";
