@@ -293,6 +293,9 @@
       <button class="sidebar-item" data-tab="vagas">
         <span class="sidebar-icone"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 13a7.97 7.97 0 0 0 0-2l2.1-1.6-2-3.4-2.5 1a8 8 0 0 0-1.7-1L14.9 3h-4l-.4 2.9a8 8 0 0 0-1.7 1l-2.5-1-2 3.4L6.4 11a8 8 0 0 0 0 2l-2.1 1.6 2 3.4 2.5-1a8 8 0 0 0 1.7 1l.4 2.9h4l.4-2.9a8 8 0 0 0 1.7-1l2.5 1 2-3.4L19.4 13z"></path></svg></span><span class="sidebar-label">Gestão de Vagas</span>
       </button>
+      <button class="sidebar-item" data-tab="processos">
+        <span class="sidebar-icone"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41L11 22l-8-8L11 2h9v9z"></path><circle cx="14.5" cy="6.5" r="1.5"></circle></svg></span><span class="sidebar-label">Tipos de Processo</span>
+      </button>
       <!-- BOTÃO EXCLUSIVO PARA ADMINISTRADORES -->
             <a href="admin-dashboard.html" class="sidebar-item" id="btn-menu-admin" style="display: none; background: rgba(232, 163, 61, 0.15); color: #e8a33d; border-left: 4px solid #e8a33d; font-weight: 700; margin-top: 10px;">
               <span class="sidebar-icone">
@@ -865,6 +868,39 @@
         </div>
       </div>
 
+      <div class="tab-conteudo" id="tab-processos">
+        <div class="card">
+          <h3><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41L11 22l-8-8L11 2h9v9z"></path><circle cx="14.5" cy="6.5" r="1.5"></circle></svg> Cadastrar Tipo de Processo</h3>
+          <p style="font-size:0.85rem; color:#666; margin-bottom:16px;">
+            Os tipos de processo cadastrados aqui aparecem para seleção ao preencher um Novo Agendamento (Operacional) e um Encaixe.
+          </p>
+
+          <form id="form-processo">
+            <div class="campo">
+              <label for="nomeProcesso">Nome do Tipo de Processo *</label>
+              <input type="text" id="nomeProcesso" required placeholder="Ex: Carga Geral">
+            </div>
+            <div id="processo-error" style="color:var(--vermelho, #c0392b); font-size:0.85rem; margin-bottom:10px;"></div>
+            <button type="submit" class="btn-primario" style="width:auto; padding:10px 20px;">Cadastrar Tipo de Processo</button>
+          </form>
+
+          <div style="overflow-x:auto; margin-top:20px;">
+            <table class="tabela-padrao">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Status</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-processos">
+                <tr><td colspan="3" style="text-align:center;">Carregando tipos de processo...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
     </main>
   </div>
 
@@ -1330,6 +1366,7 @@
           if (target === "todos") carregarTodosAgendamentos();
           if (target === "kpis") atualizarPainelKPIs();
           if (target === "regras") { carregarRegras(); carregarExcecoes(); }
+          if (target === "processos") carregarTiposProcessoTabela();
 
           // No mobile, o menu é uma gaveta por cima do conteúdo — escolher
           // uma opção já fecha ela sozinha (comportamento padrão de app).
@@ -3289,6 +3326,94 @@
         ativo,
         ocupados: slot.ocupados
       }, { merge: true });
+    }
+
+    /* ===================================================================
+       ABA: TIPOS DE PROCESSO
+       =================================================================== */
+    document.getElementById("form-processo").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const inputNome = document.getElementById("nomeProcesso");
+      const erroBox = document.getElementById("processo-error");
+      const nome = inputNome.value.trim();
+
+      if (!nome) return;
+      erroBox.textContent = "";
+
+      const btnSalvar = e.target.querySelector('button[type="submit"]');
+      btnSalvar.disabled = true;
+
+      try {
+        await addDoc(collection(db, "processTypes"), {
+          nome,
+          ativo: true,
+          criadoEm: serverTimestamp()
+        });
+        inputNome.value = "";
+        mostrarToast("Tipo de processo cadastrado.", { tipo: "sucesso" });
+
+        mapProcessos = await obterTiposProcessoMap();
+        preencherSelectProcessos();
+        preencherSelectProcessoEncaixe();
+        await carregarTiposProcessoTabela();
+      } catch (err) {
+        console.error("Erro ao cadastrar tipo de processo:", err);
+        erroBox.textContent = "Erro ao cadastrar tipo de processo: " + err.message;
+      } finally {
+        btnSalvar.disabled = false;
+      }
+    });
+
+    async function carregarTiposProcessoTabela() {
+      const tbody = document.getElementById("tbody-processos");
+      if (!tbody) return;
+      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Carregando tipos de processo...</td></tr>';
+
+      try {
+        const snap = await getDocs(collection(db, "processTypes"));
+        if (snap.empty) {
+          tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#888;">Nenhum tipo de processo cadastrado ainda.</td></tr>';
+          return;
+        }
+
+        const tipos = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
+
+        tbody.innerHTML = tipos.map(p => `
+          <tr data-id="${p.id}">
+            <td>${escapeHtml(p.nome)}</td>
+            <td>${p.ativo ? '<span class="badge aprovado">Ativo</span>' : '<span class="badge recusado">Inativo</span>'}</td>
+            <td>
+              <button type="button" class="btn-acao btn-toggle-processo" style="background:${p.ativo ? "#dc3545" : "#28a745"}; color:#fff;">${p.ativo ? "Desativar" : "Ativar"}</button>
+            </td>
+          </tr>
+        `).join("");
+
+        tbody.querySelectorAll(".btn-toggle-processo").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            const id = btn.closest("tr").dataset.id;
+            const p = tipos.find(x => x.id === id);
+            if (!p) return;
+            btn.disabled = true;
+            try {
+              await updateDoc(doc(db, "processTypes", id), { ativo: !p.ativo });
+              mostrarToast(`Tipo de processo ${p.ativo ? "desativado" : "ativado"}.`, { tipo: "sucesso" });
+
+              mapProcessos = await obterTiposProcessoMap();
+              preencherSelectProcessos();
+              preencherSelectProcessoEncaixe();
+              await carregarTiposProcessoTabela();
+            } catch (err) {
+              console.error("Erro ao alterar status do tipo de processo:", err);
+              await mostrarAlerta("Erro ao alterar o status: " + err.message, { titulo: "Erro", tipo: "erro" });
+              btn.disabled = false;
+            }
+          });
+        });
+      } catch (err) {
+        console.error("Erro ao carregar tipos de processo:", err);
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:red;">Erro ao carregar os tipos de processo.</td></tr>';
+      }
     }
 
     /* ===================================================================
