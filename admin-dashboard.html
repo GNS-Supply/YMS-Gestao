@@ -89,6 +89,9 @@
       <button class="sidebar-item" data-tab="usuarios">
         <span class="sidebar-icone"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></span><span class="sidebar-label">Gestão de Usuários</span>
       </button>
+      <button class="sidebar-item" data-tab="plantas">
+        <span class="sidebar-icone"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"></path><path d="M5 21V7l7-4 7 4v14"></path><path d="M9 21v-6h6v6"></path></svg></span><span class="sidebar-label">Plantas / Filiais</span>
+      </button>
 
       <div class="sidebar-grupo-externo">
         <a href="logistica-dashboard.html" class="sidebar-item">
@@ -137,14 +140,53 @@
                   <th>E-mail</th>
                   <th>Vínculo / Empresa</th>
                   <th>Tipo de Acesso</th>
+                  <th>Planta</th>
                   <th>Status da Conta</th>
                   <th>Ações</th>
                 </tr>
               </thead>
               <tbody id="tb-todos-usuarios">
                 <tr>
-                  <td colspan="6" class="estado-vazio">Carregando usuários...</td>
+                  <td colspan="7" class="estado-vazio">Carregando usuários...</td>
                 </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-conteudo" id="tab-plantas">
+        <div class="card">
+          <h3>Plantas / Filiais</h3>
+          <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:18px;">
+            Cada planta opera com os mesmos mecanismos do sistema (tipos de processo, vagas &amp; horários, portaria, controle de pátio), mas de forma totalmente separada: agendamentos, vagas e usuários de uma planta não se misturam com os de outra. A planta <strong>Matriz</strong> já existe (é a unidade original) — use o formulário abaixo só para cadastrar novas plantas/filiais em paralelo.
+          </p>
+
+          <form id="form-planta" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:18px;">
+            <div class="campo" style="flex:1; min-width:220px;">
+              <label for="planta-nome">Nome da Planta/Filial *</label>
+              <input type="text" id="planta-nome" required placeholder="Ex: Filial Sul">
+            </div>
+            <div class="campo" style="min-width:140px;">
+              <label for="planta-codigo">Código (opcional)</label>
+              <input type="text" id="planta-codigo" placeholder="Ex: FIL-SUL">
+            </div>
+            <div id="planta-error" style="color:var(--vermelho, #c0392b); font-size:0.85rem; width:100%;"></div>
+            <button type="submit" class="btn-primario" style="width:auto; padding:10px 20px;">Cadastrar Planta</button>
+          </form>
+
+          <div class="tabela-wrapper">
+            <table class="tabela-padrao">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Código</th>
+                  <th>Status</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tb-plantas">
+                <tr><td colspan="4" class="estado-vazio">Carregando plantas...</td></tr>
               </tbody>
             </table>
           </div>
@@ -167,11 +209,18 @@
       onSnapshot,
       serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+    import {
+      listarPlantas,
+      criarPlanta,
+      alternarAtivaPlanta,
+      PLANTA_PADRAO_ID
+    } from "./patioCore.js";
 
     let usuarioAtual = null;
     let todosUsuarios = [];
     let cancelarListenerPendentes = null;
     let abaAtivaAdmin = "aprovacoes";
+    let listaPlantasCache = [];
 
     /* ===================================================================
        MODAL DE ALERTA / CONFIRMAÇÃO CUSTOMIZADO
@@ -297,13 +346,15 @@
 
     // Proteção de Acesso — só Admin Master (Tipo 3). Página exclusiva
     // dele: nem Logística (Tipo 2) acessa esta tela.
-    protegerPagina([3], (user, perfil) => {
+    protegerPagina([3], async (user, perfil) => {
       usuarioAtual = user;
       document.getElementById("user-nome").textContent = perfil.nome || user.email;
       document.getElementById("user-tipo").textContent = "Administrador Master";
 
       inicializarAbas();
       inicializarMenuMobile();
+      inicializarFormularioPlanta();
+      await carregarPlantas();
       carregarTodosUsuarios();
       iniciarListenerPendentes();
 
@@ -402,7 +453,7 @@
        login). O listener é o mesmo tanto para o contador no menu lateral
        quanto para a lista de cartões desta aba.
        ========================================================================== */
-    const LABEL_TIPO_ACESSO = { 1: "Transportadora", 2: "Logística", 3: "Administrador" };
+    const LABEL_TIPO_ACESSO = { 1: "Transportadora", 2: "Logística", 3: "Administrador", 4: "Portaria" };
     const LABEL_VINCULO = { interno: "Colaborador Interno", externo: "Empresa Parceira" };
 
     function iniciarListenerPendentes() {
@@ -474,6 +525,7 @@
                 <option value="1">Transportadora (1)</option>
                 <option value="2">Logística (2)</option>
                 <option value="3">Administrador (3)</option>
+                <option value="4">Portaria (4)</option>
               </select>
             </div>
             <button type="button" class="btn-acao btn-aprovar btn-decidir-pendente" data-decisao="aprovado">
@@ -545,13 +597,13 @@
        ========================================================================== */
     async function carregarTodosUsuarios() {
       const tbody = document.getElementById("tb-todos-usuarios");
-      tbody.innerHTML = '<tr><td colspan="6" class="estado-vazio">Carregando usuários...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="estado-vazio">Carregando usuários...</td></tr>';
 
       try {
         const snap = await getDocs(collection(db, "users"));
 
         if (snap.empty) {
-          tbody.innerHTML = '<tr><td colspan="6" class="estado-vazio">Nenhum usuário cadastrado.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7" class="estado-vazio">Nenhum usuário cadastrado.</td></tr>';
           return;
         }
 
@@ -562,7 +614,7 @@
         renderizarTabela();
       } catch (err) {
         console.error(err);
-        tbody.innerHTML = '<tr><td colspan="6" class="estado-vazio">Erro ao carregar lista de usuários.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="estado-vazio">Erro ao carregar lista de usuários.</td></tr>';
       }
     }
 
@@ -580,7 +632,7 @@
       });
 
       if (filtrados.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="estado-vazio">Nenhum usuário encontrado.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="estado-vazio">Nenhum usuário encontrado.</td></tr>';
         return;
       }
 
@@ -606,6 +658,12 @@
               <option value="1" ${u.tipo === 1 ? "selected" : ""}>Transportadora (1)</option>
               <option value="2" ${u.tipo === 2 ? "selected" : ""}>Logística (2)</option>
               <option value="3" ${u.tipo === 3 ? "selected" : ""}>Administrador (3)</option>
+              <option value="4" ${u.tipo === 4 ? "selected" : ""}>Portaria (4)</option>
+            </select>
+          </td>
+          <td data-label="Planta">
+            <select class="select-alterar-planta" data-id="${u.id}" ${ehEuMesmo ? "disabled" : ""} style="padding:6px; border-radius:4px; font-size:0.85rem;">
+              ${listaPlantasCache.map(p => `<option value="${p.id}" ${(u.plantaId || "matriz") === p.id ? "selected" : ""}>${escapeHtml(p.nome)}</option>`).join("")}
             </select>
           </td>
           <td data-label="Status da Conta">
@@ -633,10 +691,12 @@
     async function salvarUsuario(idUser, tbody, btn) {
       const selectTipo = tbody.querySelector(`.select-alterar-tipo[data-id="${idUser}"]`);
       const selectStatus = tbody.querySelector(`.select-alterar-status[data-id="${idUser}"]`);
+      const selectPlanta = tbody.querySelector(`.select-alterar-planta[data-id="${idUser}"]`);
       const inputEmpresa = tbody.querySelector(`.input-empresa[data-id="${idUser}"]`);
 
       const novoTipo = Number(selectTipo.value);
       const novoStatus = selectStatus.value;
+      const novaPlanta = selectPlanta ? selectPlanta.value : "matriz";
       const novaEmpresa = inputEmpresa.value.trim();
 
       const linha = btn.closest("tr");
@@ -647,6 +707,7 @@
         await updateDoc(doc(db, "users", idUser), {
           tipo: novoTipo,
           status: novoStatus,
+          plantaId: novaPlanta,
           empresa: novaEmpresa,
           atualizadoEm: serverTimestamp()
         });
@@ -671,6 +732,89 @@
       const div = document.createElement("div");
       div.textContent = texto ?? "";
       return div.innerHTML;
+    }
+
+    /* ===================================================================
+       ABA: PLANTAS / FILIAIS (admin-only)
+       =================================================================== */
+    async function carregarPlantas() {
+      const tbody = document.getElementById("tb-plantas");
+      try {
+        listaPlantasCache = await listarPlantas(db);
+        renderizarTabelaPlantas();
+      } catch (err) {
+        console.error("Erro ao carregar plantas:", err);
+        if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="estado-vazio">Erro ao carregar plantas.</td></tr>';
+      }
+    }
+
+    function renderizarTabelaPlantas() {
+      const tbody = document.getElementById("tb-plantas");
+      if (!tbody) return;
+      if (!listaPlantasCache.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="estado-vazio">Nenhuma planta cadastrada.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = listaPlantasCache.map(p => `
+        <tr data-id="${p.id}">
+          <td>${escapeHtml(p.nome)}${p.id === "matriz" ? ' <small style="color:var(--texto-suave);">(unidade original)</small>' : ""}</td>
+          <td>${escapeHtml(p.codigo || "-")}</td>
+          <td>${p.ativa !== false ? '<span class="badge aprovado">Ativa</span>' : '<span class="badge recusado">Inativa</span>'}</td>
+          <td>
+            <button type="button" class="btn-acao btn-toggle-planta" data-id="${p.id}" data-ativa="${p.ativa !== false}" style="background:${p.ativa !== false ? "#dc3545" : "#28a745"}; color:#fff;">
+              ${p.ativa !== false ? "Desativar" : "Ativar"}
+            </button>
+          </td>
+        </tr>
+      `).join("");
+
+      tbody.querySelectorAll(".btn-toggle-planta").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.dataset.id;
+          const ativaAtual = btn.dataset.ativa === "true";
+          btn.disabled = true;
+          try {
+            await alternarAtivaPlanta(db, id, !ativaAtual);
+            mostrarToast(`Planta ${ativaAtual ? "desativada" : "ativada"}.`, { tipo: "sucesso" });
+            await carregarPlantas();
+          } catch (err) {
+            console.error("Erro ao alterar status da planta:", err);
+            await mostrarAlerta("Erro ao alterar o status da planta: " + err.message, { titulo: "Erro", tipo: "erro" });
+            btn.disabled = false;
+          }
+        });
+      });
+    }
+
+    function inicializarFormularioPlanta() {
+      document.getElementById("form-planta").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const inputNome = document.getElementById("planta-nome");
+        const inputCodigo = document.getElementById("planta-codigo");
+        const erroBox = document.getElementById("planta-error");
+        erroBox.textContent = "";
+
+        const btnSalvar = e.target.querySelector('button[type="submit"]');
+        btnSalvar.disabled = true;
+
+        try {
+          await criarPlanta(db, usuarioAtual, {
+            nome: inputNome.value.trim(),
+            codigo: inputCodigo.value.trim()
+          });
+          inputNome.value = "";
+          inputCodigo.value = "";
+          mostrarToast("Planta cadastrada. Ela já pode ser usada em Tipos de Processo, Vagas & Horários e na atribuição de usuários de Portaria/Logística.", { tipo: "sucesso" });
+          await carregarPlantas();
+          await carregarTodosUsuarios();
+        } catch (err) {
+          console.error("Erro ao cadastrar planta:", err);
+          erroBox.textContent = "Erro ao cadastrar planta: " + err.message;
+        } finally {
+          btnSalvar.disabled = false;
+        }
+      });
     }
   </script>
 </body>

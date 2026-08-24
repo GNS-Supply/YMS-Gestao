@@ -44,6 +44,7 @@ import {
   getDoc,
   getDocs,
   addDoc,
+  setDoc,
   query,
   where,
   onSnapshot,
@@ -71,6 +72,35 @@ export const STATUS = {
 };
 
 export const TODOS_STATUS = Object.values(STATUS);
+
+/* #######################################################################
+   PARTE 0 — MULTI-PLANTA (MATRIZ + FILIAIS)
+   =========================================================================
+   Uma "planta" é uma unidade física independente (matriz, filial, etc.)
+   com portaria e controle de pátio PRÓPRIOS, mas usando o mesmo motor
+   de regras do sistema (mesmos mecanismos: tipos de processo, vagas,
+   check-in/check-out, encaixe...). Cada planta configura essas coisas
+   de forma independente da(s) outra(s).
+
+   Compatibilidade com dados existentes: antes desta funcionalidade não
+   existia o conceito de planta — tudo pertencia implicitamente à única
+   unidade em operação. Para não precisar migrar nada, essa unidade
+   original vira a planta "matriz" (PLANTA_PADRAO_ID), e qualquer
+   documento antigo sem o campo `plantaId` é tratado como pertencente a
+   ela (`pertenceAPlanta`, `idSlotHorario` preservam o formato antigo
+   para essa planta específica).
+   ####################################################################### */
+
+export const PLANTA_PADRAO_ID = "matriz";
+
+/** Trata documentos sem `plantaId` (dados anteriores a esta funcionalidade) como pertencentes à planta matriz. */
+export function plantaEfetiva(dadosDoc) {
+  return dadosDoc?.plantaId || PLANTA_PADRAO_ID;
+}
+
+export function pertenceAPlanta(dadosDoc, plantaId) {
+  return plantaEfetiva(dadosDoc) === (plantaId || PLANTA_PADRAO_ID);
+}
 
 export const STATUS_LEGADO = [
   STATUS.PENDENTE, STATUS.APROVADO, STATUS.RECUSADO, STATUS.EXPIRADO,
@@ -188,6 +218,58 @@ export function checkInValido(checkIn) {
 
 export function checkOutValido(checkOut) {
   return !!checkOut && typeof checkOut.notaFiscal === "string";
+}
+
+/* #######################################################################
+   PARTE 1C — EXIGÊNCIA DE NOTA FISCAL POR TIPO DE PROCESSO
+   =========================================================================
+   Cada `processTypes/{id}` ganha o campo `exigenciaNF`, definido no
+   cadastro do tipo de processo (aba "Tipos de Processo"). Ele decide em
+   qual etapa a Portaria é obrigada a informar o número da Nota Fiscal:
+   - ENTRADA: obrigatória no Check-in (e no Encaixe, que já nasce Em Pátio)
+   - SAIDA:   obrigatória no Check-out (comportamento histórico do sistema)
+   - AMBOS:   obrigatória nas duas etapas
+   - NAO_DEFINIDO: valor padrão para tipos criados antes desta mudança (e
+     para novos tipos até o usuário decidir) — preserva o comportamento
+     antigo do sistema, que só pedia NF na saída.
+   ####################################################################### */
+
+export const EXIGENCIA_NF = {
+  NAO_DEFINIDO: "nao_definido",
+  ENTRADA: "entrada",
+  SAIDA: "saida",
+  AMBOS: "ambos"
+};
+
+export const TODAS_EXIGENCIA_NF = Object.values(EXIGENCIA_NF);
+
+export const EXIGENCIA_NF_LABEL = {
+  [EXIGENCIA_NF.NAO_DEFINIDO]: "Não definido",
+  [EXIGENCIA_NF.ENTRADA]: "Somente na Entrada",
+  [EXIGENCIA_NF.SAIDA]: "Somente na Saída",
+  [EXIGENCIA_NF.AMBOS]: "Entrada e Saída (ambos)"
+};
+
+/**
+ * Se a NF é obrigatória na ENTRADA (check-in / encaixe) para este tipo
+ * de processo. Documentos antigos sem `exigenciaNF` são tratados como
+ * NAO_DEFINIDO, ou seja: NÃO exige na entrada (preserva o comportamento
+ * histórico do sistema).
+ */
+export function exigeNFNaEntrada(tipoProcesso) {
+  const exigencia = tipoProcesso?.exigenciaNF || EXIGENCIA_NF.NAO_DEFINIDO;
+  return exigencia === EXIGENCIA_NF.ENTRADA || exigencia === EXIGENCIA_NF.AMBOS;
+}
+
+/**
+ * Se a NF é obrigatória na SAÍDA (check-out) para este tipo de processo.
+ * NAO_DEFINIDO conta como "sim" de propósito: é o comportamento antigo,
+ * que sempre pediu NF no check-out, então tipos ainda não configurados
+ * continuam exigindo na saída até alguém decidir o contrário.
+ */
+export function exigeNFNaSaida(tipoProcesso) {
+  const exigencia = tipoProcesso?.exigenciaNF || EXIGENCIA_NF.NAO_DEFINIDO;
+  return exigencia !== EXIGENCIA_NF.ENTRADA;
 }
 
 /* #######################################################################
@@ -523,8 +605,54 @@ export function minutosParaHora(min) {
   return `${h}:${m}`;
 }
 
-export function idSlotHorario(dataStr, horaInicio) {
-  return `${dataStr}_${horaInicio.replace(":", "-")}`;
+export async function listarPlantas(db) {
+  const snap = await getDocs(collection(db, "plantas"));
+  const plantas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  // A planta matriz sempre existe implicitamente, mesmo que ninguém
+  // tenha criado o documento em `plantas/matriz` ainda (sistemas
+  // migrados de antes desta funcionalidade). Garante que ela sempre
+  // apareça em primeiro lugar nas listas de seleção.
+  if (!plantas.some(p => p.id === PLANTA_PADRAO_ID)) {
+    plantas.unshift({ id: PLANTA_PADRAO_ID, nome: "Matriz", ativa: true, implicita: true });
+  }
+  return plantas.sort((a, b) => {
+    if (a.id === PLANTA_PADRAO_ID) return -1;
+    if (b.id === PLANTA_PADRAO_ID) return 1;
+    return (a.nome || "").localeCompare(b.nome || "", "pt-BR");
+  });
+}
+
+export async function criarPlanta(db, usuarioLogado, dados) {
+  if (!usuarioLogado || !usuarioLogado.uid) throw new Error("Usuário não identificado.");
+  const nome = String(dados.nome || "").trim();
+  if (!nome) throw new Error("O nome da planta é obrigatório.");
+
+  return await addDoc(collection(db, "plantas"), {
+    nome,
+    codigo: dados.codigo ? String(dados.codigo).trim().toUpperCase() : "",
+    ativa: true,
+    criadoEm: serverTimestamp(),
+    criadoPor: usuarioLogado.uid
+  });
+}
+
+export async function alternarAtivaPlanta(db, plantaId, ativa) {
+  if (plantaId === PLANTA_PADRAO_ID) {
+    // A planta matriz pode não ter um documento próprio ainda (dados
+    // legados) — `setDoc(..., {merge:true})` cria ou atualiza, sem
+    // risco de sobrescrever campos existentes.
+    await setDoc(doc(db, "plantas", PLANTA_PADRAO_ID), { nome: "Matriz", ativa }, { merge: true });
+    return;
+  }
+  await updateDoc(doc(db, "plantas", plantaId), { ativa });
+}
+
+export function idSlotHorario(dataStr, horaInicio, plantaId = PLANTA_PADRAO_ID) {
+  const base = `${dataStr}_${horaInicio.replace(":", "-")}`;
+  // Formato antigo preservado para a planta matriz, para não invalidar
+  // nenhum documento `timeSlots` já existente em produção. Plantas
+  // novas usam um prefixo para nunca colidir com o pátio da matriz.
+  return (!plantaId || plantaId === PLANTA_PADRAO_ID) ? base : `${plantaId}__${base}`;
 }
 
 export function calcularBlocosHorario(obj) {
@@ -574,14 +702,18 @@ export function regraSeAplicaNaData(regra, dataStr) {
 }
 
 export async function buscarSlotsVirtuaisDoDia(db, dataStr, opcoes = {}) {
-  const { incluirFechados = false } = opcoes;
+  const { incluirFechados = false, plantaId = PLANTA_PADRAO_ID } = opcoes;
   const diaSemana = diaSemanaDaData(dataStr);
   const mapa = {};
 
   // 1) REGRA MASTER (Horários & Exceções -> Regra Padrão)
+  // Filtro de planta é feito no cliente (não em `where`) para que
+  // regras antigas sem `plantaId` continuem valendo para a matriz sem
+  // precisar de migração — ver `pertenceAPlanta`.
   const snapRegras = await getDocs(query(collection(db, "timeSlotRules"), where("ativo", "==", true)));
   snapRegras.docs.forEach(d => {
     const r = d.data();
+    if (!pertenceAPlanta(r, plantaId)) return;
     if (!(r.diasSemana || []).includes(diaSemana)) return;
     if (!regraSeAplicaNaData(r, dataStr)) return;
     calcularBlocosHorario(r).forEach(min => {
@@ -593,6 +725,7 @@ export async function buscarSlotsVirtuaisDoDia(db, dataStr, opcoes = {}) {
   const snapExc = await getDocs(query(collection(db, "timeSlotExceptions"), where("ativo", "==", true)));
   snapExc.docs.forEach(d => {
     const ex = d.data();
+    if (!pertenceAPlanta(ex, plantaId)) return;
     if (!(ex.diasSemana || []).includes(diaSemana)) return;
     calcularBlocosHorario(ex).forEach(min => {
       const hora = minutosParaHora(min);
@@ -612,7 +745,11 @@ export async function buscarSlotsVirtuaisDoDia(db, dataStr, opcoes = {}) {
   //    nunca sobrescreve a regra recorrente em si).
   const snapManual = await getDocs(query(collection(db, "timeSlots"), where("data", "==", dataStr)));
   const manuais = {};
-  snapManual.docs.forEach(d => { manuais[d.data().horaInicio] = { id: d.id, ...d.data() }; });
+  snapManual.docs.forEach(d => {
+    const dados = d.data();
+    if (!pertenceAPlanta(dados, plantaId)) return;
+    manuais[dados.horaInicio] = { id: d.id, ...dados };
+  });
 
   Object.keys(manuais).forEach(hora => {
     const m = manuais[hora];
@@ -709,8 +846,8 @@ function validarCamposObrigatorios(dados) {
   }
 }
 
-async function buscarCapacidadeReferencia(db, dataAgendada, horaInicio) {
-  const slots = await buscarSlotsVirtuaisDoDia(db, dataAgendada, { incluirFechados: true });
+async function buscarCapacidadeReferencia(db, dataAgendada, horaInicio, plantaId = PLANTA_PADRAO_ID) {
+  const slots = await buscarSlotsVirtuaisDoDia(db, dataAgendada, { incluirFechados: true, plantaId });
   const slot = slots.find(s => s.horaInicio === horaInicio);
   return slot ? slot : null;
 }
@@ -726,16 +863,17 @@ export async function criarAgendamentoOperacional(db, usuarioLogado, dados, opco
 
   const transportadoraCadastrada = await buscarTransportadoraCadastrada(db, dados.transportadoraId);
 
+  const plantaId = dados.plantaId || PLANTA_PADRAO_ID;
   const dataAgendada = dados.dataAgendada;
   const horaInicio = dados.horaInicio;
   const horaFim = minutosParaHora((horaParaMinutos(horaInicio) + 60) % (24 * 60));
 
-  const slotReferencia = await buscarCapacidadeReferencia(db, dataAgendada, horaInicio);
+  const slotReferencia = await buscarCapacidadeReferencia(db, dataAgendada, horaInicio, plantaId);
   if (slotReferencia && slotReferencia.fechado && !ignorarFechado) {
     throw new Error("Este horário está fechado manualmente para esta data. Use opcoes.ignorarFechado=true para forçar, se necessário.");
   }
 
-  const slotId = idSlotHorario(dataAgendada, horaInicio);
+  const slotId = idSlotHorario(dataAgendada, horaInicio, plantaId);
   const slotRef = doc(db, "timeSlots", slotId);
   const bookingRef = doc(collection(db, "bookings"));
 
@@ -789,6 +927,7 @@ export async function criarAgendamentoOperacional(db, usuarioLogado, dados, opco
       data: dataAgendada,
       horaInicio,
       horaFim,
+      plantaId,
       capacidadeMax,
       ativo: true,
       ocupados
@@ -798,6 +937,7 @@ export async function criarAgendamentoOperacional(db, usuarioLogado, dados, opco
       usuarioId: transportadoraCadastrada ? transportadoraCadastrada.uid : null,
       transportadoraCadastrada: !!transportadoraCadastrada,
       empresa: String(dados.empresa).trim(),
+      plantaId,
       tipoProcessoId: dados.tipoProcessoId,
       dataAgendada,
       horaInicio,
@@ -856,7 +996,8 @@ export async function criarAgendamentoTransportadora(db, usuarioAtual, dados, sl
     throw new Error("Este horário não está mais disponível. Selecione a data novamente.");
   }
 
-  const slotId = idSlotHorario(dados.dataAgendada, dados.horaInicio);
+  const plantaId = dados.plantaId || PLANTA_PADRAO_ID;
+  const slotId = idSlotHorario(dados.dataAgendada, dados.horaInicio, plantaId);
   const slotRef = doc(db, "timeSlots", slotId);
   const bookingRef = doc(collection(db, "bookings"));
 
@@ -892,6 +1033,7 @@ export async function criarAgendamentoTransportadora(db, usuarioAtual, dados, sl
       data: dados.dataAgendada,
       horaInicio: dados.horaInicio,
       horaFim: slotReferencia.horaFim,
+      plantaId,
       capacidadeMax,
       ativo: true,
       ocupados: ocupadosAtuais + 1
@@ -900,6 +1042,7 @@ export async function criarAgendamentoTransportadora(db, usuarioAtual, dados, sl
     transaction.set(bookingRef, {
       usuarioId: usuarioAtual.uid,
       empresa: String(dados.empresa).trim(),
+      plantaId,
       tipoProcessoId: dados.tipoProcessoId,
       dataAgendada: dados.dataAgendada,
       horaInicio: dados.horaInicio,
@@ -1053,7 +1196,7 @@ export async function mudarStatusBooking(db, usuarioLogado, booking, novoStatus)
 
     let slotSnap = null;
     if (precisaLiberarVaga) {
-      const slotRef = doc(db, "timeSlots", idSlotHorario(dadosAtuais.dataAgendada, dadosAtuais.horaInicio));
+      const slotRef = doc(db, "timeSlots", idSlotHorario(dadosAtuais.dataAgendada, dadosAtuais.horaInicio, plantaEfetiva(dadosAtuais)));
       slotSnap = await transaction.get(slotRef);
     }
 
@@ -1136,7 +1279,7 @@ export async function recusarSolicitacao(db, usuarioLogado, bookingId) {
     const precisaLiberarVaga = dadosAtuais.vagaLiberada !== true;
     let slotSnap = null;
     if (precisaLiberarVaga) {
-      const slotRef = doc(db, "timeSlots", idSlotHorario(dadosAtuais.dataAgendada, dadosAtuais.horaInicio));
+      const slotRef = doc(db, "timeSlots", idSlotHorario(dadosAtuais.dataAgendada, dadosAtuais.horaInicio, plantaEfetiva(dadosAtuais)));
       slotSnap = await transaction.get(slotRef);
     }
 
@@ -1194,6 +1337,16 @@ export async function registrarCheckIn(db, usuarioLogado, bookingId, dadosConfir
       throw new Error("Este agendamento foi cancelado pela transportadora. Se o veículo está fisicamente no local, registre-o pela Entrada Expressa (Encaixe).");
     }
 
+    let tipoProcesso = null;
+    if (dadosAtuais.tipoProcessoId) {
+      const tipoSnap = await transaction.get(doc(db, "processTypes", dadosAtuais.tipoProcessoId));
+      if (tipoSnap.exists()) tipoProcesso = tipoSnap.data();
+    }
+    const notaFiscalEntrada = String(dadosConfirmados.notaFiscal || "").trim();
+    if (exigeNFNaEntrada(tipoProcesso) && !notaFiscalEntrada) {
+      throw new Error("O número da Nota Fiscal é obrigatório na entrada para este tipo de processo.");
+    }
+
     const agora = new Date();
     const pontualidade = calcularPontualidade(dadosAtuais.horaInicio, agora);
     const novoComparecimento = pontualidade === PONTUALIDADE.ATRASADO
@@ -1236,7 +1389,8 @@ export async function registrarCheckIn(db, usuarioLogado, bookingId, dadosConfir
         dataHora: serverTimestamp(),
         pontualidade,
         dadosConferidos: true,
-        divergente
+        divergente,
+        notaFiscalEntrada: notaFiscalEntrada || ""
       },
       historicoEstados: arrayUnion(...historico),
       atualizadoEm: serverTimestamp(),
@@ -1259,8 +1413,16 @@ export async function registrarCheckOut(db, usuarioLogado, bookingId, dados) {
       throw new Error(`Só é possível dar check-out em veículos Em Pátio (situação atual: "${situacaoDetalhadaLabel(dadosAtuais)}").`);
     }
 
+    let tipoProcesso = null;
+    if (dadosAtuais.tipoProcessoId) {
+      const tipoSnap = await transaction.get(doc(db, "processTypes", dadosAtuais.tipoProcessoId));
+      if (tipoSnap.exists()) tipoProcesso = tipoSnap.data();
+    }
+
     const notaFiscal = String(dados.notaFiscal || "").trim();
-    if (!notaFiscal) throw new Error("O número da Nota Fiscal é obrigatório para o check-out.");
+    if (exigeNFNaSaida(tipoProcesso) && !notaFiscal) {
+      throw new Error("O número da Nota Fiscal é obrigatório para o check-out neste tipo de processo.");
+    }
 
     const agora = new Date();
     const permanenciaMinutos = calcularTempoPermanenciaMinutos(dadosAtuais.checkIn?.dataHora, agora);
@@ -1312,7 +1474,7 @@ export async function registrarNoShow(db, usuarioLogado, bookingId) {
     const precisaLiberarVaga = dadosAtuais.vagaLiberada !== true;
     let slotSnap = null;
     if (precisaLiberarVaga) {
-      const slotRef = doc(db, "timeSlots", idSlotHorario(dadosAtuais.dataAgendada, dadosAtuais.horaInicio));
+      const slotRef = doc(db, "timeSlots", idSlotHorario(dadosAtuais.dataAgendada, dadosAtuais.horaInicio, plantaEfetiva(dadosAtuais)));
       slotSnap = await transaction.get(slotRef);
     }
 
@@ -1344,6 +1506,19 @@ export async function criarEntradaEncaixe(db, usuarioLogado, dados) {
   if (!usuarioLogado || !usuarioLogado.uid) throw new Error("Usuário não identificado.");
   validarCamposObrigatorios(dados);
 
+  // Encaixe já nasce "Em Pátio" (não passa por um Check-in separado na
+  // Portaria), então a exigência de NF na entrada precisa ser conferida
+  // aqui mesmo, na criação do registro.
+  let tipoProcesso = null;
+  if (dados.tipoProcessoId) {
+    const tipoSnap = await getDoc(doc(db, "processTypes", dados.tipoProcessoId));
+    if (tipoSnap.exists()) tipoProcesso = tipoSnap.data();
+  }
+  const notaFiscalEntrada = String(dados.notaFiscal || "").trim();
+  if (exigeNFNaEntrada(tipoProcesso) && !notaFiscalEntrada) {
+    throw new Error("O número da Nota Fiscal é obrigatório na entrada para este tipo de processo.");
+  }
+
   const dimsIniciais = {
     aprovacaoStatus: APROVACAO.APROVADO,
     comparecimentoStatus: COMPARECIMENTO.COMPARECEU,
@@ -1353,6 +1528,7 @@ export async function criarEntradaEncaixe(db, usuarioLogado, dados) {
   const bookingRef = await addDoc(collection(db, "bookings"), {
     usuarioId: null,
     transportadoraCadastrada: false,
+    plantaId: dados.plantaId || PLANTA_PADRAO_ID,
     empresa: String(dados.empresa).trim(),
     tipoProcessoId: dados.tipoProcessoId,
     dataAgendada: dados.dataAgendada,
@@ -1375,7 +1551,8 @@ export async function criarEntradaEncaixe(db, usuarioLogado, dados) {
       dataHora: serverTimestamp(),
       pontualidade: PONTUALIDADE.PONTUAL,
       dadosConferidos: true,
-      divergente: false
+      divergente: false,
+      notaFiscalEntrada: notaFiscalEntrada || ""
     },
     criadoEm: serverTimestamp(),
     criadoPor: usuarioLogado.uid,
@@ -1392,7 +1569,7 @@ export async function criarEntradaEncaixe(db, usuarioLogado, dados) {
 
 async function liberarVagaSemMudarStatus(db, usuarioLogado, booking) {
   const bookingRef = doc(db, "bookings", booking.id);
-  const slotRef = doc(db, "timeSlots", idSlotHorario(booking.dataAgendada, booking.horaInicio));
+  const slotRef = doc(db, "timeSlots", idSlotHorario(booking.dataAgendada, booking.horaInicio, plantaEfetiva(booking)));
 
   await runTransaction(db, async (transaction) => {
     const bookingSnap = await transaction.get(bookingRef);
@@ -1506,6 +1683,7 @@ export async function criarRegraRecorrencia(db, usuarioLogado, dados) {
   const payload = {
     diasSemana: dados.diasSemana.slice().sort((a, b) => a - b),
     horaInicio: dados.horaInicio,
+    plantaId: dados.plantaId || PLANTA_PADRAO_ID,
     transportadoraId: dados.transportadoraId || null,
     empresa: String(dados.empresa).trim(),
     tipoProcessoId: dados.tipoProcessoId,
@@ -1596,6 +1774,7 @@ export async function garantirOcorrenciasRecorrencia(db, usuarioLogado, regra, h
         await criarAgendamentoOperacional(db, usuarioLogado, {
           transportadoraId: regra.transportadoraId,
           empresa: regra.empresa,
+          plantaId: regra.plantaId || PLANTA_PADRAO_ID,
           tipoProcessoId: regra.tipoProcessoId,
           dataAgendada: cursor,
           horaInicio: regra.horaInicio,

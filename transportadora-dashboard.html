@@ -39,6 +39,13 @@
             <input type="text" id="empresa" required>
           </div>
 
+          <div class="campo" id="campo-planta-wrapper" style="display:none;">
+            <label for="planta">Planta / Filial</label>
+            <select id="planta" required>
+              <option value="">Selecione...</option>
+            </select>
+          </div>
+
           <div class="campo">
             <label for="tipoProcesso">Tipo de Processo</label>
             <select id="tipoProcesso" required>
@@ -136,7 +143,10 @@
       aplicarMascaraPlaca,
       configurarMascaraPlaca,
       placaCompleta,
-      situacaoDetalhadaLabel
+      situacaoDetalhadaLabel,
+      listarPlantas,
+      PLANTA_PADRAO_ID,
+      pertenceAPlanta
     } from "./patioCore.js";
     // Máscara de placa, disponibilidade e normalização de booking vêm
     // TODOS de patioCore.js — a única implementação do sistema (ver
@@ -338,6 +348,8 @@
     // ---------------- Elementos do DOM ----------------
     const form = document.getElementById("form-agendamento");
     const selectTipoProcesso = document.getElementById("tipoProcesso");
+    const selectPlanta = document.getElementById("planta");
+    const campoPlantaWrapper = document.getElementById("campo-planta-wrapper");
     const inputData = document.getElementById("data");
     const slotsGrid = document.getElementById("slots-grid");
     const slotsMsg = document.getElementById("slots-msg");
@@ -346,6 +358,13 @@
     const listaAgendamentos = document.getElementById("lista-agendamentos");
     const inputPlacaCavalo = document.getElementById("placaCavalo");
     const inputPlacaCarreta = document.getElementById("placaCarreta");
+
+    // Planta/filial em que este agendamento será feito. Só existe mais
+    // de uma opção quando o Admin cadastrou filiais (ver Admin > Plantas
+    // / Filiais); nesse caso o campo aparece e a transportadora escolhe.
+    // Com uma única planta (o caso hoje) o campo fica oculto e tudo
+    // continua se comportando exatamente como antes.
+    let plantaSelecionada = PLANTA_PADRAO_ID;
 
     // Máscara de placa: importada de patioCore.js. Nenhuma cópia local
     // aqui — ver logistica-dashboard.html, que usa a mesma implementação.
@@ -385,10 +404,47 @@
 
       preencherCampoEmpresa(perfil);
 
+      await inicializarSeletorPlanta();
       mapTiposProcessoCache = await obterTiposProcessoMap();
       iniciarListenerMeusAgendamentos();
       carregarTiposProcessoAtivos();
     });
+
+    /* ===================================================================
+       0. PLANTA / FILIAL — só aparece se houver mais de uma cadastrada
+       =================================================================== */
+    async function inicializarSeletorPlanta() {
+      try {
+        const plantas = await listarPlantas(db);
+        const ativas = plantas.filter(p => p.ativa !== false);
+
+        if (ativas.length <= 1) {
+          plantaSelecionada = ativas[0]?.id || PLANTA_PADRAO_ID;
+          campoPlantaWrapper.style.display = "none";
+          return;
+        }
+
+        campoPlantaWrapper.style.display = "";
+        selectPlanta.innerHTML = ativas.map(p => `<option value="${p.id}">${p.nome}</option>`).join("");
+        plantaSelecionada = ativas[0].id;
+        selectPlanta.value = plantaSelecionada;
+
+        selectPlanta.addEventListener("change", () => {
+          plantaSelecionada = selectPlanta.value || PLANTA_PADRAO_ID;
+          // Tipo de processo e horários são específicos de cada planta —
+          // trocar a planta invalida qualquer seleção feita antes.
+          carregarTiposProcessoAtivos();
+          inputData.value = "";
+          inputHoraSelecionada.value = "";
+          slotsGrid.innerHTML = "";
+          slotsMsg.textContent = "Selecione uma data para consultar os horários.";
+        });
+      } catch (err) {
+        console.error("Erro ao carregar plantas:", err);
+        plantaSelecionada = PLANTA_PADRAO_ID;
+        campoPlantaWrapper.style.display = "none";
+      }
+    }
 
     /* ===================================================================
        1. CARREGAR TIPOS DE PROCESSO ATIVOS
@@ -402,6 +458,7 @@
         selectTipoProcesso.innerHTML = '<option value="">Selecione o tipo de processo...</option>';
         snap.docs.forEach(docSnap => {
           const p = docSnap.data();
+          if (!pertenceAPlanta(p, plantaSelecionada)) return;
           const opt = document.createElement("option");
           opt.value = docSnap.id;
           opt.textContent = p.nome;
@@ -433,7 +490,7 @@
       try {
         // incluirFechados=false (padrão): horários fechados manualmente
         // pela Logística para esta data não aparecem aqui.
-        slotsDoDia = await buscarSlotsVirtuaisDoDia(db, dataSelecionada);
+        slotsDoDia = await buscarSlotsVirtuaisDoDia(db, dataSelecionada, { plantaId: plantaSelecionada });
 
         // Se a data escolhida é HOJE, remove da lista qualquer horário cujo
         // início já passou (ou está em andamento) — não faz sentido oferecer
@@ -553,6 +610,7 @@
         const resultado = await criarAgendamentoTransportadora(db, usuarioAtual, {
           empresa,
           tipoProcessoId,
+          plantaId: plantaSelecionada,
           dataAgendada,
           horaInicio,
           placaCavalo,

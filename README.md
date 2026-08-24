@@ -1,167 +1,80 @@
-# Sistema de Agendamento de Pátio
+# Alterações no YMS-Gestao
 
-Sistema web + mobile para agendamento de janelas de carga/descarga, com controle
-de capacidade em tempo real e aprovação por perfil.
+Não tenho permissão de escrita no seu GitHub, então aqui estão os 4 arquivos
+já modificados + um patch (`mudancas.patch`) para aplicar via
+`git apply mudancas.patch` na raiz do repo, se preferir.
 
-## Stack
-
-| Camada              | Tecnologia                                 |
-|---------------------|---------------------------------------------|
-| Front-end Web        | HTML + CSS + JavaScript puro (sem build)    |
-| Front-end Mobile      | Flutter                                     |
-| Banco de dados / Auth | Firebase (Firestore + Authentication)       |
-| Backend / Cron / Segredos | Cloudflare Workers                     |
-| Hospedagem Web        | Netlify (deploy automático via GitHub)      |
-| Versionamento / CI     | GitHub + GitHub Actions                    |
-
-## Estrutura do repositório
-
+## Como aplicar
+Baixe os 4 arquivos e substitua os originais no seu repositório local, ou:
 ```
-patio-agendamento/
-├── web/                     # App web (HTML/CSS/JS puro)
-│   ├── index.html           # Login
-│   ├── css/style.css
-│   ├── js/firebase-config.js
-│   ├── js/auth.js
-│   ├── transportadora/      # Telas do perfil Transportadora
-│   ├── logistica/           # Telas do perfil Logística
-│   └── admin/                # Telas do perfil Admin Master
-├── mobile/                  # App Flutter (transportadora/motorista)
-├── cloudflare-worker/       # API + Cron Job de expiração + segredos
-├── firestore.rules          # Regras de segurança
-├── firestore.indexes.json   # Índices compostos necessários
-└── README.md
+cd YMS-Gestao
+git apply mudancas.patch
+git add -A
+git commit -m "Exigencia de NF por tipo de processo + suporte a multi-planta (matriz/filiais)"
+git push
 ```
 
-## Modelo de dados (Firestore)
+## 1) Exigência de Nota Fiscal por Tipo de Processo
+- Ao cadastrar um Tipo de Processo (aba Tipos de Processo), agora existe o
+  campo "Exigir Nota Fiscal": Não definido / Somente Entrada / Somente
+  Saída / Entrada e Saída.
+- Os 3 tipos já existentes (Carga, Descarga, Carga & Descarga) são migrados
+  automaticamente para "Não definido" na primeira vez que a aba é aberta —
+  o comportamento deles continua IDÊNTICO ao de hoje (pede NF só na saída)
+  até você decidir mudar.
+- A tabela da aba permite editar a exigência de qualquer tipo a qualquer
+  momento (select inline, salva na hora).
+- Check-in, Check-out e Encaixe (entrada expressa) agora mostram/exigem o
+  campo de NF dinamicamente, de acordo com o tipo de processo do
+  agendamento. A validação também roda dentro da transação em
+  `patioCore.js`, então fica protegida mesmo se alguém pular a interface.
 
-### `users/{uid}`
-```json
-{
-  "nome": "string",
-  "email": "string",
-  "tipo": 1,            // 1=Transportadora, 2=Logística, 3=Admin
-  "empresa": "string",  // preenchido se tipo=1
-  "criadoEm": "timestamp"
-}
-```
+## 2) Plantas / Filiais (multi-unidade em paralelo)
+- Nova aba **"Plantas / Filiais"** no Painel Admin (só tipo 3 vê e mexe):
+  cadastrar planta, ativar/desativar. A unidade atual já existe
+  implicitamente como planta "Matriz" — nada precisa ser migrado.
+- Na tabela de usuários do Admin, cada usuário (Transportadora, Logística,
+  Admin) agora tem uma coluna "Planta". Para o pessoal de Portaria/
+  Logística, essa é a planta em que ele vai operar: o painel dele passa a
+  mostrar e criar dados (Tipos de Processo, Vagas & Horários, Regras,
+  Bookings, Portaria/Pátio) exclusivamente dentro dessa planta — o pátio
+  de cada planta fica isolado do das outras.
+- No Painel da Transportadora, se houver mais de uma planta ativa
+  cadastrada, aparece um seletor "Planta / Filial" no formulário de
+  agendamento (fica oculto automaticamente enquanto só existir a Matriz).
+  Trocar a planta recarrega os tipos de processo e horários disponíveis
+  daquela unidade.
+- Tudo foi feito para não exigir migração de dados: qualquer documento
+  antigo sem o campo `plantaId` é tratado como pertencente à Matriz.
 
-### `processTypes/{id}`
-```json
-{ "nome": "Carga Geral", "ativo": true }
-```
+## 3) Novo tipo de usuário: Portaria (tipo 4)
+- Assim como Logística/Admin, esse tipo **não existe na tela de cadastro**
+  — quem se cadastra como "interno" continua caindo em
+  `status: "pendente_aprovacao"`, e é o Admin quem decide o tipo na
+  aprovação (aba Aprovações Pendentes ou Gestão de Usuários), agora com a
+  opção "Portaria (4)" nos dois lugares.
+- Usuário tipo 4 faz login normalmente e cai no mesmo
+  `logistica-dashboard.html` de Logística/Admin (reaproveita toda a
+  lógica de planta, check-in/check-out/encaixe já pronta), mas com o menu
+  lateral restrito a 3 abas: **Painel do Dia**, **Portaria** e **KPIs /
+  Indicadores** (usei essa como "Dashboard" — me avise se você tinha outra
+  aba em mente). Solicitações, Todos os Agend., Novo Agendamento,
+  Horários & Exceções, Gestão de Vagas e Tipos de Processo ficam ocultos.
+- Essa restrição hoje é só de interface (esconde os botões e bloqueia
+  navegação por `?tab=` para uma aba não liberada). Ela NÃO impede um
+  usuário tipo 4 de, por exemplo, chamar `getDocs(collection(db,
+  "processTypes"))` diretamente pelo console do navegador — isso só fica
+  de fato travado com as Firestore Rules, que ficaram combinado de
+  ajustarmos a seguir.
 
-### Disponibilidade de horários (sem geração em massa no calendário)
-
-Nenhuma vaga futura precisa ser "gerada" previamente. A disponibilidade de
-qualquer data (mesmo daqui a 2 anos) é calculada dinamicamente no momento da
-consulta, combinando 3 coleções em ordem de prioridade (a de baixo sobrescreve
-a de cima), implementado em `web/js/disponibilidade.js`:
-
-**1) `timeSlotRules/{id}` — Regra Padrão de Atendimento (recorrente)**
-```json
-{
-  "diasSemana": [1,2,3,4,5],     // 0=domingo ... 6=sábado
-  "horaInicio": "06:00",
-  "horaFim": "00:00",             // pode atravessar a meia-noite
-  "capacidadePorHora": 2,
-  "ativo": true
-}
-```
-Define o horário de funcionamento padrão do pátio e a capacidade por hora,
-para qualquer data futura que caia naqueles dias da semana.
-
-**2) `timeSlotExceptions/{id}` — Exceções recorrentes (têm prioridade sobre a regra padrão)**
-```json
-{
-  "diasSemana": [0],              // ex: domingo
-  "horaInicio": "00:00",
-  "horaFim": "23:59",
-  "capacidadePorHora": 0,         // 0 = sem atendimento nesse intervalo
-  "ativo": true
-}
-```
-Usadas para bloquear um período recorrente (ex: domingo sem atendimento) ou
-reduzir a capacidade em um intervalo específico (ex: seg a sex, 11:00-14:00,
-1 veículo/hora no horário de almoço). Se `capacidadePorHora` for maior que 0,
-o valor sobrescreve a capacidade da regra padrão apenas naquele dia/horário.
-
-**3) `timeSlots/{data}_{hora}` — Ajuste manual pontual por data (prioridade máxima)**
-```json
-{
-  "data": "2026-08-10",
-  "horaInicio": "08:00",
-  "horaFim": "09:00",
-  "capacidadeMax": 3,
-  "ativo": true,
-  "ocupados": 1
-}
-```
-Documento **opcional**, criado sob demanda:
-- É criado automaticamente ("lazy") pela transação de agendamento, na primeira
-  reserva feita para aquele horário/data — é onde a ocupação real (`ocupados`)
-  fica registrada, garantindo atomicidade contra concorrência.
-- Também pode ser criado/editado manualmente pela Logística/Admin na aba
-  "Vagas & Horários" para fechar, reabrir ou mudar a capacidade só daquele dia
-  específico (sem afetar a regra padrão nem outras datas), ou para liberar um
-  horário fora do padrão pontualmente.
-
-### `bookings/{id}`
-```json
-{
-  "transportadoraId": "uid",
-  "empresa": "string",
-  "dataAgendada": "2026-08-10",
-  "horaInicio": "08:00",
-  "tipoProcessoId": "id",
-  "placaCavalo": "string",
-  "placaCarreta": "string",
-  "motorista": "string",
-  "observacoes": "string",
-  "status": "Pendente",   // Pendente | Aprovado | Recusado | Expirado | Cancelado
-  "criadoEm": "timestamp",
-  "atualizadoEm": "timestamp"
-}
-```
-
-### `auditLogs/{id}`
-```json
-{
-  "bookingId": "id",
-  "usuarioId": "uid",
-  "acao": "Solicitou",   // Solicitou | Aprovou | Recusou | Expirou | Cancelou
-  "dataHora": "timestamp"
-}
-```
-
-## Como evitar conflito de vagas (2 pessoas agendando ao mesmo tempo)
-
-A criação de um agendamento **não é um simples `add()`** — é uma
-**Firestore Transaction** sobre o documento `timeSlots/{data}_{hora}`:
-
-1. O cliente já sabe, a partir de `disponibilidade.js`, qual a capacidade
-   calculada (regra padrão ou exceção) para aquele horário/data.
-2. Dentro da transação: se o documento em `timeSlots` ainda não existir
-   (data futura nunca reservada antes), ele é **criado na hora** usando essa
-   capacidade calculada, com `ocupados = 1`. Se já existir, o cliente lê o
-   `ocupados` atual e só confirma a escrita se ainda houver vaga.
-3. O Firestore garante atomicidade: se duas transportadoras tentarem a
-   última vaga ao mesmo tempo, apenas uma transaction vence — a outra recebe
-   erro e o front-end informa "vaga acabou de ser preenchida, escolha outro
-   horário".
-
-Isso elimina a necessidade de gerar vagas em massa no calendário: o
-documento de controle de ocupação só passa a existir quando (a) alguém
-reserva aquele horário pela primeira vez, ou (b) a Logística/Admin cria um
-ajuste manual pontual para aquela data.
-
-## Próximos passos de implementação
-
-1. ✅ Estrutura + regras de segurança + modelo de dados
-2. ⬜ Tela de login web (Firebase Auth)
-3. ⬜ Dashboard Transportadora (form de agendamento + "meus agendamentos")
-4. ⬜ Dashboard Logística (aprovar/recusar + configurar vagas)
-5. ⬜ Painel Admin Master
-6. ⬜ Cloudflare Worker: Cron de expiração automática
-7. ⬜ App Flutter (mobile)
-8. ⬜ Deploy Netlify + GitHub Actions
+## Pontos de atenção antes de subir para produção
+- **Regras de segurança do Firestore** (não estão neste repo/patch): se
+  você tiver `firestore.rules` restringindo por perfil, vale conferir se
+  alguma regra precisa saber sobre `plantaId` (por exemplo, impedir que um
+  usuário de Logística da Filial escreva em `bookings` da Matriz). Hoje o
+  isolamento é feito no cliente (JS); reforçar isso nas regras do servidor
+  é recomendado antes de operar duas plantas de verdade com equipes
+  diferentes.
+- Teste local recomendado: criar 1 planta filial de teste, um usuário
+  Logística vinculado a ela, e confirmar que os dados da Matriz não
+  aparecem para esse usuário (e vice-versa).

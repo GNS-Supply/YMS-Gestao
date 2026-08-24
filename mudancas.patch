@@ -1,0 +1,1433 @@
+diff --git a/admin-dashboard.html b/admin-dashboard.html
+index f369618..62c2207 100644
+--- a/admin-dashboard.html
++++ b/admin-dashboard.html
+@@ -89,6 +89,9 @@
+       <button class="sidebar-item" data-tab="usuarios">
+         <span class="sidebar-icone"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></span><span class="sidebar-label">Gestão de Usuários</span>
+       </button>
++      <button class="sidebar-item" data-tab="plantas">
++        <span class="sidebar-icone"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"></path><path d="M5 21V7l7-4 7 4v14"></path><path d="M9 21v-6h6v6"></path></svg></span><span class="sidebar-label">Plantas / Filiais</span>
++      </button>
+ 
+       <div class="sidebar-grupo-externo">
+         <a href="logistica-dashboard.html" class="sidebar-item">
+@@ -137,14 +140,53 @@
+                   <th>E-mail</th>
+                   <th>Vínculo / Empresa</th>
+                   <th>Tipo de Acesso</th>
++                  <th>Planta</th>
+                   <th>Status da Conta</th>
+                   <th>Ações</th>
+                 </tr>
+               </thead>
+               <tbody id="tb-todos-usuarios">
+                 <tr>
+-                  <td colspan="6" class="estado-vazio">Carregando usuários...</td>
++                  <td colspan="7" class="estado-vazio">Carregando usuários...</td>
++                </tr>
++              </tbody>
++            </table>
++          </div>
++        </div>
++      </div>
++
++      <div class="tab-conteudo" id="tab-plantas">
++        <div class="card">
++          <h3>Plantas / Filiais</h3>
++          <p style="font-size:0.85rem; color:var(--texto-suave); margin-bottom:18px;">
++            Cada planta opera com os mesmos mecanismos do sistema (tipos de processo, vagas &amp; horários, portaria, controle de pátio), mas de forma totalmente separada: agendamentos, vagas e usuários de uma planta não se misturam com os de outra. A planta <strong>Matriz</strong> já existe (é a unidade original) — use o formulário abaixo só para cadastrar novas plantas/filiais em paralelo.
++          </p>
++
++          <form id="form-planta" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:18px;">
++            <div class="campo" style="flex:1; min-width:220px;">
++              <label for="planta-nome">Nome da Planta/Filial *</label>
++              <input type="text" id="planta-nome" required placeholder="Ex: Filial Sul">
++            </div>
++            <div class="campo" style="min-width:140px;">
++              <label for="planta-codigo">Código (opcional)</label>
++              <input type="text" id="planta-codigo" placeholder="Ex: FIL-SUL">
++            </div>
++            <div id="planta-error" style="color:var(--vermelho, #c0392b); font-size:0.85rem; width:100%;"></div>
++            <button type="submit" class="btn-primario" style="width:auto; padding:10px 20px;">Cadastrar Planta</button>
++          </form>
++
++          <div class="tabela-wrapper">
++            <table class="tabela-padrao">
++              <thead>
++                <tr>
++                  <th>Nome</th>
++                  <th>Código</th>
++                  <th>Status</th>
++                  <th>Ações</th>
+                 </tr>
++              </thead>
++              <tbody id="tb-plantas">
++                <tr><td colspan="4" class="estado-vazio">Carregando plantas...</td></tr>
+               </tbody>
+             </table>
+           </div>
+@@ -167,11 +209,18 @@
+       onSnapshot,
+       serverTimestamp
+     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
++    import {
++      listarPlantas,
++      criarPlanta,
++      alternarAtivaPlanta,
++      PLANTA_PADRAO_ID
++    } from "./patioCore.js";
+ 
+     let usuarioAtual = null;
+     let todosUsuarios = [];
+     let cancelarListenerPendentes = null;
+     let abaAtivaAdmin = "aprovacoes";
++    let listaPlantasCache = [];
+ 
+     /* ===================================================================
+        MODAL DE ALERTA / CONFIRMAÇÃO CUSTOMIZADO
+@@ -297,13 +346,15 @@
+ 
+     // Proteção de Acesso — só Admin Master (Tipo 3). Página exclusiva
+     // dele: nem Logística (Tipo 2) acessa esta tela.
+-    protegerPagina([3], (user, perfil) => {
++    protegerPagina([3], async (user, perfil) => {
+       usuarioAtual = user;
+       document.getElementById("user-nome").textContent = perfil.nome || user.email;
+       document.getElementById("user-tipo").textContent = "Administrador Master";
+ 
+       inicializarAbas();
+       inicializarMenuMobile();
++      inicializarFormularioPlanta();
++      await carregarPlantas();
+       carregarTodosUsuarios();
+       iniciarListenerPendentes();
+ 
+@@ -402,7 +453,7 @@
+        login). O listener é o mesmo tanto para o contador no menu lateral
+        quanto para a lista de cartões desta aba.
+        ========================================================================== */
+-    const LABEL_TIPO_ACESSO = { 1: "Transportadora", 2: "Logística", 3: "Administrador" };
++    const LABEL_TIPO_ACESSO = { 1: "Transportadora", 2: "Logística", 3: "Administrador", 4: "Portaria" };
+     const LABEL_VINCULO = { interno: "Colaborador Interno", externo: "Empresa Parceira" };
+ 
+     function iniciarListenerPendentes() {
+@@ -474,6 +525,7 @@
+                 <option value="1">Transportadora (1)</option>
+                 <option value="2">Logística (2)</option>
+                 <option value="3">Administrador (3)</option>
++                <option value="4">Portaria (4)</option>
+               </select>
+             </div>
+             <button type="button" class="btn-acao btn-aprovar btn-decidir-pendente" data-decisao="aprovado">
+@@ -545,13 +597,13 @@
+        ========================================================================== */
+     async function carregarTodosUsuarios() {
+       const tbody = document.getElementById("tb-todos-usuarios");
+-      tbody.innerHTML = '<tr><td colspan="6" class="estado-vazio">Carregando usuários...</td></tr>';
++      tbody.innerHTML = '<tr><td colspan="7" class="estado-vazio">Carregando usuários...</td></tr>';
+ 
+       try {
+         const snap = await getDocs(collection(db, "users"));
+ 
+         if (snap.empty) {
+-          tbody.innerHTML = '<tr><td colspan="6" class="estado-vazio">Nenhum usuário cadastrado.</td></tr>';
++          tbody.innerHTML = '<tr><td colspan="7" class="estado-vazio">Nenhum usuário cadastrado.</td></tr>';
+           return;
+         }
+ 
+@@ -562,7 +614,7 @@
+         renderizarTabela();
+       } catch (err) {
+         console.error(err);
+-        tbody.innerHTML = '<tr><td colspan="6" class="estado-vazio">Erro ao carregar lista de usuários.</td></tr>';
++        tbody.innerHTML = '<tr><td colspan="7" class="estado-vazio">Erro ao carregar lista de usuários.</td></tr>';
+       }
+     }
+ 
+@@ -580,7 +632,7 @@
+       });
+ 
+       if (filtrados.length === 0) {
+-        tbody.innerHTML = '<tr><td colspan="6" class="estado-vazio">Nenhum usuário encontrado.</td></tr>';
++        tbody.innerHTML = '<tr><td colspan="7" class="estado-vazio">Nenhum usuário encontrado.</td></tr>';
+         return;
+       }
+ 
+@@ -606,6 +658,12 @@
+               <option value="1" ${u.tipo === 1 ? "selected" : ""}>Transportadora (1)</option>
+               <option value="2" ${u.tipo === 2 ? "selected" : ""}>Logística (2)</option>
+               <option value="3" ${u.tipo === 3 ? "selected" : ""}>Administrador (3)</option>
++              <option value="4" ${u.tipo === 4 ? "selected" : ""}>Portaria (4)</option>
++            </select>
++          </td>
++          <td data-label="Planta">
++            <select class="select-alterar-planta" data-id="${u.id}" ${ehEuMesmo ? "disabled" : ""} style="padding:6px; border-radius:4px; font-size:0.85rem;">
++              ${listaPlantasCache.map(p => `<option value="${p.id}" ${(u.plantaId || "matriz") === p.id ? "selected" : ""}>${escapeHtml(p.nome)}</option>`).join("")}
+             </select>
+           </td>
+           <td data-label="Status da Conta">
+@@ -633,10 +691,12 @@
+     async function salvarUsuario(idUser, tbody, btn) {
+       const selectTipo = tbody.querySelector(`.select-alterar-tipo[data-id="${idUser}"]`);
+       const selectStatus = tbody.querySelector(`.select-alterar-status[data-id="${idUser}"]`);
++      const selectPlanta = tbody.querySelector(`.select-alterar-planta[data-id="${idUser}"]`);
+       const inputEmpresa = tbody.querySelector(`.input-empresa[data-id="${idUser}"]`);
+ 
+       const novoTipo = Number(selectTipo.value);
+       const novoStatus = selectStatus.value;
++      const novaPlanta = selectPlanta ? selectPlanta.value : "matriz";
+       const novaEmpresa = inputEmpresa.value.trim();
+ 
+       const linha = btn.closest("tr");
+@@ -647,6 +707,7 @@
+         await updateDoc(doc(db, "users", idUser), {
+           tipo: novoTipo,
+           status: novoStatus,
++          plantaId: novaPlanta,
+           empresa: novaEmpresa,
+           atualizadoEm: serverTimestamp()
+         });
+@@ -672,6 +733,89 @@
+       div.textContent = texto ?? "";
+       return div.innerHTML;
+     }
++
++    /* ===================================================================
++       ABA: PLANTAS / FILIAIS (admin-only)
++       =================================================================== */
++    async function carregarPlantas() {
++      const tbody = document.getElementById("tb-plantas");
++      try {
++        listaPlantasCache = await listarPlantas(db);
++        renderizarTabelaPlantas();
++      } catch (err) {
++        console.error("Erro ao carregar plantas:", err);
++        if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="estado-vazio">Erro ao carregar plantas.</td></tr>';
++      }
++    }
++
++    function renderizarTabelaPlantas() {
++      const tbody = document.getElementById("tb-plantas");
++      if (!tbody) return;
++      if (!listaPlantasCache.length) {
++        tbody.innerHTML = '<tr><td colspan="4" class="estado-vazio">Nenhuma planta cadastrada.</td></tr>';
++        return;
++      }
++
++      tbody.innerHTML = listaPlantasCache.map(p => `
++        <tr data-id="${p.id}">
++          <td>${escapeHtml(p.nome)}${p.id === "matriz" ? ' <small style="color:var(--texto-suave);">(unidade original)</small>' : ""}</td>
++          <td>${escapeHtml(p.codigo || "-")}</td>
++          <td>${p.ativa !== false ? '<span class="badge aprovado">Ativa</span>' : '<span class="badge recusado">Inativa</span>'}</td>
++          <td>
++            <button type="button" class="btn-acao btn-toggle-planta" data-id="${p.id}" data-ativa="${p.ativa !== false}" style="background:${p.ativa !== false ? "#dc3545" : "#28a745"}; color:#fff;">
++              ${p.ativa !== false ? "Desativar" : "Ativar"}
++            </button>
++          </td>
++        </tr>
++      `).join("");
++
++      tbody.querySelectorAll(".btn-toggle-planta").forEach(btn => {
++        btn.addEventListener("click", async () => {
++          const id = btn.dataset.id;
++          const ativaAtual = btn.dataset.ativa === "true";
++          btn.disabled = true;
++          try {
++            await alternarAtivaPlanta(db, id, !ativaAtual);
++            mostrarToast(`Planta ${ativaAtual ? "desativada" : "ativada"}.`, { tipo: "sucesso" });
++            await carregarPlantas();
++          } catch (err) {
++            console.error("Erro ao alterar status da planta:", err);
++            await mostrarAlerta("Erro ao alterar o status da planta: " + err.message, { titulo: "Erro", tipo: "erro" });
++            btn.disabled = false;
++          }
++        });
++      });
++    }
++
++    function inicializarFormularioPlanta() {
++      document.getElementById("form-planta").addEventListener("submit", async (e) => {
++        e.preventDefault();
++        const inputNome = document.getElementById("planta-nome");
++        const inputCodigo = document.getElementById("planta-codigo");
++        const erroBox = document.getElementById("planta-error");
++        erroBox.textContent = "";
++
++        const btnSalvar = e.target.querySelector('button[type="submit"]');
++        btnSalvar.disabled = true;
++
++        try {
++          await criarPlanta(db, usuarioAtual, {
++            nome: inputNome.value.trim(),
++            codigo: inputCodigo.value.trim()
++          });
++          inputNome.value = "";
++          inputCodigo.value = "";
++          mostrarToast("Planta cadastrada. Ela já pode ser usada em Tipos de Processo, Vagas & Horários e na atribuição de usuários de Portaria/Logística.", { tipo: "sucesso" });
++          await carregarPlantas();
++          await carregarTodosUsuarios();
++        } catch (err) {
++          console.error("Erro ao cadastrar planta:", err);
++          erroBox.textContent = "Erro ao cadastrar planta: " + err.message;
++        } finally {
++          btnSalvar.disabled = false;
++        }
++      });
++    }
+   </script>
+ </body>
+ </html>
+diff --git a/cadastro.html b/cadastro.html
+index 80ea699..1a0862e 100644
+--- a/cadastro.html
++++ b/cadastro.html
+@@ -103,7 +103,8 @@
+     const ROTAS_POR_TIPO = {
+       1: "transportadora-dashboard.html",
+       2: "logistica-dashboard.html",
+-      3: "admin-dashboard.html"
++      3: "admin-dashboard.html",
++      4: "logistica-dashboard.html"
+     };
+ 
+     const form = document.getElementById("cadastro-form");
+diff --git a/index.html b/index.html
+index 4eb1438..a225a4c 100644
+--- a/index.html
++++ b/index.html
+@@ -108,7 +108,8 @@
+     const ROTAS_POR_TIPO = {
+       1: "transportadora-dashboard.html",
+       2: "logistica-dashboard.html",
+-      3: "admin-dashboard.html"
++      3: "admin-dashboard.html",
++      4: "logistica-dashboard.html"
+     };
+ 
+     form?.addEventListener("submit", async (e) => {
+diff --git a/logistica-dashboard.html b/logistica-dashboard.html
+index aade230..a368907 100644
+--- a/logistica-dashboard.html
++++ b/logistica-dashboard.html
+@@ -251,6 +251,7 @@
+       <div class="info-usuario">
+         <div id="user-nome" style="font-weight: 600;">--</div>
+         <div id="user-tipo" style="opacity: 0.75; font-size: 0.75rem;">--</div>
++        <div id="user-planta" style="opacity: 0.75; font-size: 0.72rem;"></div>
+       </div>
+       <button id="btn-logout">Sair</button>
+     </div>
+@@ -883,6 +884,16 @@
+               <label for="nomeProcesso">Nome do Tipo de Processo *</label>
+               <input type="text" id="nomeProcesso" required placeholder="Ex: Carga Geral">
+             </div>
++            <div class="campo">
++              <label for="processo-exigencia-nf">Exigir Nota Fiscal (NF) *</label>
++              <select id="processo-exigencia-nf" required>
++                <option value="nao_definido">Não definido (decidir depois)</option>
++                <option value="entrada">Somente na Entrada</option>
++                <option value="saida">Somente na Saída</option>
++                <option value="ambos">Entrada e Saída (ambos)</option>
++              </select>
++              <small style="display:block; margin-top:4px; color:var(--texto-suave); font-size:0.78rem;">Define em qual etapa a Portaria será obrigada a informar o número da NF para este tipo de processo.</small>
++            </div>
+             <div id="processo-error" style="color:var(--vermelho, #c0392b); font-size:0.85rem; margin-bottom:10px;"></div>
+             <button type="submit" class="btn-primario" style="width:auto; padding:10px 20px;">Cadastrar Tipo de Processo</button>
+           </form>
+@@ -893,11 +904,12 @@
+                 <tr>
+                   <th>Nome</th>
+                   <th>Status</th>
++                  <th>Exigência de NF</th>
+                   <th>Ações</th>
+                 </tr>
+               </thead>
+               <tbody id="tbody-processos">
+-                <tr><td colspan="3" style="text-align:center;">Carregando tipos de processo...</td></tr>
++                <tr><td colspan="4" style="text-align:center;">Carregando tipos de processo...</td></tr>
+               </tbody>
+             </table>
+           </div>
+@@ -941,6 +953,11 @@
+           <input type="text" id="checkin-motorista" required>
+         </div>
+ 
++        <div class="campo" id="checkin-nf-wrapper" style="display:none;">
++          <label for="checkin-nf">Número da Nota Fiscal (NF) *</label>
++          <input type="text" id="checkin-nf" placeholder="Ex: 102938">
++        </div>
++
+         <div class="campo">
+           <label for="checkin-pontualidade">Pontualidade Calculada</label>
+           <input type="text" id="checkin-pontualidade" readonly style="background: #e9ecef; font-weight: bold;">
+@@ -963,9 +980,9 @@
+         <input type="hidden" id="checkout-booking-id">
+         <input type="hidden" id="checkout-entrada-timestamp">
+ 
+-        <div class="campo">
+-          <label for="checkout-nf">Número da Nota Fiscal (NF) *</label>
+-          <input type="text" id="checkout-nf" placeholder="Ex: 102938" required>
++        <div class="campo" id="checkout-nf-wrapper">
++          <label for="checkout-nf" id="checkout-nf-label">Número da Nota Fiscal (NF) *</label>
++          <input type="text" id="checkout-nf" placeholder="Ex: 102938">
+         </div>
+ 
+         <div class="campo">
+@@ -1020,6 +1037,11 @@
+           </select>
+         </div>
+ 
++        <div class="campo" id="encaixe-nf-wrapper" style="display:none;">
++          <label for="encaixe-nf">Número da Nota Fiscal (NF) *</label>
++          <input type="text" id="encaixe-nf" placeholder="Ex: 102938">
++        </div>
++
+         <div class="campo">
+           <label for="encaixe-obs">Observação / Motivo do Encaixe</label>
+           <input type="text" id="encaixe-obs" placeholder="Ex: Carga emergencial liberada por Logística">
+@@ -1084,7 +1106,16 @@
+       excluirRegraRecorrencia,
+       garantirOcorrenciasRecorrencia,
+       garantirTodasRecorrencias,
+-      HORIZONTE_RECORRENCIA_SEMANAS
++      HORIZONTE_RECORRENCIA_SEMANAS,
++      EXIGENCIA_NF,
++      EXIGENCIA_NF_LABEL,
++      TODAS_EXIGENCIA_NF,
++      exigeNFNaEntrada,
++      exigeNFNaSaida,
++      PLANTA_PADRAO_ID,
++      plantaEfetiva,
++      pertenceAPlanta,
++      listarPlantas
+     } from "./patioCore.js";
+     // Máscara de placa, cálculo de disponibilidade, transições de
+     // estado e o listener em tempo real da lista de agendamentos vêm
+@@ -1092,7 +1123,18 @@
+     // dessas regras por conta própria (ver revisão estrutural).
+ 
+     let usuarioLogado = null;
++    // Planta/filial deste usuário de Portaria/Logística. Definida pelo
++    // Admin (aba "Plantas / Filiais"); sem valor definido, cai na
++    // matriz por padrão. Toda leitura e escrita nesta tela (tipos de
++    // processo, vagas & horários, agendamentos, portaria) fica presa a
++    // esta planta — o pátio de cada planta é controlado em paralelo,
++    // sem se misturar com o de outra.
++    let plantaAtual = PLANTA_PADRAO_ID;
+     let mapProcessos = {};
++    // id -> objeto completo do tipo de processo (inclui exigenciaNF),
++    // usado para decidir se a Portaria deve pedir Nota Fiscal na
++    // entrada e/ou na saída para o processo daquele agendamento.
++    let mapTiposProcessoCompletos = {};
+     let listaTransportadoras = [];
+     let todosBookingsGerais = [];
+     let filtroPortariaAtual = "todos";
+@@ -1284,10 +1326,32 @@
+ 
+     // Proteção de acesso (Tipo 2 = Logística, 3 = Admin) — os MESMOS dois
+     // perfis que antes acessavam portaria.html separadamente.
+-    protegerPagina([2, 3], async (user, dadosUser) => {
++    protegerPagina([2, 3, 4], async (user, dadosUser) => {
+       usuarioLogado = { uid: user.uid, ...dadosUser };
++      plantaAtual = usuarioLogado.plantaId || PLANTA_PADRAO_ID;
+       document.getElementById("user-nome").textContent = dadosUser.nome || user.email;
+-      document.getElementById("user-tipo").textContent = dadosUser.tipo === 3 ? "Administrador Master" : "Operador Logística";
++      document.getElementById("user-tipo").textContent =
++        dadosUser.tipo === 3 ? "Administrador Master" :
++        dadosUser.tipo === 4 ? "Portaria" :
++        "Operador Logística";
++
++      // Portaria (tipo 4): acesso restrito a Painel do Dia, Portaria e
++      // Dashboard (KPIs) — as demais abas do menu lateral (Solicitações,
++      // Todos os Agend., Novo Agendamento, Horários & Exceções, Gestão
++      // de Vagas, Tipos de Processo) ficam ocultas. Isso é só a camada
++      // de UI: a restrição de verdade vem das Firestore Rules.
++      if (Number(dadosUser.tipo) === 4) {
++        restringirMenuParaPortaria();
++      }
++
++      // Nome amigável da planta no topo, só para o operador confirmar
++      // rapidamente em qual unidade está trabalhando (útil sobretudo
++      // quando existe mais de uma planta cadastrada).
++      listarPlantas(db).then(plantas => {
++        const p = plantas.find(x => x.id === plantaAtual);
++        const label = document.getElementById("user-planta");
++        if (label && p) label.textContent = `Planta: ${p.nome}`;
++      }).catch(() => {});
+       
+ // Exibe o botão de retorno ao Painel Admin se o tipo de usuário for Administrador (3)
+       if (Number(dadosUser.tipo) === 3) {
+@@ -1348,6 +1412,24 @@
+        pelo antigo portaria.html, que agora só redireciona pra cá com
+        "?tab=portaria" em vez de ser uma página própria.
+        =================================================================== */
++    // Abas liberadas para o tipo 4 (Portaria). Mantida fora da função
++    // para ser consultada tanto ao esconder botões quanto ao bloquear
++    // navegação via clique/deep-link ("?tab=...") para uma aba oculta.
++    const ABAS_PERMITIDAS_PORTARIA = ["painel", "portaria", "kpis"];
++
++    function restringirMenuParaPortaria() {
++      document.querySelectorAll(".sidebar-item[data-tab]").forEach(btn => {
++        if (!ABAS_PERMITIDAS_PORTARIA.includes(btn.dataset.tab)) {
++          btn.style.display = "none";
++        }
++      });
++    }
++
++    function podeAcessarAba(target) {
++      if (Number(usuarioLogado?.tipo) !== 4) return true;
++      return ABAS_PERMITIDAS_PORTARIA.includes(target);
++    }
++
+     function inicializarAbas() {
+       const btns = document.querySelectorAll(".sidebar-item[data-tab]");
+       const conteudos = document.querySelectorAll(".tab-conteudo");
+@@ -1355,6 +1437,7 @@
+       btns.forEach(btn => {
+         btn.addEventListener("click", () => {
+           const target = btn.dataset.tab;
++          if (!podeAcessarAba(target)) return;
+           btns.forEach(b => b.classList.remove("ativo"));
+           conteudos.forEach(c => c.classList.remove("ativo"));
+ 
+@@ -1381,6 +1464,10 @@
+ 
+       const tabParam = new URLSearchParams(window.location.search).get("tab");
+       if (tabParam === "hoje") {
++        if (!podeAcessarAba("todos")) {
++          abaAtivaAtual = "painel";
++          return;
++        }
+         // "Agendamento de Hoje" foi removido por ser uma segunda
+         // implementação da mesma informação que "Todos os Agendamentos"
+         // já mostra com filtro de data = hoje. Qualquer link/favorito
+@@ -1390,7 +1477,7 @@
+         document.getElementById("filtro-data-fim").value = hojeIso;
+         const alvoTodos = document.querySelector('.sidebar-item[data-tab="todos"]');
+         if (alvoTodos) alvoTodos.click();
+-      } else if (tabParam) {
++      } else if (tabParam && podeAcessarAba(tabParam)) {
+         const alvo = document.querySelector(`.sidebar-item[data-tab="${tabParam}"]`);
+         if (alvo) alvo.click();
+       } else {
+@@ -1466,7 +1553,12 @@
+       cancelarListenerBookings = escutarBookings(
+         db,
+         async (bookings) => {
+-          todosBookingsGerais = bookings;
++          // Cada Portaria/Logística só enxerga os agendamentos da sua
++          // própria planta — o listener traz tudo do Firestore, mas o
++          // filtro por planta acontece aqui antes de qualquer tela usar
++          // os dados, mantendo o pátio de cada planta isolado do das
++          // demais (bookings antigos sem `plantaId` contam como matriz).
++          todosBookingsGerais = bookings.filter(b => pertenceAPlanta(b, plantaAtual));
+           preencherSelectEmpresasKPIs(todosBookingsGerais);
+           rerenderizarAbaAtiva();
+           if (!primeiraCarga) mostrarIndicadorTempoReal();
+@@ -1578,7 +1670,7 @@
+       container.innerHTML = '<p style="text-align:center; color:#888; padding:20px;">Calculando horários e reservas...</p>';
+ 
+       try {
+-        const slots = await obterHorariosDisponiveis(db, dataIso, { incluirFechados: true });
++        const slots = await obterHorariosDisponiveis(db, dataIso, { incluirFechados: true, plantaId: plantaAtual });
+         // Aprovado cobre Em Pátio/Concluído/No-Show também (aprovacaoStatus
+         // permanece "Aprovado" nessas 3 dimensões independentes — ver patioCore.js).
+         const agendamentosDia = todosBookingsGerais.filter(b => b.dataAgendada === dataIso && [APROVACAO.PENDENTE, APROVACAO.APROVADO].includes(b.aprovacaoStatus));
+@@ -1949,6 +2041,18 @@
+           const pontualidade = calcularPontualidade(booking.horaInicio, new Date());
+           document.getElementById("checkin-pontualidade").value = pontualidade;
+ 
++          const tipoProcesso = mapTiposProcessoCompletos[booking.tipoProcessoId] || null;
++          const nfWrapper = document.getElementById("checkin-nf-wrapper");
++          const nfInput = document.getElementById("checkin-nf");
++          nfInput.value = "";
++          if (exigeNFNaEntrada(tipoProcesso)) {
++            nfWrapper.style.display = "";
++            nfInput.setAttribute("required", "required");
++          } else {
++            nfWrapper.style.display = "none";
++            nfInput.removeAttribute("required");
++          }
++
+           abrirModalPortaria("modal-checkin");
+         });
+       });
+@@ -1963,6 +2067,18 @@
+           document.getElementById("checkout-nf").value = booking.checkOut?.notaFiscal || "";
+           document.getElementById("checkout-obs").value = "";
+ 
++          const tipoProcesso = mapTiposProcessoCompletos[booking.tipoProcessoId] || null;
++          const nfObrigatoriaSaida = exigeNFNaSaida(tipoProcesso);
++          const nfInput = document.getElementById("checkout-nf");
++          const nfLabel = document.getElementById("checkout-nf-label");
++          if (nfObrigatoriaSaida) {
++            nfInput.setAttribute("required", "required");
++            nfLabel.textContent = "Número da Nota Fiscal (NF) *";
++          } else {
++            nfInput.removeAttribute("required");
++            nfLabel.textContent = "Número da Nota Fiscal (NF) — opcional para este tipo de processo";
++          }
++
+           const entradaDate = booking.checkIn?.dataHora?.toDate ? booking.checkIn.dataHora.toDate() : new Date();
+           document.getElementById("checkout-entrada-timestamp").value = entradaDate.getTime();
+ 
+@@ -2025,6 +2141,8 @@
+ 
+       document.getElementById("btn-abrir-encaixe").addEventListener("click", () => {
+         document.getElementById("form-encaixe").reset();
++        document.getElementById("encaixe-nf-wrapper").style.display = "none";
++        document.getElementById("encaixe-nf").removeAttribute("required");
+         abrirModalPortaria("modal-encaixe");
+       });
+ 
+@@ -2044,6 +2162,7 @@
+         document.getElementById("checkin-placa-cavalo").value = placaCavalo;
+         document.getElementById("checkin-placa-carreta").value = placaCarreta;
+         const motorista = document.getElementById("checkin-motorista").value.trim();
++        const notaFiscal = document.getElementById("checkin-nf").value.trim();
+ 
+         try {
+           // registrarCheckIn() centraliza em patioCore.js: muda as
+@@ -2051,7 +2170,9 @@
+           // comparecimento (null -> Compareceu/Compareceu Atrasado) na
+           // mesma transação, calculando pontualidade e divergência de
+           // dados internamente, sem sobrescrever a dimensão de aprovação.
+-          await registrarCheckIn(db, usuarioLogado, id, { placaCavalo, placaCarreta, motorista });
++          // A própria transação em patioCore.js confere se a NF é
++          // obrigatória na entrada para o tipo de processo do agendamento.
++          await registrarCheckIn(db, usuarioLogado, id, { placaCavalo, placaCarreta, motorista, notaFiscal });
+ 
+           await registrarAuditLog(id, "Check-In");
+           fecharModaisPortaria();
+@@ -2072,8 +2193,10 @@
+         const notaFiscal = document.getElementById("checkout-nf").value.trim();
+         const obsSaida = document.getElementById("checkout-obs").value.trim();
+ 
+-        if (!notaFiscal) {
+-          mostrarToast("O número da Nota Fiscal é obrigatório para realizar o Check-out.", { tipo: "erro" });
++        const bookingAtual = obterAgendamentosHojeOrdenados().find(b => b.id === id);
++        const tipoProcessoAtual = bookingAtual ? (mapTiposProcessoCompletos[bookingAtual.tipoProcessoId] || null) : null;
++        if (exigeNFNaSaida(tipoProcessoAtual) && !notaFiscal) {
++          mostrarToast("O número da Nota Fiscal é obrigatório para realizar o Check-out neste tipo de processo.", { tipo: "erro" });
+           return;
+         }
+ 
+@@ -2102,6 +2225,7 @@
+         document.getElementById("encaixe-placa-carreta").value = placaCarreta;
+         const motorista = document.getElementById("encaixe-motorista").value.trim();
+         const tipoProcessoId = document.getElementById("encaixe-processo").value;
++        const notaFiscal = document.getElementById("encaixe-nf").value.trim();
+         const obs = document.getElementById("encaixe-obs").value.trim();
+ 
+         const agora = new Date();
+@@ -2114,11 +2238,13 @@
+           const { bookingId } = await criarEntradaEncaixe(db, usuarioLogado, {
+             empresa,
+             tipoProcessoId,
++            plantaId: plantaAtual,
+             dataAgendada: dataLocalStr(),
+             horaInicio,
+             placaCavalo,
+             placaCarreta,
+             motorista,
++            notaFiscal,
+             observacoes: obs ? `[ENCAIXE PORTARIA] ${obs}` : "[ENCAIXE PORTARIA]"
+           });
+           await registrarAuditLog(bookingId, "Entrada Encaixe Portaria");
+@@ -2177,6 +2303,23 @@
+       });
+     }
+ 
++    // Encaixe já nasce "Em Pátio" (equivale a uma entrada), então o
++    // campo de NF aparece/torna-se obrigatório assim que um tipo de
++    // processo que exige NF na entrada é selecionado.
++    document.getElementById("encaixe-processo").addEventListener("change", (e) => {
++      const tipoProcesso = mapTiposProcessoCompletos[e.target.value] || null;
++      const nfWrapper = document.getElementById("encaixe-nf-wrapper");
++      const nfInput = document.getElementById("encaixe-nf");
++      if (exigeNFNaEntrada(tipoProcesso)) {
++        nfWrapper.style.display = "";
++        nfInput.setAttribute("required", "required");
++      } else {
++        nfWrapper.style.display = "none";
++        nfInput.removeAttribute("required");
++        nfInput.value = "";
++      }
++    });
++
+     /* ===================================================================
+        ETAPA 2B: NOVO AGENDAMENTO OPERACIONAL DIRETO
+        =================================================================== */
+@@ -2249,6 +2392,7 @@
+           await criarAgendamentoOperacional(db, usuarioLogado, {
+             transportadoraId: usuarioId,
+             empresa,
++            plantaId: plantaAtual,
+             dataAgendada: inputData.value,
+             horaInicio: document.getElementById("op-horario").value,
+             tipoProcessoId: document.getElementById("op-processo").value,
+@@ -2353,6 +2497,7 @@
+             horaInicio: document.getElementById("rec-horario").value,
+             transportadoraId: usuarioId,
+             empresa,
++            plantaId: plantaAtual,
+             tipoProcessoId: document.getElementById("rec-processo").value,
+             placaCavaloPadrao: placaCavalo,
+             placaCarretaPadrao: placaCarreta,
+@@ -2386,7 +2531,8 @@
+       tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Carregando recorrências...</td></tr>';
+ 
+       try {
+-        const regras = await listarRegrasRecorrencia(db);
++        const todasRegras = await listarRegrasRecorrencia(db);
++        const regras = todasRegras.filter(r => pertenceAPlanta(r, plantaAtual));
+ 
+         if (regras.length === 0) {
+           tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#888;">Nenhuma recorrência cadastrada ainda.</td></tr>';
+@@ -2490,7 +2636,7 @@
+         // incluirFechados:false (padrão) — não faz sentido oferecer, no
+         // formulário de lançamento operacional, um horário que a própria
+         // Logística fechou manualmente para esta data.
+-        const slots = await obterHorariosDisponiveis(db, dataStr, { incluirFechados: false });
++        const slots = await obterHorariosDisponiveis(db, dataStr, { incluirFechados: false, plantaId: plantaAtual });
+         selectHorario.innerHTML = '<option value="" disabled selected>Selecione um horário...</option>';
+ 
+         slots.forEach(s => {
+@@ -2851,6 +2997,7 @@
+         const snap = await getDocs(collection(db, "timeSlotRules"));
+         const regras = snap.docs
+           .map(d => ({ id: d.id, ...d.data() }))
++          .filter(r => pertenceAPlanta(r, plantaAtual))
+           .sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
+ 
+         if (regras.length === 0) {
+@@ -2988,7 +3135,7 @@
+         return;
+       }
+ 
+-      const payload = { diasSemana, horaInicio, horaFim, capacidadePorHora, ativo, tipoRecorrencia, semanaReferencia };
++      const payload = { diasSemana, horaInicio, horaFim, capacidadePorHora, ativo, tipoRecorrencia, semanaReferencia, plantaId: plantaAtual };
+       const btn = document.getElementById("btn-salvar-regra");
+       btn.disabled = true;
+       btn.textContent = "Salvando...";
+@@ -3021,6 +3168,7 @@
+         const snap = await getDocs(collection(db, "timeSlotExceptions"));
+         const excecoes = snap.docs
+           .map(d => ({ id: d.id, ...d.data() }))
++          .filter(ex => pertenceAPlanta(ex, plantaAtual))
+           .sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
+ 
+         if (excecoes.length === 0) {
+@@ -3142,7 +3290,7 @@
+         return;
+       }
+ 
+-      const payload = { diasSemana, horaInicio, horaFim, capacidadePorHora, ativo };
++      const payload = { diasSemana, horaInicio, horaFim, capacidadePorHora, ativo, plantaId: plantaAtual };
+       const btn = document.getElementById("btn-salvar-excecao");
+       btn.disabled = true;
+       btn.textContent = "Salvando...";
+@@ -3185,7 +3333,7 @@
+       tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Carregando vagas...</td></tr>';
+ 
+       try {
+-        const slots = await obterHorariosDisponiveis(db, dataStr, { incluirFechados: true });
++        const slots = await obterHorariosDisponiveis(db, dataStr, { incluirFechados: true, plantaId: plantaAtual });
+ 
+         if (slots.length === 0) {
+           tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#888;">Nenhum horário de atendimento configurado (Regra Padrão/Exceção) para esta data.</td></tr>';
+@@ -3306,7 +3454,7 @@
+ 
+           btn.disabled = true;
+           try {
+-            const slotId = idSlotHorario(dataStr, horaInicio);
++            const slotId = idSlotHorario(dataStr, horaInicio, plantaAtual);
+             await deleteDoc(doc(db, "timeSlots", slotId));
+             mostrarToast("Horário restaurado para o padrão.", { tipo: "sucesso" });
+             await carregarVagas();
+@@ -3320,11 +3468,12 @@
+     }
+ 
+     async function salvarAjusteVaga(dataStr, slot, { capacidadeMax, ativo }) {
+-      const slotId = idSlotHorario(dataStr, slot.horaInicio);
++      const slotId = idSlotHorario(dataStr, slot.horaInicio, plantaAtual);
+       await setDoc(doc(db, "timeSlots", slotId), {
+         data: dataStr,
+         horaInicio: slot.horaInicio,
+         horaFim: slot.horaFim,
++        plantaId: plantaAtual,
+         capacidadeMax,
+         ativo,
+         ocupados: slot.ocupados
+@@ -3337,8 +3486,10 @@
+     document.getElementById("form-processo").addEventListener("submit", async (e) => {
+       e.preventDefault();
+       const inputNome = document.getElementById("nomeProcesso");
++      const selectExigenciaNF = document.getElementById("processo-exigencia-nf");
+       const erroBox = document.getElementById("processo-error");
+       const nome = inputNome.value.trim();
++      const exigenciaNF = selectExigenciaNF.value || EXIGENCIA_NF.NAO_DEFINIDO;
+ 
+       if (!nome) return;
+       erroBox.textContent = "";
+@@ -3350,9 +3501,12 @@
+         await addDoc(collection(db, "processTypes"), {
+           nome,
+           ativo: true,
++          exigenciaNF,
++          plantaId: plantaAtual,
+           criadoEm: serverTimestamp()
+         });
+         inputNome.value = "";
++        selectExigenciaNF.value = EXIGENCIA_NF.NAO_DEFINIDO;
+         mostrarToast("Tipo de processo cadastrado.", { tipo: "sucesso" });
+ 
+         mapProcessos = await obterTiposProcessoMap();
+@@ -3370,28 +3524,78 @@
+     async function carregarTiposProcessoTabela() {
+       const tbody = document.getElementById("tbody-processos");
+       if (!tbody) return;
+-      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Carregando tipos de processo...</td></tr>';
++      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Carregando tipos de processo...</td></tr>';
+ 
+       try {
+         const snap = await getDocs(collection(db, "processTypes"));
+         if (snap.empty) {
+-          tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#888;">Nenhum tipo de processo cadastrado ainda.</td></tr>';
++          tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#888;">Nenhum tipo de processo cadastrado ainda.</td></tr>';
+           return;
+         }
+ 
+         const tipos = snap.docs.map(d => ({ id: d.id, ...d.data() }))
++          .filter(p => pertenceAPlanta(p, plantaAtual))
+           .sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
+ 
++        if (!tipos.length) {
++          tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#888;">Nenhum tipo de processo cadastrado nesta planta ainda.</td></tr>';
++          return;
++        }
++
++        // Migração silenciosa: tipos criados antes desta funcionalidade
++        // não têm o campo `exigenciaNF`. Grava explicitamente "Não
++        // definido" neles para deixar o dado consistente (o
++        // comportamento — exigir NF só na saída — já era esse por
++        // padrão, isso só torna a configuração visível/editável).
++        const semExigencia = tipos.filter(p => !p.exigenciaNF);
++        if (semExigencia.length) {
++          await Promise.all(semExigencia.map(p => {
++            p.exigenciaNF = EXIGENCIA_NF.NAO_DEFINIDO;
++            return updateDoc(doc(db, "processTypes", p.id), { exigenciaNF: EXIGENCIA_NF.NAO_DEFINIDO }).catch(err => {
++              console.error("Erro ao migrar exigenciaNF do tipo", p.id, err);
++            });
++          }));
++        }
++
++        const opcoesExigencia = TODAS_EXIGENCIA_NF.map(v =>
++          `<option value="${v}">${escapeHtml(EXIGENCIA_NF_LABEL[v])}</option>`
++        ).join("");
++
+         tbody.innerHTML = tipos.map(p => `
+           <tr data-id="${p.id}">
+             <td>${escapeHtml(p.nome)}</td>
+             <td>${p.ativo ? '<span class="badge aprovado">Ativo</span>' : '<span class="badge recusado">Inativo</span>'}</td>
++            <td>
++              <select class="select-exigencia-nf" data-id="${p.id}" style="padding:6px 8px; font-size:0.85rem;">
++                ${opcoesExigencia}
++              </select>
++            </td>
+             <td>
+               <button type="button" class="btn-acao btn-toggle-processo" style="background:${p.ativo ? "#dc3545" : "#28a745"}; color:#fff;">${p.ativo ? "Desativar" : "Ativar"}</button>
+             </td>
+           </tr>
+         `).join("");
+ 
++        tbody.querySelectorAll(".select-exigencia-nf").forEach(select => {
++          const p = tipos.find(x => x.id === select.dataset.id);
++          if (p) select.value = p.exigenciaNF || EXIGENCIA_NF.NAO_DEFINIDO;
++
++          select.addEventListener("change", async () => {
++            const id = select.dataset.id;
++            select.disabled = true;
++            try {
++              await updateDoc(doc(db, "processTypes", id), { exigenciaNF: select.value });
++              mostrarToast("Exigência de Nota Fiscal atualizada.", { tipo: "sucesso" });
++              mapProcessos = await obterTiposProcessoMap();
++            } catch (err) {
++              console.error("Erro ao atualizar exigência de NF:", err);
++              await mostrarAlerta("Erro ao atualizar a exigência de NF: " + err.message, { titulo: "Erro", tipo: "erro" });
++            } finally {
++              select.disabled = false;
++            }
++          });
++        });
++
+         tbody.querySelectorAll(".btn-toggle-processo").forEach(btn => {
+           btn.addEventListener("click", async () => {
+             const id = btn.closest("tr").dataset.id;
+@@ -3415,7 +3619,7 @@
+         });
+       } catch (err) {
+         console.error("Erro ao carregar tipos de processo:", err);
+-        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:red;">Erro ao carregar os tipos de processo.</td></tr>';
++        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:red;">Erro ao carregar os tipos de processo.</td></tr>';
+       }
+     }
+ 
+@@ -3424,9 +3628,15 @@
+        =================================================================== */
+     async function obterTiposProcessoMap() {
+       const map = {};
++      mapTiposProcessoCompletos = {};
+       try {
+         const snap = await getDocs(collection(db, "processTypes"));
+-        snap.docs.forEach(d => { map[d.id] = d.data().nome; });
++        snap.docs.forEach(d => {
++          const dados = d.data();
++          if (!pertenceAPlanta(dados, plantaAtual)) return;
++          map[d.id] = dados.nome;
++          mapTiposProcessoCompletos[d.id] = { id: d.id, ...dados };
++        });
+       } catch (err) { console.error(err); }
+       return map;
+     }
+diff --git a/patioCore.js b/patioCore.js
+index 6123d8e..f4ab544 100644
+--- a/patioCore.js
++++ b/patioCore.js
+@@ -44,6 +44,7 @@ import {
+   getDoc,
+   getDocs,
+   addDoc,
++  setDoc,
+   query,
+   where,
+   onSnapshot,
+@@ -72,6 +73,35 @@ export const STATUS = {
+ 
+ export const TODOS_STATUS = Object.values(STATUS);
+ 
++/* #######################################################################
++   PARTE 0 — MULTI-PLANTA (MATRIZ + FILIAIS)
++   =========================================================================
++   Uma "planta" é uma unidade física independente (matriz, filial, etc.)
++   com portaria e controle de pátio PRÓPRIOS, mas usando o mesmo motor
++   de regras do sistema (mesmos mecanismos: tipos de processo, vagas,
++   check-in/check-out, encaixe...). Cada planta configura essas coisas
++   de forma independente da(s) outra(s).
++
++   Compatibilidade com dados existentes: antes desta funcionalidade não
++   existia o conceito de planta — tudo pertencia implicitamente à única
++   unidade em operação. Para não precisar migrar nada, essa unidade
++   original vira a planta "matriz" (PLANTA_PADRAO_ID), e qualquer
++   documento antigo sem o campo `plantaId` é tratado como pertencente a
++   ela (`pertenceAPlanta`, `idSlotHorario` preservam o formato antigo
++   para essa planta específica).
++   ####################################################################### */
++
++export const PLANTA_PADRAO_ID = "matriz";
++
++/** Trata documentos sem `plantaId` (dados anteriores a esta funcionalidade) como pertencentes à planta matriz. */
++export function plantaEfetiva(dadosDoc) {
++  return dadosDoc?.plantaId || PLANTA_PADRAO_ID;
++}
++
++export function pertenceAPlanta(dadosDoc, plantaId) {
++  return plantaEfetiva(dadosDoc) === (plantaId || PLANTA_PADRAO_ID);
++}
++
+ export const STATUS_LEGADO = [
+   STATUS.PENDENTE, STATUS.APROVADO, STATUS.RECUSADO, STATUS.EXPIRADO,
+   STATUS.CANCELADO, STATUS.SEM_RESPOSTA
+@@ -190,6 +220,58 @@ export function checkOutValido(checkOut) {
+   return !!checkOut && typeof checkOut.notaFiscal === "string";
+ }
+ 
++/* #######################################################################
++   PARTE 1C — EXIGÊNCIA DE NOTA FISCAL POR TIPO DE PROCESSO
++   =========================================================================
++   Cada `processTypes/{id}` ganha o campo `exigenciaNF`, definido no
++   cadastro do tipo de processo (aba "Tipos de Processo"). Ele decide em
++   qual etapa a Portaria é obrigada a informar o número da Nota Fiscal:
++   - ENTRADA: obrigatória no Check-in (e no Encaixe, que já nasce Em Pátio)
++   - SAIDA:   obrigatória no Check-out (comportamento histórico do sistema)
++   - AMBOS:   obrigatória nas duas etapas
++   - NAO_DEFINIDO: valor padrão para tipos criados antes desta mudança (e
++     para novos tipos até o usuário decidir) — preserva o comportamento
++     antigo do sistema, que só pedia NF na saída.
++   ####################################################################### */
++
++export const EXIGENCIA_NF = {
++  NAO_DEFINIDO: "nao_definido",
++  ENTRADA: "entrada",
++  SAIDA: "saida",
++  AMBOS: "ambos"
++};
++
++export const TODAS_EXIGENCIA_NF = Object.values(EXIGENCIA_NF);
++
++export const EXIGENCIA_NF_LABEL = {
++  [EXIGENCIA_NF.NAO_DEFINIDO]: "Não definido",
++  [EXIGENCIA_NF.ENTRADA]: "Somente na Entrada",
++  [EXIGENCIA_NF.SAIDA]: "Somente na Saída",
++  [EXIGENCIA_NF.AMBOS]: "Entrada e Saída (ambos)"
++};
++
++/**
++ * Se a NF é obrigatória na ENTRADA (check-in / encaixe) para este tipo
++ * de processo. Documentos antigos sem `exigenciaNF` são tratados como
++ * NAO_DEFINIDO, ou seja: NÃO exige na entrada (preserva o comportamento
++ * histórico do sistema).
++ */
++export function exigeNFNaEntrada(tipoProcesso) {
++  const exigencia = tipoProcesso?.exigenciaNF || EXIGENCIA_NF.NAO_DEFINIDO;
++  return exigencia === EXIGENCIA_NF.ENTRADA || exigencia === EXIGENCIA_NF.AMBOS;
++}
++
++/**
++ * Se a NF é obrigatória na SAÍDA (check-out) para este tipo de processo.
++ * NAO_DEFINIDO conta como "sim" de propósito: é o comportamento antigo,
++ * que sempre pediu NF no check-out, então tipos ainda não configurados
++ * continuam exigindo na saída até alguém decidir o contrário.
++ */
++export function exigeNFNaSaida(tipoProcesso) {
++  const exigencia = tipoProcesso?.exigenciaNF || EXIGENCIA_NF.NAO_DEFINIDO;
++  return exigencia !== EXIGENCIA_NF.ENTRADA;
++}
++
+ /* #######################################################################
+    PARTE 1B — MODELO TRIDIMENSIONAL DE ESTADOS (fonte de verdade)
+    ####################################################################### */
+@@ -523,8 +605,54 @@ export function minutosParaHora(min) {
+   return `${h}:${m}`;
+ }
+ 
+-export function idSlotHorario(dataStr, horaInicio) {
+-  return `${dataStr}_${horaInicio.replace(":", "-")}`;
++export async function listarPlantas(db) {
++  const snap = await getDocs(collection(db, "plantas"));
++  const plantas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
++  // A planta matriz sempre existe implicitamente, mesmo que ninguém
++  // tenha criado o documento em `plantas/matriz` ainda (sistemas
++  // migrados de antes desta funcionalidade). Garante que ela sempre
++  // apareça em primeiro lugar nas listas de seleção.
++  if (!plantas.some(p => p.id === PLANTA_PADRAO_ID)) {
++    plantas.unshift({ id: PLANTA_PADRAO_ID, nome: "Matriz", ativa: true, implicita: true });
++  }
++  return plantas.sort((a, b) => {
++    if (a.id === PLANTA_PADRAO_ID) return -1;
++    if (b.id === PLANTA_PADRAO_ID) return 1;
++    return (a.nome || "").localeCompare(b.nome || "", "pt-BR");
++  });
++}
++
++export async function criarPlanta(db, usuarioLogado, dados) {
++  if (!usuarioLogado || !usuarioLogado.uid) throw new Error("Usuário não identificado.");
++  const nome = String(dados.nome || "").trim();
++  if (!nome) throw new Error("O nome da planta é obrigatório.");
++
++  return await addDoc(collection(db, "plantas"), {
++    nome,
++    codigo: dados.codigo ? String(dados.codigo).trim().toUpperCase() : "",
++    ativa: true,
++    criadoEm: serverTimestamp(),
++    criadoPor: usuarioLogado.uid
++  });
++}
++
++export async function alternarAtivaPlanta(db, plantaId, ativa) {
++  if (plantaId === PLANTA_PADRAO_ID) {
++    // A planta matriz pode não ter um documento próprio ainda (dados
++    // legados) — `setDoc(..., {merge:true})` cria ou atualiza, sem
++    // risco de sobrescrever campos existentes.
++    await setDoc(doc(db, "plantas", PLANTA_PADRAO_ID), { nome: "Matriz", ativa }, { merge: true });
++    return;
++  }
++  await updateDoc(doc(db, "plantas", plantaId), { ativa });
++}
++
++export function idSlotHorario(dataStr, horaInicio, plantaId = PLANTA_PADRAO_ID) {
++  const base = `${dataStr}_${horaInicio.replace(":", "-")}`;
++  // Formato antigo preservado para a planta matriz, para não invalidar
++  // nenhum documento `timeSlots` já existente em produção. Plantas
++  // novas usam um prefixo para nunca colidir com o pátio da matriz.
++  return (!plantaId || plantaId === PLANTA_PADRAO_ID) ? base : `${plantaId}__${base}`;
+ }
+ 
+ export function calcularBlocosHorario(obj) {
+@@ -574,14 +702,18 @@ export function regraSeAplicaNaData(regra, dataStr) {
+ }
+ 
+ export async function buscarSlotsVirtuaisDoDia(db, dataStr, opcoes = {}) {
+-  const { incluirFechados = false } = opcoes;
++  const { incluirFechados = false, plantaId = PLANTA_PADRAO_ID } = opcoes;
+   const diaSemana = diaSemanaDaData(dataStr);
+   const mapa = {};
+ 
+   // 1) REGRA MASTER (Horários & Exceções -> Regra Padrão)
++  // Filtro de planta é feito no cliente (não em `where`) para que
++  // regras antigas sem `plantaId` continuem valendo para a matriz sem
++  // precisar de migração — ver `pertenceAPlanta`.
+   const snapRegras = await getDocs(query(collection(db, "timeSlotRules"), where("ativo", "==", true)));
+   snapRegras.docs.forEach(d => {
+     const r = d.data();
++    if (!pertenceAPlanta(r, plantaId)) return;
+     if (!(r.diasSemana || []).includes(diaSemana)) return;
+     if (!regraSeAplicaNaData(r, dataStr)) return;
+     calcularBlocosHorario(r).forEach(min => {
+@@ -593,6 +725,7 @@ export async function buscarSlotsVirtuaisDoDia(db, dataStr, opcoes = {}) {
+   const snapExc = await getDocs(query(collection(db, "timeSlotExceptions"), where("ativo", "==", true)));
+   snapExc.docs.forEach(d => {
+     const ex = d.data();
++    if (!pertenceAPlanta(ex, plantaId)) return;
+     if (!(ex.diasSemana || []).includes(diaSemana)) return;
+     calcularBlocosHorario(ex).forEach(min => {
+       const hora = minutosParaHora(min);
+@@ -612,7 +745,11 @@ export async function buscarSlotsVirtuaisDoDia(db, dataStr, opcoes = {}) {
+   //    nunca sobrescreve a regra recorrente em si).
+   const snapManual = await getDocs(query(collection(db, "timeSlots"), where("data", "==", dataStr)));
+   const manuais = {};
+-  snapManual.docs.forEach(d => { manuais[d.data().horaInicio] = { id: d.id, ...d.data() }; });
++  snapManual.docs.forEach(d => {
++    const dados = d.data();
++    if (!pertenceAPlanta(dados, plantaId)) return;
++    manuais[dados.horaInicio] = { id: d.id, ...dados };
++  });
+ 
+   Object.keys(manuais).forEach(hora => {
+     const m = manuais[hora];
+@@ -709,8 +846,8 @@ function validarCamposObrigatorios(dados) {
+   }
+ }
+ 
+-async function buscarCapacidadeReferencia(db, dataAgendada, horaInicio) {
+-  const slots = await buscarSlotsVirtuaisDoDia(db, dataAgendada, { incluirFechados: true });
++async function buscarCapacidadeReferencia(db, dataAgendada, horaInicio, plantaId = PLANTA_PADRAO_ID) {
++  const slots = await buscarSlotsVirtuaisDoDia(db, dataAgendada, { incluirFechados: true, plantaId });
+   const slot = slots.find(s => s.horaInicio === horaInicio);
+   return slot ? slot : null;
+ }
+@@ -726,16 +863,17 @@ export async function criarAgendamentoOperacional(db, usuarioLogado, dados, opco
+ 
+   const transportadoraCadastrada = await buscarTransportadoraCadastrada(db, dados.transportadoraId);
+ 
++  const plantaId = dados.plantaId || PLANTA_PADRAO_ID;
+   const dataAgendada = dados.dataAgendada;
+   const horaInicio = dados.horaInicio;
+   const horaFim = minutosParaHora((horaParaMinutos(horaInicio) + 60) % (24 * 60));
+ 
+-  const slotReferencia = await buscarCapacidadeReferencia(db, dataAgendada, horaInicio);
++  const slotReferencia = await buscarCapacidadeReferencia(db, dataAgendada, horaInicio, plantaId);
+   if (slotReferencia && slotReferencia.fechado && !ignorarFechado) {
+     throw new Error("Este horário está fechado manualmente para esta data. Use opcoes.ignorarFechado=true para forçar, se necessário.");
+   }
+ 
+-  const slotId = idSlotHorario(dataAgendada, horaInicio);
++  const slotId = idSlotHorario(dataAgendada, horaInicio, plantaId);
+   const slotRef = doc(db, "timeSlots", slotId);
+   const bookingRef = doc(collection(db, "bookings"));
+ 
+@@ -789,6 +927,7 @@ export async function criarAgendamentoOperacional(db, usuarioLogado, dados, opco
+       data: dataAgendada,
+       horaInicio,
+       horaFim,
++      plantaId,
+       capacidadeMax,
+       ativo: true,
+       ocupados
+@@ -798,6 +937,7 @@ export async function criarAgendamentoOperacional(db, usuarioLogado, dados, opco
+       usuarioId: transportadoraCadastrada ? transportadoraCadastrada.uid : null,
+       transportadoraCadastrada: !!transportadoraCadastrada,
+       empresa: String(dados.empresa).trim(),
++      plantaId,
+       tipoProcessoId: dados.tipoProcessoId,
+       dataAgendada,
+       horaInicio,
+@@ -856,7 +996,8 @@ export async function criarAgendamentoTransportadora(db, usuarioAtual, dados, sl
+     throw new Error("Este horário não está mais disponível. Selecione a data novamente.");
+   }
+ 
+-  const slotId = idSlotHorario(dados.dataAgendada, dados.horaInicio);
++  const plantaId = dados.plantaId || PLANTA_PADRAO_ID;
++  const slotId = idSlotHorario(dados.dataAgendada, dados.horaInicio, plantaId);
+   const slotRef = doc(db, "timeSlots", slotId);
+   const bookingRef = doc(collection(db, "bookings"));
+ 
+@@ -892,6 +1033,7 @@ export async function criarAgendamentoTransportadora(db, usuarioAtual, dados, sl
+       data: dados.dataAgendada,
+       horaInicio: dados.horaInicio,
+       horaFim: slotReferencia.horaFim,
++      plantaId,
+       capacidadeMax,
+       ativo: true,
+       ocupados: ocupadosAtuais + 1
+@@ -900,6 +1042,7 @@ export async function criarAgendamentoTransportadora(db, usuarioAtual, dados, sl
+     transaction.set(bookingRef, {
+       usuarioId: usuarioAtual.uid,
+       empresa: String(dados.empresa).trim(),
++      plantaId,
+       tipoProcessoId: dados.tipoProcessoId,
+       dataAgendada: dados.dataAgendada,
+       horaInicio: dados.horaInicio,
+@@ -1053,7 +1196,7 @@ export async function mudarStatusBooking(db, usuarioLogado, booking, novoStatus)
+ 
+     let slotSnap = null;
+     if (precisaLiberarVaga) {
+-      const slotRef = doc(db, "timeSlots", idSlotHorario(dadosAtuais.dataAgendada, dadosAtuais.horaInicio));
++      const slotRef = doc(db, "timeSlots", idSlotHorario(dadosAtuais.dataAgendada, dadosAtuais.horaInicio, plantaEfetiva(dadosAtuais)));
+       slotSnap = await transaction.get(slotRef);
+     }
+ 
+@@ -1136,7 +1279,7 @@ export async function recusarSolicitacao(db, usuarioLogado, bookingId) {
+     const precisaLiberarVaga = dadosAtuais.vagaLiberada !== true;
+     let slotSnap = null;
+     if (precisaLiberarVaga) {
+-      const slotRef = doc(db, "timeSlots", idSlotHorario(dadosAtuais.dataAgendada, dadosAtuais.horaInicio));
++      const slotRef = doc(db, "timeSlots", idSlotHorario(dadosAtuais.dataAgendada, dadosAtuais.horaInicio, plantaEfetiva(dadosAtuais)));
+       slotSnap = await transaction.get(slotRef);
+     }
+ 
+@@ -1194,6 +1337,16 @@ export async function registrarCheckIn(db, usuarioLogado, bookingId, dadosConfir
+       throw new Error("Este agendamento foi cancelado pela transportadora. Se o veículo está fisicamente no local, registre-o pela Entrada Expressa (Encaixe).");
+     }
+ 
++    let tipoProcesso = null;
++    if (dadosAtuais.tipoProcessoId) {
++      const tipoSnap = await transaction.get(doc(db, "processTypes", dadosAtuais.tipoProcessoId));
++      if (tipoSnap.exists()) tipoProcesso = tipoSnap.data();
++    }
++    const notaFiscalEntrada = String(dadosConfirmados.notaFiscal || "").trim();
++    if (exigeNFNaEntrada(tipoProcesso) && !notaFiscalEntrada) {
++      throw new Error("O número da Nota Fiscal é obrigatório na entrada para este tipo de processo.");
++    }
++
+     const agora = new Date();
+     const pontualidade = calcularPontualidade(dadosAtuais.horaInicio, agora);
+     const novoComparecimento = pontualidade === PONTUALIDADE.ATRASADO
+@@ -1236,7 +1389,8 @@ export async function registrarCheckIn(db, usuarioLogado, bookingId, dadosConfir
+         dataHora: serverTimestamp(),
+         pontualidade,
+         dadosConferidos: true,
+-        divergente
++        divergente,
++        notaFiscalEntrada: notaFiscalEntrada || ""
+       },
+       historicoEstados: arrayUnion(...historico),
+       atualizadoEm: serverTimestamp(),
+@@ -1259,8 +1413,16 @@ export async function registrarCheckOut(db, usuarioLogado, bookingId, dados) {
+       throw new Error(`Só é possível dar check-out em veículos Em Pátio (situação atual: "${situacaoDetalhadaLabel(dadosAtuais)}").`);
+     }
+ 
++    let tipoProcesso = null;
++    if (dadosAtuais.tipoProcessoId) {
++      const tipoSnap = await transaction.get(doc(db, "processTypes", dadosAtuais.tipoProcessoId));
++      if (tipoSnap.exists()) tipoProcesso = tipoSnap.data();
++    }
++
+     const notaFiscal = String(dados.notaFiscal || "").trim();
+-    if (!notaFiscal) throw new Error("O número da Nota Fiscal é obrigatório para o check-out.");
++    if (exigeNFNaSaida(tipoProcesso) && !notaFiscal) {
++      throw new Error("O número da Nota Fiscal é obrigatório para o check-out neste tipo de processo.");
++    }
+ 
+     const agora = new Date();
+     const permanenciaMinutos = calcularTempoPermanenciaMinutos(dadosAtuais.checkIn?.dataHora, agora);
+@@ -1312,7 +1474,7 @@ export async function registrarNoShow(db, usuarioLogado, bookingId) {
+     const precisaLiberarVaga = dadosAtuais.vagaLiberada !== true;
+     let slotSnap = null;
+     if (precisaLiberarVaga) {
+-      const slotRef = doc(db, "timeSlots", idSlotHorario(dadosAtuais.dataAgendada, dadosAtuais.horaInicio));
++      const slotRef = doc(db, "timeSlots", idSlotHorario(dadosAtuais.dataAgendada, dadosAtuais.horaInicio, plantaEfetiva(dadosAtuais)));
+       slotSnap = await transaction.get(slotRef);
+     }
+ 
+@@ -1344,6 +1506,19 @@ export async function criarEntradaEncaixe(db, usuarioLogado, dados) {
+   if (!usuarioLogado || !usuarioLogado.uid) throw new Error("Usuário não identificado.");
+   validarCamposObrigatorios(dados);
+ 
++  // Encaixe já nasce "Em Pátio" (não passa por um Check-in separado na
++  // Portaria), então a exigência de NF na entrada precisa ser conferida
++  // aqui mesmo, na criação do registro.
++  let tipoProcesso = null;
++  if (dados.tipoProcessoId) {
++    const tipoSnap = await getDoc(doc(db, "processTypes", dados.tipoProcessoId));
++    if (tipoSnap.exists()) tipoProcesso = tipoSnap.data();
++  }
++  const notaFiscalEntrada = String(dados.notaFiscal || "").trim();
++  if (exigeNFNaEntrada(tipoProcesso) && !notaFiscalEntrada) {
++    throw new Error("O número da Nota Fiscal é obrigatório na entrada para este tipo de processo.");
++  }
++
+   const dimsIniciais = {
+     aprovacaoStatus: APROVACAO.APROVADO,
+     comparecimentoStatus: COMPARECIMENTO.COMPARECEU,
+@@ -1353,6 +1528,7 @@ export async function criarEntradaEncaixe(db, usuarioLogado, dados) {
+   const bookingRef = await addDoc(collection(db, "bookings"), {
+     usuarioId: null,
+     transportadoraCadastrada: false,
++    plantaId: dados.plantaId || PLANTA_PADRAO_ID,
+     empresa: String(dados.empresa).trim(),
+     tipoProcessoId: dados.tipoProcessoId,
+     dataAgendada: dados.dataAgendada,
+@@ -1375,7 +1551,8 @@ export async function criarEntradaEncaixe(db, usuarioLogado, dados) {
+       dataHora: serverTimestamp(),
+       pontualidade: PONTUALIDADE.PONTUAL,
+       dadosConferidos: true,
+-      divergente: false
++      divergente: false,
++      notaFiscalEntrada: notaFiscalEntrada || ""
+     },
+     criadoEm: serverTimestamp(),
+     criadoPor: usuarioLogado.uid,
+@@ -1392,7 +1569,7 @@ export async function criarEntradaEncaixe(db, usuarioLogado, dados) {
+ 
+ async function liberarVagaSemMudarStatus(db, usuarioLogado, booking) {
+   const bookingRef = doc(db, "bookings", booking.id);
+-  const slotRef = doc(db, "timeSlots", idSlotHorario(booking.dataAgendada, booking.horaInicio));
++  const slotRef = doc(db, "timeSlots", idSlotHorario(booking.dataAgendada, booking.horaInicio, plantaEfetiva(booking)));
+ 
+   await runTransaction(db, async (transaction) => {
+     const bookingSnap = await transaction.get(bookingRef);
+@@ -1506,6 +1683,7 @@ export async function criarRegraRecorrencia(db, usuarioLogado, dados) {
+   const payload = {
+     diasSemana: dados.diasSemana.slice().sort((a, b) => a - b),
+     horaInicio: dados.horaInicio,
++    plantaId: dados.plantaId || PLANTA_PADRAO_ID,
+     transportadoraId: dados.transportadoraId || null,
+     empresa: String(dados.empresa).trim(),
+     tipoProcessoId: dados.tipoProcessoId,
+@@ -1596,6 +1774,7 @@ export async function garantirOcorrenciasRecorrencia(db, usuarioLogado, regra, h
+         await criarAgendamentoOperacional(db, usuarioLogado, {
+           transportadoraId: regra.transportadoraId,
+           empresa: regra.empresa,
++          plantaId: regra.plantaId || PLANTA_PADRAO_ID,
+           tipoProcessoId: regra.tipoProcessoId,
+           dataAgendada: cursor,
+           horaInicio: regra.horaInicio,
+diff --git a/transportadora-dashboard.html b/transportadora-dashboard.html
+index 7def650..b92f8eb 100644
+--- a/transportadora-dashboard.html
++++ b/transportadora-dashboard.html
+@@ -39,6 +39,13 @@
+             <input type="text" id="empresa" required>
+           </div>
+ 
++          <div class="campo" id="campo-planta-wrapper" style="display:none;">
++            <label for="planta">Planta / Filial</label>
++            <select id="planta" required>
++              <option value="">Selecione...</option>
++            </select>
++          </div>
++
+           <div class="campo">
+             <label for="tipoProcesso">Tipo de Processo</label>
+             <select id="tipoProcesso" required>
+@@ -136,7 +143,10 @@
+       aplicarMascaraPlaca,
+       configurarMascaraPlaca,
+       placaCompleta,
+-      situacaoDetalhadaLabel
++      situacaoDetalhadaLabel,
++      listarPlantas,
++      PLANTA_PADRAO_ID,
++      pertenceAPlanta
+     } from "./patioCore.js";
+     // Máscara de placa, disponibilidade e normalização de booking vêm
+     // TODOS de patioCore.js — a única implementação do sistema (ver
+@@ -338,6 +348,8 @@
+     // ---------------- Elementos do DOM ----------------
+     const form = document.getElementById("form-agendamento");
+     const selectTipoProcesso = document.getElementById("tipoProcesso");
++    const selectPlanta = document.getElementById("planta");
++    const campoPlantaWrapper = document.getElementById("campo-planta-wrapper");
+     const inputData = document.getElementById("data");
+     const slotsGrid = document.getElementById("slots-grid");
+     const slotsMsg = document.getElementById("slots-msg");
+@@ -347,6 +359,13 @@
+     const inputPlacaCavalo = document.getElementById("placaCavalo");
+     const inputPlacaCarreta = document.getElementById("placaCarreta");
+ 
++    // Planta/filial em que este agendamento será feito. Só existe mais
++    // de uma opção quando o Admin cadastrou filiais (ver Admin > Plantas
++    // / Filiais); nesse caso o campo aparece e a transportadora escolhe.
++    // Com uma única planta (o caso hoje) o campo fica oculto e tudo
++    // continua se comportando exatamente como antes.
++    let plantaSelecionada = PLANTA_PADRAO_ID;
++
+     // Máscara de placa: importada de patioCore.js. Nenhuma cópia local
+     // aqui — ver logistica-dashboard.html, que usa a mesma implementação.
+     configurarMascaraPlaca(inputPlacaCavalo);
+@@ -385,11 +404,48 @@
+ 
+       preencherCampoEmpresa(perfil);
+ 
++      await inicializarSeletorPlanta();
+       mapTiposProcessoCache = await obterTiposProcessoMap();
+       iniciarListenerMeusAgendamentos();
+       carregarTiposProcessoAtivos();
+     });
+ 
++    /* ===================================================================
++       0. PLANTA / FILIAL — só aparece se houver mais de uma cadastrada
++       =================================================================== */
++    async function inicializarSeletorPlanta() {
++      try {
++        const plantas = await listarPlantas(db);
++        const ativas = plantas.filter(p => p.ativa !== false);
++
++        if (ativas.length <= 1) {
++          plantaSelecionada = ativas[0]?.id || PLANTA_PADRAO_ID;
++          campoPlantaWrapper.style.display = "none";
++          return;
++        }
++
++        campoPlantaWrapper.style.display = "";
++        selectPlanta.innerHTML = ativas.map(p => `<option value="${p.id}">${p.nome}</option>`).join("");
++        plantaSelecionada = ativas[0].id;
++        selectPlanta.value = plantaSelecionada;
++
++        selectPlanta.addEventListener("change", () => {
++          plantaSelecionada = selectPlanta.value || PLANTA_PADRAO_ID;
++          // Tipo de processo e horários são específicos de cada planta —
++          // trocar a planta invalida qualquer seleção feita antes.
++          carregarTiposProcessoAtivos();
++          inputData.value = "";
++          inputHoraSelecionada.value = "";
++          slotsGrid.innerHTML = "";
++          slotsMsg.textContent = "Selecione uma data para consultar os horários.";
++        });
++      } catch (err) {
++        console.error("Erro ao carregar plantas:", err);
++        plantaSelecionada = PLANTA_PADRAO_ID;
++        campoPlantaWrapper.style.display = "none";
++      }
++    }
++
+     /* ===================================================================
+        1. CARREGAR TIPOS DE PROCESSO ATIVOS
+        =================================================================== */
+@@ -402,6 +458,7 @@
+         selectTipoProcesso.innerHTML = '<option value="">Selecione o tipo de processo...</option>';
+         snap.docs.forEach(docSnap => {
+           const p = docSnap.data();
++          if (!pertenceAPlanta(p, plantaSelecionada)) return;
+           const opt = document.createElement("option");
+           opt.value = docSnap.id;
+           opt.textContent = p.nome;
+@@ -433,7 +490,7 @@
+       try {
+         // incluirFechados=false (padrão): horários fechados manualmente
+         // pela Logística para esta data não aparecem aqui.
+-        slotsDoDia = await buscarSlotsVirtuaisDoDia(db, dataSelecionada);
++        slotsDoDia = await buscarSlotsVirtuaisDoDia(db, dataSelecionada, { plantaId: plantaSelecionada });
+ 
+         // Se a data escolhida é HOJE, remove da lista qualquer horário cujo
+         // início já passou (ou está em andamento) — não faz sentido oferecer
+@@ -553,6 +610,7 @@
+         const resultado = await criarAgendamentoTransportadora(db, usuarioAtual, {
+           empresa,
+           tipoProcessoId,
++          plantaId: plantaSelecionada,
+           dataAgendada,
+           horaInicio,
+           placaCavalo,
