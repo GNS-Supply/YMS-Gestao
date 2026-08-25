@@ -1379,9 +1379,21 @@ button:focus-visible,
   flex: 0 0 232px;
   width: 232px;
   background: var(--azul-escuro);
-  min-height: calc(100vh - 60px);
+  /* BUGFIX: "top" e "min-height" abaixo usavam o valor fixo 60px,
+     assumindo uma .topbar sempre com a mesma altura. Em telas com
+     .topbar mais alta que isso (ex: quando o Admin ganha um seletor de
+     planta extra no logistica-dashboard.html), o menu lateral ficava
+     mais alto que a área visível abaixo da topbar — como
+     "position: sticky" não consegue grudar um elemento maior que o
+     espaço disponível, o menu passava a se mover junto com o scroll da
+     página em vez de ficar fixo, o que parecia (e de fato era) um
+     "menu grudento quebrado". --topbar-altura é medida em JS a partir
+     da altura real da .topbar (ver logistica-dashboard.html) e cai
+     para 60px por padrão nas telas que não fazem essa medição.
+     */
+  min-height: calc(100vh - var(--topbar-altura, 60px));
   position: sticky;
-  top: 60px;
+  top: var(--topbar-altura, 60px);
   display: flex;
   flex-direction: column;
   padding: 14px 0;

@@ -307,10 +307,10 @@ index 4eb1438..a225a4c 100644
  
      form?.addEventListener("submit", async (e) => {
 diff --git a/logistica-dashboard.html b/logistica-dashboard.html
-index aade230..a2d0b4e 100644
+index aade230..05ac371 100644
 --- a/logistica-dashboard.html
 +++ b/logistica-dashboard.html
-@@ -231,6 +231,42 @@
+@@ -231,6 +231,54 @@
        background: #fff;
        animation: pulsoIndicador 1.2s ease-in-out infinite;
      }
@@ -331,6 +331,18 @@ index aade230..a2d0b4e 100644
 +      background: #f59e0b;
 +      border-color: #f59e0b;
 +      color: #1a1200;
++    }
++    /* BUGFIX: o <select> herdava (de propósito) o texto branco do
++       topbar para ficar legível quando FECHADO — mas a lista suspensa
++       de <option> usa o fundo claro padrão do navegador, e sem regra
++       própria essas opções também saíam com texto branco, ficando
++       "brancoem branco" (ilegível) quando o menu abria. Fixando fundo
++       escuro + texto claro só nas opções, sem depender do que o
++       navegador escolhe por padrão.
++     */
++    .seletor-planta-admin option {
++      background: #101922;
++      color: #fff;
 +    }
 +
 +    /* NOVO: aviso fixo quando o Admin está fora da planta padrão dele */
@@ -353,7 +365,7 @@ index aade230..a2d0b4e 100644
    </style>
  </head>
  <body>
-@@ -251,11 +287,27 @@
+@@ -251,11 +299,27 @@
        <div class="info-usuario">
          <div id="user-nome" style="font-weight: 600;">--</div>
          <div id="user-tipo" style="opacity: 0.75; font-size: 0.75rem;">--</div>
@@ -381,7 +393,7 @@ index aade230..a2d0b4e 100644
    <div class="layout-erp">
  
      <div class="sidebar-overlay" id="sidebar-overlay"></div>
-@@ -883,6 +935,16 @@
+@@ -883,6 +947,16 @@
                <label for="nomeProcesso">Nome do Tipo de Processo *</label>
                <input type="text" id="nomeProcesso" required placeholder="Ex: Carga Geral">
              </div>
@@ -398,7 +410,7 @@ index aade230..a2d0b4e 100644
              <div id="processo-error" style="color:var(--vermelho, #c0392b); font-size:0.85rem; margin-bottom:10px;"></div>
              <button type="submit" class="btn-primario" style="width:auto; padding:10px 20px;">Cadastrar Tipo de Processo</button>
            </form>
-@@ -893,11 +955,12 @@
+@@ -893,11 +967,12 @@
                  <tr>
                    <th>Nome</th>
                    <th>Status</th>
@@ -412,7 +424,7 @@ index aade230..a2d0b4e 100644
                </tbody>
              </table>
            </div>
-@@ -941,6 +1004,11 @@
+@@ -941,6 +1016,11 @@
            <input type="text" id="checkin-motorista" required>
          </div>
  
@@ -424,7 +436,7 @@ index aade230..a2d0b4e 100644
          <div class="campo">
            <label for="checkin-pontualidade">Pontualidade Calculada</label>
            <input type="text" id="checkin-pontualidade" readonly style="background: #e9ecef; font-weight: bold;">
-@@ -963,9 +1031,9 @@
+@@ -963,9 +1043,9 @@
          <input type="hidden" id="checkout-booking-id">
          <input type="hidden" id="checkout-entrada-timestamp">
  
@@ -437,7 +449,7 @@ index aade230..a2d0b4e 100644
          </div>
  
          <div class="campo">
-@@ -1020,6 +1088,11 @@
+@@ -1020,6 +1100,11 @@
            </select>
          </div>
  
@@ -449,7 +461,7 @@ index aade230..a2d0b4e 100644
          <div class="campo">
            <label for="encaixe-obs">Observação / Motivo do Encaixe</label>
            <input type="text" id="encaixe-obs" placeholder="Ex: Carga emergencial liberada por Logística">
-@@ -1084,7 +1157,16 @@
+@@ -1084,7 +1169,16 @@
        excluirRegraRecorrencia,
        garantirOcorrenciasRecorrencia,
        garantirTodasRecorrencias,
@@ -467,7 +479,7 @@ index aade230..a2d0b4e 100644
      } from "./patioCore.js";
      // Máscara de placa, cálculo de disponibilidade, transições de
      // estado e o listener em tempo real da lista de agendamentos vêm
-@@ -1092,7 +1174,31 @@
+@@ -1092,7 +1186,31 @@
      // dessas regras por conta própria (ver revisão estrutural).
  
      let usuarioLogado = null;
@@ -499,8 +511,32 @@ index aade230..a2d0b4e 100644
      let listaTransportadoras = [];
      let todosBookingsGerais = [];
      let filtroPortariaAtual = "todos";
-@@ -1284,10 +1390,61 @@
+@@ -1282,12 +1400,85 @@
+       });
+     }
  
++    // BUGFIX (menu lateral "se movendo" ao rolar a página): o menu
++    // (.sidebar-erp) usa position:sticky com um offset do topo igual à
++    // altura da .topbar — se esse valor for diferente da altura real
++    // (ex: quando o seletor de planta do Admin aparece e deixa a
++    // topbar mais alta), o menu passa a não caber mais no espaço
++    // sticky calculado e "escapa", parecendo se mover com o scroll.
++    // Mede a altura real da topbar e mantém a variável CSS
++    // --topbar-altura sempre sincronizada com ela.
++    function sincronizarAlturaTopbar() {
++      const topbar = document.querySelector(".topbar");
++      if (!topbar) return;
++      document.documentElement.style.setProperty("--topbar-altura", `${topbar.offsetHeight}px`);
++    }
++    window.addEventListener("resize", sincronizarAlturaTopbar);
++    // ResizeObserver cobre mudanças de altura da topbar que não vêm de
++    // resize da janela — ex: o seletor de planta do Admin aparecendo
++    // depois que listarPlantas() resolve (ver bloco abaixo).
++    if (window.ResizeObserver) {
++      new ResizeObserver(sincronizarAlturaTopbar).observe(document.querySelector(".topbar"));
++    }
++    sincronizarAlturaTopbar();
++
      // Proteção de acesso (Tipo 2 = Logística, 3 = Admin) — os MESMOS dois
      // perfis que antes acessavam portaria.html separadamente.
 -    protegerPagina([2, 3], async (user, dadosUser) => {
@@ -563,7 +599,7 @@ index aade230..a2d0b4e 100644
        
  // Exibe o botão de retorno ao Painel Admin se o tipo de usuário for Administrador (3)
        if (Number(dadosUser.tipo) === 3) {
-@@ -1348,6 +1505,24 @@
+@@ -1348,6 +1539,24 @@
         pelo antigo portaria.html, que agora só redireciona pra cá com
         "?tab=portaria" em vez de ser uma página própria.
         =================================================================== */
@@ -588,7 +624,7 @@ index aade230..a2d0b4e 100644
      function inicializarAbas() {
        const btns = document.querySelectorAll(".sidebar-item[data-tab]");
        const conteudos = document.querySelectorAll(".tab-conteudo");
-@@ -1355,6 +1530,7 @@
+@@ -1355,6 +1564,7 @@
        btns.forEach(btn => {
          btn.addEventListener("click", () => {
            const target = btn.dataset.tab;
@@ -596,7 +632,7 @@ index aade230..a2d0b4e 100644
            btns.forEach(b => b.classList.remove("ativo"));
            conteudos.forEach(c => c.classList.remove("ativo"));
  
-@@ -1381,6 +1557,10 @@
+@@ -1381,6 +1591,10 @@
  
        const tabParam = new URLSearchParams(window.location.search).get("tab");
        if (tabParam === "hoje") {
@@ -607,7 +643,7 @@ index aade230..a2d0b4e 100644
          // "Agendamento de Hoje" foi removido por ser uma segunda
          // implementação da mesma informação que "Todos os Agendamentos"
          // já mostra com filtro de data = hoje. Qualquer link/favorito
-@@ -1390,7 +1570,7 @@
+@@ -1390,7 +1604,7 @@
          document.getElementById("filtro-data-fim").value = hojeIso;
          const alvoTodos = document.querySelector('.sidebar-item[data-tab="todos"]');
          if (alvoTodos) alvoTodos.click();
@@ -616,7 +652,7 @@ index aade230..a2d0b4e 100644
          const alvo = document.querySelector(`.sidebar-item[data-tab="${tabParam}"]`);
          if (alvo) alvo.click();
        } else {
-@@ -1466,7 +1646,16 @@
+@@ -1466,7 +1680,16 @@
        cancelarListenerBookings = escutarBookings(
          db,
          async (bookings) => {
@@ -634,7 +670,7 @@ index aade230..a2d0b4e 100644
            preencherSelectEmpresasKPIs(todosBookingsGerais);
            rerenderizarAbaAtiva();
            if (!primeiraCarga) mostrarIndicadorTempoReal();
-@@ -1514,10 +1703,63 @@
+@@ -1514,10 +1737,63 @@
          case "solicitacoes": renderizarSolicitacoesPendentes(); break;
          case "todos": carregarTodosAgendamentos(); break;
          case "kpis": atualizarPainelKPIs(); break;
@@ -698,7 +734,7 @@ index aade230..a2d0b4e 100644
      /* ===================================================================
         RESTAURAÇÃO DO PAINEL DO DIA (TIRA DE DIAS + HORA A HORA)
         =================================================================== */
-@@ -1578,7 +1820,7 @@
+@@ -1578,7 +1854,7 @@
        container.innerHTML = '<p style="text-align:center; color:#888; padding:20px;">Calculando horários e reservas...</p>';
  
        try {
@@ -707,7 +743,7 @@ index aade230..a2d0b4e 100644
          // Aprovado cobre Em Pátio/Concluído/No-Show também (aprovacaoStatus
          // permanece "Aprovado" nessas 3 dimensões independentes — ver patioCore.js).
          const agendamentosDia = todosBookingsGerais.filter(b => b.dataAgendada === dataIso && [APROVACAO.PENDENTE, APROVACAO.APROVADO].includes(b.aprovacaoStatus));
-@@ -1949,6 +2191,18 @@
+@@ -1949,6 +2225,18 @@
            const pontualidade = calcularPontualidade(booking.horaInicio, new Date());
            document.getElementById("checkin-pontualidade").value = pontualidade;
  
@@ -726,7 +762,7 @@ index aade230..a2d0b4e 100644
            abrirModalPortaria("modal-checkin");
          });
        });
-@@ -1963,6 +2217,18 @@
+@@ -1963,6 +2251,18 @@
            document.getElementById("checkout-nf").value = booking.checkOut?.notaFiscal || "";
            document.getElementById("checkout-obs").value = "";
  
@@ -745,7 +781,7 @@ index aade230..a2d0b4e 100644
            const entradaDate = booking.checkIn?.dataHora?.toDate ? booking.checkIn.dataHora.toDate() : new Date();
            document.getElementById("checkout-entrada-timestamp").value = entradaDate.getTime();
  
-@@ -2025,6 +2291,8 @@
+@@ -2025,6 +2325,8 @@
  
        document.getElementById("btn-abrir-encaixe").addEventListener("click", () => {
          document.getElementById("form-encaixe").reset();
@@ -754,7 +790,7 @@ index aade230..a2d0b4e 100644
          abrirModalPortaria("modal-encaixe");
        });
  
-@@ -2044,6 +2312,7 @@
+@@ -2044,6 +2346,7 @@
          document.getElementById("checkin-placa-cavalo").value = placaCavalo;
          document.getElementById("checkin-placa-carreta").value = placaCarreta;
          const motorista = document.getElementById("checkin-motorista").value.trim();
@@ -762,7 +798,7 @@ index aade230..a2d0b4e 100644
  
          try {
            // registrarCheckIn() centraliza em patioCore.js: muda as
-@@ -2051,7 +2320,9 @@
+@@ -2051,7 +2354,9 @@
            // comparecimento (null -> Compareceu/Compareceu Atrasado) na
            // mesma transação, calculando pontualidade e divergência de
            // dados internamente, sem sobrescrever a dimensão de aprovação.
@@ -773,7 +809,7 @@ index aade230..a2d0b4e 100644
  
            await registrarAuditLog(id, "Check-In");
            fecharModaisPortaria();
-@@ -2072,8 +2343,10 @@
+@@ -2072,8 +2377,10 @@
          const notaFiscal = document.getElementById("checkout-nf").value.trim();
          const obsSaida = document.getElementById("checkout-obs").value.trim();
  
@@ -786,7 +822,7 @@ index aade230..a2d0b4e 100644
            return;
          }
  
-@@ -2102,6 +2375,7 @@
+@@ -2102,6 +2409,7 @@
          document.getElementById("encaixe-placa-carreta").value = placaCarreta;
          const motorista = document.getElementById("encaixe-motorista").value.trim();
          const tipoProcessoId = document.getElementById("encaixe-processo").value;
@@ -794,7 +830,7 @@ index aade230..a2d0b4e 100644
          const obs = document.getElementById("encaixe-obs").value.trim();
  
          const agora = new Date();
-@@ -2114,11 +2388,13 @@
+@@ -2114,11 +2422,13 @@
            const { bookingId } = await criarEntradaEncaixe(db, usuarioLogado, {
              empresa,
              tipoProcessoId,
@@ -808,7 +844,7 @@ index aade230..a2d0b4e 100644
              observacoes: obs ? `[ENCAIXE PORTARIA] ${obs}` : "[ENCAIXE PORTARIA]"
            });
            await registrarAuditLog(bookingId, "Entrada Encaixe Portaria");
-@@ -2177,6 +2453,23 @@
+@@ -2177,6 +2487,23 @@
        });
      }
  
@@ -832,7 +868,7 @@ index aade230..a2d0b4e 100644
      /* ===================================================================
         ETAPA 2B: NOVO AGENDAMENTO OPERACIONAL DIRETO
         =================================================================== */
-@@ -2249,6 +2542,7 @@
+@@ -2249,6 +2576,7 @@
            await criarAgendamentoOperacional(db, usuarioLogado, {
              transportadoraId: usuarioId,
              empresa,
@@ -840,7 +876,7 @@ index aade230..a2d0b4e 100644
              dataAgendada: inputData.value,
              horaInicio: document.getElementById("op-horario").value,
              tipoProcessoId: document.getElementById("op-processo").value,
-@@ -2353,6 +2647,7 @@
+@@ -2353,6 +2681,7 @@
              horaInicio: document.getElementById("rec-horario").value,
              transportadoraId: usuarioId,
              empresa,
@@ -848,7 +884,7 @@ index aade230..a2d0b4e 100644
              tipoProcessoId: document.getElementById("rec-processo").value,
              placaCavaloPadrao: placaCavalo,
              placaCarretaPadrao: placaCarreta,
-@@ -2386,7 +2681,8 @@
+@@ -2386,7 +2715,8 @@
        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Carregando recorrências...</td></tr>';
  
        try {
@@ -858,7 +894,7 @@ index aade230..a2d0b4e 100644
  
          if (regras.length === 0) {
            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#888;">Nenhuma recorrência cadastrada ainda.</td></tr>';
-@@ -2490,7 +2786,7 @@
+@@ -2490,7 +2820,7 @@
          // incluirFechados:false (padrão) — não faz sentido oferecer, no
          // formulário de lançamento operacional, um horário que a própria
          // Logística fechou manualmente para esta data.
@@ -867,7 +903,7 @@ index aade230..a2d0b4e 100644
          selectHorario.innerHTML = '<option value="" disabled selected>Selecione um horário...</option>';
  
          slots.forEach(s => {
-@@ -2851,6 +3147,7 @@
+@@ -2851,6 +3181,7 @@
          const snap = await getDocs(collection(db, "timeSlotRules"));
          const regras = snap.docs
            .map(d => ({ id: d.id, ...d.data() }))
@@ -875,7 +911,7 @@ index aade230..a2d0b4e 100644
            .sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
  
          if (regras.length === 0) {
-@@ -2988,7 +3285,7 @@
+@@ -2988,7 +3319,7 @@
          return;
        }
  
@@ -884,7 +920,7 @@ index aade230..a2d0b4e 100644
        const btn = document.getElementById("btn-salvar-regra");
        btn.disabled = true;
        btn.textContent = "Salvando...";
-@@ -3021,6 +3318,7 @@
+@@ -3021,6 +3352,7 @@
          const snap = await getDocs(collection(db, "timeSlotExceptions"));
          const excecoes = snap.docs
            .map(d => ({ id: d.id, ...d.data() }))
@@ -892,7 +928,7 @@ index aade230..a2d0b4e 100644
            .sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
  
          if (excecoes.length === 0) {
-@@ -3142,7 +3440,7 @@
+@@ -3142,7 +3474,7 @@
          return;
        }
  
@@ -901,7 +937,7 @@ index aade230..a2d0b4e 100644
        const btn = document.getElementById("btn-salvar-excecao");
        btn.disabled = true;
        btn.textContent = "Salvando...";
-@@ -3185,7 +3483,7 @@
+@@ -3185,7 +3517,7 @@
        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Carregando vagas...</td></tr>';
  
        try {
@@ -910,7 +946,7 @@ index aade230..a2d0b4e 100644
  
          if (slots.length === 0) {
            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#888;">Nenhum horário de atendimento configurado (Regra Padrão/Exceção) para esta data.</td></tr>';
-@@ -3306,7 +3604,7 @@
+@@ -3306,7 +3638,7 @@
  
            btn.disabled = true;
            try {
@@ -919,7 +955,7 @@ index aade230..a2d0b4e 100644
              await deleteDoc(doc(db, "timeSlots", slotId));
              mostrarToast("Horário restaurado para o padrão.", { tipo: "sucesso" });
              await carregarVagas();
-@@ -3320,11 +3618,12 @@
+@@ -3320,11 +3652,12 @@
      }
  
      async function salvarAjusteVaga(dataStr, slot, { capacidadeMax, ativo }) {
@@ -933,7 +969,7 @@ index aade230..a2d0b4e 100644
          capacidadeMax,
          ativo,
          ocupados: slot.ocupados
-@@ -3337,8 +3636,10 @@
+@@ -3337,8 +3670,10 @@
      document.getElementById("form-processo").addEventListener("submit", async (e) => {
        e.preventDefault();
        const inputNome = document.getElementById("nomeProcesso");
@@ -944,7 +980,7 @@ index aade230..a2d0b4e 100644
  
        if (!nome) return;
        erroBox.textContent = "";
-@@ -3350,9 +3651,12 @@
+@@ -3350,9 +3685,12 @@
          await addDoc(collection(db, "processTypes"), {
            nome,
            ativo: true,
@@ -957,7 +993,7 @@ index aade230..a2d0b4e 100644
          mostrarToast("Tipo de processo cadastrado.", { tipo: "sucesso" });
  
          mapProcessos = await obterTiposProcessoMap();
-@@ -3370,28 +3674,78 @@
+@@ -3370,28 +3708,78 @@
      async function carregarTiposProcessoTabela() {
        const tbody = document.getElementById("tbody-processos");
        if (!tbody) return;
@@ -1038,7 +1074,7 @@ index aade230..a2d0b4e 100644
          tbody.querySelectorAll(".btn-toggle-processo").forEach(btn => {
            btn.addEventListener("click", async () => {
              const id = btn.closest("tr").dataset.id;
-@@ -3415,7 +3769,7 @@
+@@ -3415,7 +3803,7 @@
          });
        } catch (err) {
          console.error("Erro ao carregar tipos de processo:", err);
@@ -1047,7 +1083,7 @@ index aade230..a2d0b4e 100644
        }
      }
  
-@@ -3424,9 +3778,15 @@
+@@ -3424,9 +3812,15 @@
         =================================================================== */
      async function obterTiposProcessoMap() {
        const map = {};
@@ -1477,11 +1513,84 @@ index 6123d8e..f4ab544 100644
            tipoProcessoId: regra.tipoProcessoId,
            dataAgendada: cursor,
            horaInicio: regra.horaInicio,
+diff --git a/style.css b/style.css
+index 404d5e4..06e4cc2 100644
+--- a/style.css
++++ b/style.css
+@@ -1379,9 +1379,21 @@ button:focus-visible,
+   flex: 0 0 232px;
+   width: 232px;
+   background: var(--azul-escuro);
+-  min-height: calc(100vh - 60px);
++  /* BUGFIX: "top" e "min-height" abaixo usavam o valor fixo 60px,
++     assumindo uma .topbar sempre com a mesma altura. Em telas com
++     .topbar mais alta que isso (ex: quando o Admin ganha um seletor de
++     planta extra no logistica-dashboard.html), o menu lateral ficava
++     mais alto que a área visível abaixo da topbar — como
++     "position: sticky" não consegue grudar um elemento maior que o
++     espaço disponível, o menu passava a se mover junto com o scroll da
++     página em vez de ficar fixo, o que parecia (e de fato era) um
++     "menu grudento quebrado". --topbar-altura é medida em JS a partir
++     da altura real da .topbar (ver logistica-dashboard.html) e cai
++     para 60px por padrão nas telas que não fazem essa medição.
++     */
++  min-height: calc(100vh - var(--topbar-altura, 60px));
+   position: sticky;
+-  top: 60px;
++  top: var(--topbar-altura, 60px);
+   display: flex;
+   flex-direction: column;
+   padding: 14px 0;
 diff --git a/transportadora-dashboard.html b/transportadora-dashboard.html
-index 7def650..b92f8eb 100644
+index 7def650..3e8697b 100644
 --- a/transportadora-dashboard.html
 +++ b/transportadora-dashboard.html
-@@ -39,6 +39,13 @@
+@@ -9,6 +9,44 @@
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+   <link rel="stylesheet" href="style.css">
++  <style>
++    /* Filtros rápidos de período em "Meus Agendamentos" — mesmo padrão
++       visual dos filtros da Portaria no painel da Logística (.btn-filtro),
++       reaproveitado aqui pra manter a linguagem visual consistente entre
++       as telas. */
++    .segmentado {
++      display: flex;
++      gap: 8px;
++      margin-bottom: 16px;
++      flex-wrap: wrap;
++    }
++    .segmentado-item {
++      padding: 8px 16px;
++      border: 1px solid var(--cinza-borda, #ccc);
++      background: #f8f9fa;
++      border-radius: 6px;
++      cursor: pointer;
++      font-weight: 500;
++      font-size: 0.85rem;
++      transition: all 0.2s;
++    }
++    .segmentado-item.ativo {
++      background: var(--azul-escuro, #0f2942);
++      color: #fff;
++      border-color: var(--azul-escuro, #0f2942);
++    }
++    .btn-secundario {
++      padding: 9px 14px;
++      border: 1px solid var(--cinza-borda, #ccc);
++      background: #fff;
++      color: var(--texto, #1A2229);
++      border-radius: 6px;
++      cursor: pointer;
++      font-weight: 500;
++      transition: all 0.2s;
++    }
++    .btn-secundario:hover { background: var(--cinza-bg, #EEF0F1); }
++  </style>
+ </head>
+ <body>
+ 
+@@ -39,6 +77,13 @@
              <input type="text" id="empresa" required>
            </div>
  
@@ -1495,7 +1604,75 @@ index 7def650..b92f8eb 100644
            <div class="campo">
              <label for="tipoProcesso">Tipo de Processo</label>
              <select id="tipoProcesso" required>
-@@ -136,7 +143,10 @@
+@@ -87,12 +132,39 @@
+ 
+     <div class="tab-conteudo" id="tab-meus">
+       <div class="card">
+-        <div style="display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
++        <!-- Atalhos rápidos de período — mesma lógica do "Painel do Dia" da
++             Logística, adaptada para a Transportadora não precisar montar
++             filtros toda vez que só quer ver o agendamento de hoje ou
++             conferir o histórico do que já passou. -->
++        <div class="segmentado" id="segmentado-periodo-rapido" role="group" aria-label="Período">
++          <button type="button" class="segmentado-item ativo" data-filtro-rapido="todos">Todos</button>
++          <button type="button" class="segmentado-item" data-filtro-rapido="hoje">Hoje</button>
++          <button type="button" class="segmentado-item" data-filtro-rapido="futuros">Próximos</button>
++          <button type="button" class="segmentado-item" data-filtro-rapido="historico">Histórico</button>
++        </div>
++
++        <div style="display:flex; gap:12px; margin-bottom:8px; flex-wrap:wrap; align-items:flex-end;">
+           <div class="campo" style="flex:2; min-width:200px; margin:0;">
+             <label for="busca-meus-agendamentos">Buscar (motorista ou placa)</label>
+             <input type="text" id="busca-meus-agendamentos" placeholder="Ex: João ou AAA0A00">
+           </div>
+-          <div class="campo" style="flex:1; min-width:200px; margin:0;">
++          <div class="campo" style="flex:1; min-width:170px; margin:0;">
++            <label for="filtro-tipo-processo-meus">Tipo de Processo</label>
++            <select id="filtro-tipo-processo-meus">
++              <option value="">Todos</option>
++            </select>
++          </div>
++          <div class="campo" style="flex:1; min-width:170px; margin:0;">
++            <label for="filtro-status-meus">Status da Solicitação</label>
++            <select id="filtro-status-meus">
++              <option value="">Todos</option>
++              <option value="pendente">Pendente / Aguardando</option>
++              <option value="aprovado">Aprovado / Em Pátio / Concluído</option>
++              <option value="recusado">Recusado / Cancelado / No-Show</option>
++              <option value="expirado">Expirado</option>
++            </select>
++          </div>
++          <div class="campo" style="flex:1; min-width:150px; margin:0;">
+             <label for="ordenar-meus-agendamentos">Ordenar por</label>
+             <select id="ordenar-meus-agendamentos">
+               <option value="data_desc">Data (mais recente primeiro)</option>
+@@ -101,10 +173,25 @@
+               <option value="horario_desc">Horário (decrescente)</option>
+               <option value="motorista_asc">Motorista (A-Z)</option>
+               <option value="placa_asc">Placa do Cavalo (A-Z)</option>
++              <option value="tipo_processo_asc">Tipo de Processo (A-Z)</option>
+               <option value="status_asc">Status (A-Z)</option>
+             </select>
+           </div>
+         </div>
++
++        <div style="display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap; align-items:flex-end;">
++          <div class="campo" style="margin:0;">
++            <label for="filtro-data-inicio-meus">Período de — até</label>
++            <div style="display:flex; gap:6px; align-items:center;">
++              <input type="date" id="filtro-data-inicio-meus" style="max-width:150px;">
++              <span style="opacity:0.6;">—</span>
++              <input type="date" id="filtro-data-fim-meus" style="max-width:150px;">
++            </div>
++          </div>
++          <button type="button" class="btn-secundario" id="btn-limpar-filtros-meus" style="padding:9px 14px; font-size:0.82rem;">Limpar filtros</button>
++          <span id="contador-meus-agendamentos" style="font-size:0.8rem; opacity:0.7; margin-left:auto; align-self:center;"></span>
++        </div>
++
+         <div class="lista-agendamentos" id="lista-agendamentos">
+           <div class="estado-vazio">Carregando...</div>
+         </div>
+@@ -136,7 +223,10 @@
        aplicarMascaraPlaca,
        configurarMascaraPlaca,
        placaCompleta,
@@ -1507,7 +1684,7 @@ index 7def650..b92f8eb 100644
      } from "./patioCore.js";
      // Máscara de placa, disponibilidade e normalização de booking vêm
      // TODOS de patioCore.js — a única implementação do sistema (ver
-@@ -338,6 +348,8 @@
+@@ -338,6 +428,8 @@
      // ---------------- Elementos do DOM ----------------
      const form = document.getElementById("form-agendamento");
      const selectTipoProcesso = document.getElementById("tipoProcesso");
@@ -1516,7 +1693,7 @@ index 7def650..b92f8eb 100644
      const inputData = document.getElementById("data");
      const slotsGrid = document.getElementById("slots-grid");
      const slotsMsg = document.getElementById("slots-msg");
-@@ -347,6 +359,13 @@
+@@ -347,6 +439,13 @@
      const inputPlacaCavalo = document.getElementById("placaCavalo");
      const inputPlacaCarreta = document.getElementById("placaCarreta");
  
@@ -1530,12 +1707,13 @@ index 7def650..b92f8eb 100644
      // Máscara de placa: importada de patioCore.js. Nenhuma cópia local
      // aqui — ver logistica-dashboard.html, que usa a mesma implementação.
      configurarMascaraPlaca(inputPlacaCavalo);
-@@ -385,11 +404,48 @@
+@@ -385,11 +484,49 @@
  
        preencherCampoEmpresa(perfil);
  
 +      await inicializarSeletorPlanta();
        mapTiposProcessoCache = await obterTiposProcessoMap();
++      preencherFiltroTipoProcessoMeus();
        iniciarListenerMeusAgendamentos();
        carregarTiposProcessoAtivos();
      });
@@ -1579,7 +1757,7 @@ index 7def650..b92f8eb 100644
      /* ===================================================================
         1. CARREGAR TIPOS DE PROCESSO ATIVOS
         =================================================================== */
-@@ -402,6 +458,7 @@
+@@ -402,6 +539,7 @@
          selectTipoProcesso.innerHTML = '<option value="">Selecione o tipo de processo...</option>';
          snap.docs.forEach(docSnap => {
            const p = docSnap.data();
@@ -1587,7 +1765,7 @@ index 7def650..b92f8eb 100644
            const opt = document.createElement("option");
            opt.value = docSnap.id;
            opt.textContent = p.nome;
-@@ -433,7 +490,7 @@
+@@ -433,7 +571,7 @@
        try {
          // incluirFechados=false (padrão): horários fechados manualmente
          // pela Logística para esta data não aparecem aqui.
@@ -1596,7 +1774,7 @@ index 7def650..b92f8eb 100644
  
          // Se a data escolhida é HOJE, remove da lista qualquer horário cujo
          // início já passou (ou está em andamento) — não faz sentido oferecer
-@@ -553,6 +610,7 @@
+@@ -553,6 +691,7 @@
          const resultado = await criarAgendamentoTransportadora(db, usuarioAtual, {
            empresa,
            tipoProcessoId,
@@ -1604,3 +1782,178 @@ index 7def650..b92f8eb 100644
            dataAgendada,
            horaInicio,
            placaCavalo,
+@@ -583,6 +722,10 @@
+         document.querySelectorAll(".tab-conteudo").forEach(c => c.classList.remove("ativo"));
+         document.querySelector('.tab-btn[data-tab="meus"]')?.classList.add("ativo");
+         document.getElementById("tab-meus")?.classList.add("ativo");
++        // Reseta os filtros antes de destacar o item novo — senão um
++        // filtro de status/período deixado ativo de uma consulta
++        // anterior pode esconder o agendamento recém-criado da lista.
++        document.getElementById("btn-limpar-filtros-meus")?.click();
+         idParaDestacarPendente = resultado.bookingId;
+         renderizarListaAgendamentos();
+ 
+@@ -608,6 +751,15 @@
+     let idParaDestacarPendente = null;
+     let buscaMeusAgendamentosTexto = "";
+     let ordenacaoMeusAgendamentos = "data_desc";
++    // NOVO (organização de "Meus Agendamentos"): filtro rápido de
++    // período (todos/hoje/futuros/historico) — vira null assim que a
++    // Transportadora escolhe um período customizado abaixo, pra não ter
++    // dois filtros de data brigando entre si.
++    let filtroRapidoMeus = "todos";
++    let filtroDataInicioMeus = "";
++    let filtroDataFimMeus = "";
++    let filtroTipoProcessoMeus = "";
++    let filtroStatusMeus = "";
+ 
+     document.getElementById("busca-meus-agendamentos")?.addEventListener("input", (e) => {
+       buscaMeusAgendamentosTexto = e.target.value.trim();
+@@ -619,6 +771,80 @@
+       renderizarListaAgendamentos();
+     });
+ 
++    document.getElementById("filtro-tipo-processo-meus")?.addEventListener("change", (e) => {
++      filtroTipoProcessoMeus = e.target.value;
++      renderizarListaAgendamentos();
++    });
++
++    document.getElementById("filtro-status-meus")?.addEventListener("change", (e) => {
++      filtroStatusMeus = e.target.value;
++      renderizarListaAgendamentos();
++    });
++
++    document.querySelectorAll("#segmentado-periodo-rapido .segmentado-item").forEach(btn => {
++      btn.addEventListener("click", () => {
++        filtroRapidoMeus = btn.dataset.filtroRapido;
++        filtroDataInicioMeus = "";
++        filtroDataFimMeus = "";
++        const inicioEl = document.getElementById("filtro-data-inicio-meus");
++        const fimEl = document.getElementById("filtro-data-fim-meus");
++        if (inicioEl) inicioEl.value = "";
++        if (fimEl) fimEl.value = "";
++        document.querySelectorAll("#segmentado-periodo-rapido .segmentado-item").forEach(b => b.classList.remove("ativo"));
++        btn.classList.add("ativo");
++        renderizarListaAgendamentos();
++      });
++    });
++
++    function aoMudarPeriodoCustomizado() {
++      // Um período customizado sempre substitui o atalho rápido — evita
++      // o usuário achar que escolheu "Histórico" só até uma data X e na
++      // verdade os dois filtros estarem combinados de um jeito confuso.
++      filtroRapidoMeus = null;
++      document.querySelectorAll("#segmentado-periodo-rapido .segmentado-item").forEach(b => b.classList.remove("ativo"));
++      renderizarListaAgendamentos();
++    }
++    document.getElementById("filtro-data-inicio-meus")?.addEventListener("change", (e) => {
++      filtroDataInicioMeus = e.target.value;
++      aoMudarPeriodoCustomizado();
++    });
++    document.getElementById("filtro-data-fim-meus")?.addEventListener("change", (e) => {
++      filtroDataFimMeus = e.target.value;
++      aoMudarPeriodoCustomizado();
++    });
++
++    document.getElementById("btn-limpar-filtros-meus")?.addEventListener("click", () => {
++      buscaMeusAgendamentosTexto = "";
++      filtroTipoProcessoMeus = "";
++      filtroStatusMeus = "";
++      filtroDataInicioMeus = "";
++      filtroDataFimMeus = "";
++      filtroRapidoMeus = "todos";
++      const buscaEl = document.getElementById("busca-meus-agendamentos");
++      if (buscaEl) buscaEl.value = "";
++      const tipoEl = document.getElementById("filtro-tipo-processo-meus");
++      if (tipoEl) tipoEl.value = "";
++      const statusEl = document.getElementById("filtro-status-meus");
++      if (statusEl) statusEl.value = "";
++      const inicioEl = document.getElementById("filtro-data-inicio-meus");
++      if (inicioEl) inicioEl.value = "";
++      const fimEl = document.getElementById("filtro-data-fim-meus");
++      if (fimEl) fimEl.value = "";
++      document.querySelectorAll("#segmentado-periodo-rapido .segmentado-item").forEach(b => b.classList.remove("ativo"));
++      document.querySelector('#segmentado-periodo-rapido .segmentado-item[data-filtro-rapido="todos"]')?.classList.add("ativo");
++      renderizarListaAgendamentos();
++    });
++
++    // Preenche o <select> de Tipo de Processo com o que já foi carregado
++    // em mapTiposProcessoCache (id -> nome), assim que ele fica pronto.
++    function preencherFiltroTipoProcessoMeus() {
++      const select = document.getElementById("filtro-tipo-processo-meus");
++      if (!select) return;
++      const opcoes = Object.entries(mapTiposProcessoCache).sort((a, b) => a[1].localeCompare(b[1], "pt-BR"));
++      select.innerHTML = '<option value="">Todos</option>' +
++        opcoes.map(([id, nome]) => `<option value="${id}">${escapeHtml(nome)}</option>`).join("");
++    }
++
+     function iniciarListenerMeusAgendamentos() {
+       if (cancelarListenerMeusAgendamentos) return;
+       const q = query(collection(db, "bookings"), where("usuarioId", "==", usuarioAtual.uid));
+@@ -656,9 +882,28 @@
+       horario_desc: (a, b) => (b.horaInicio || "").localeCompare(a.horaInicio || ""),
+       motorista_asc: (a, b) => (a.motorista || "").localeCompare(b.motorista || "", "pt-BR"),
+       placa_asc: (a, b) => (a.placaCavalo || "").localeCompare(b.placaCavalo || "", "pt-BR"),
++      tipo_processo_asc: (a, b) => (mapTiposProcessoCache[a.tipoProcessoId] || "").localeCompare(mapTiposProcessoCache[b.tipoProcessoId] || "", "pt-BR"),
+       status_asc: (a, b) => situacaoDetalhadaLabel(a).localeCompare(situacaoDetalhadaLabel(b), "pt-BR")
+     };
+ 
++    // NOVO: filtro de período — o atalho rápido (Hoje/Próximos/Histórico)
++    // e o período customizado (data início/fim) são mutuamente exclusivos
++    // (ver aoMudarPeriodoCustomizado), então só um dos dois está ativo
++    // por vez aqui.
++    function passaNoFiltroDePeriodo(a) {
++      const data = a.dataAgendada || "";
++      if (filtroDataInicioMeus || filtroDataFimMeus) {
++        if (filtroDataInicioMeus && data < filtroDataInicioMeus) return false;
++        if (filtroDataFimMeus && data > filtroDataFimMeus) return false;
++        return true;
++      }
++      const hoje = dataDeHojeStr();
++      if (filtroRapidoMeus === "hoje") return data === hoje;
++      if (filtroRapidoMeus === "futuros") return data > hoje;
++      if (filtroRapidoMeus === "historico") return data !== "" && data < hoje;
++      return true; // "todos" ou nenhum filtro ativo
++    }
++
+     function filtrarESordenarMeusAgendamentos(lista) {
+       let resultado = lista;
+       if (buscaMeusAgendamentosTexto) {
+@@ -668,6 +913,13 @@
+           return alvo.includes(termo);
+         });
+       }
++      if (filtroTipoProcessoMeus) {
++        resultado = resultado.filter(a => a.tipoProcessoId === filtroTipoProcessoMeus);
++      }
++      if (filtroStatusMeus) {
++        resultado = resultado.filter(a => (CLASSE_BADGE_TRANSPORTADORA[a.status] || "pendente") === filtroStatusMeus);
++      }
++      resultado = resultado.filter(passaNoFiltroDePeriodo);
+       const comparador = COMPARADORES_ORDENACAO_MEUS[ordenacaoMeusAgendamentos] || COMPARADORES_ORDENACAO_MEUS.data_desc;
+       return resultado.slice().sort(comparador);
+     }
+@@ -677,13 +929,22 @@
+ 
+       if (meusAgendamentos.length === 0) {
+         listaAgendamentos.innerHTML = '<div class="estado-vazio">Você ainda não possui agendamentos cadastrados.</div>';
++        const contador = document.getElementById("contador-meus-agendamentos");
++        if (contador) contador.textContent = "";
+         return;
+       }
+ 
+       const agendamentos = filtrarESordenarMeusAgendamentos(meusAgendamentos);
+ 
++      const contador = document.getElementById("contador-meus-agendamentos");
++      if (contador) {
++        contador.textContent = agendamentos.length === meusAgendamentos.length
++          ? `${agendamentos.length} agendamento(s)`
++          : `${agendamentos.length} de ${meusAgendamentos.length} agendamento(s)`;
++      }
++
+       if (agendamentos.length === 0) {
+-        listaAgendamentos.innerHTML = '<div class="estado-vazio">Nenhum agendamento encontrado para esta busca.</div>';
++        listaAgendamentos.innerHTML = '<div class="estado-vazio">Nenhum agendamento encontrado para este filtro.</div>';
+         return;
+       }
+ 

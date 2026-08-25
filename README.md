@@ -159,3 +159,47 @@ ele estiver fora dela, aparece um aviso bem visível.
 - Nas Firestore Rules, isso não muda nada: o Admin (`souAdmin()`) já
   tinha acesso irrestrito a todas as plantas desde a rewrite anterior —
   essa mudança é só de interface/experiência, não de permissão.
+
+## 6) "Meus Agendamentos" reorganizado (`transportadora-dashboard.html`)
+
+A tela ganhou os mesmos recursos de organização/consulta do "Painel do
+Dia" da Logística, adaptados para a Transportadora:
+
+- **Atalhos rápidos de período**: Todos / Hoje / Próximos / Histórico
+  (histórico = data já passada). Um clique já filtra a lista, sem
+  precisar escolher datas manualmente.
+- **Período customizado**: dois campos de data (de/até) — ao usar,
+  substitui o atalho rápido automaticamente (os dois nunca ficam
+  combinados de forma confusa).
+- **Filtro por Tipo de Processo**: select com os tipos ativos.
+- **Filtro por Status da Solicitação**: Pendente/Aguardando, Aprovado
+  (inclui Em Pátio/Concluído), Recusado (inclui Cancelado/No-Show) ou
+  Expirado.
+- **Busca por motorista/placa**: já existia, mantida como estava.
+- **Ordenar por**: além das opções já existentes, adicionei "Tipo de
+  Processo (A-Z)".
+- **Contador** (ex: "8 de 23 agendamento(s)") e botão **Limpar
+  filtros**.
+- Ao criar um novo agendamento, a tela agora limpa os filtros
+  automaticamente antes de destacar o item recém-criado — assim um
+  filtro esquecido de uma consulta anterior nunca esconde a
+  confirmação do que acabou de ser agendado.
+
+## 7) Correções de interface (`logistica-dashboard.html`, `style.css`)
+
+- **Menu lateral "andando" com o scroll**: o menu (`.sidebar-erp`) usa
+  `position: sticky` com um deslocamento do topo fixo em 60px — quando
+  a topbar ficava mais alta que isso (ex: com o seletor de planta do
+  Admin), o menu deixava de caber no espaço calculado e passava a se
+  mover junto com a rolagem em vez de ficar fixo. Troquei o valor fixo
+  por uma variável CSS (`--topbar-altura`) medida de verdade em JS a
+  partir da altura real da topbar (via `ResizeObserver`, então também
+  se ajusta sozinho caso o conteúdo da topbar mude depois). Sem
+  impacto nas outras telas que usam o mesmo menu (`admin-dashboard.html`)
+  — lá a variável simplesmente cai no valor padrão de 60px, idêntico ao
+  comportamento anterior.
+- **Contraste do seletor de planta**: a lista suspensa (`<option>`)
+  estava sem estilo próprio e herdava o texto branco do controle
+  fechado, mas com fundo claro padrão do navegador — texto branco em
+  fundo claro, ilegível. Agora as opções têm fundo escuro fixo e texto
+  branco, com bom contraste em qualquer navegador.

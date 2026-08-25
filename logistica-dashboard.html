@@ -249,6 +249,18 @@
       border-color: #f59e0b;
       color: #1a1200;
     }
+    /* BUGFIX: o <select> herdava (de propósito) o texto branco do
+       topbar para ficar legível quando FECHADO — mas a lista suspensa
+       de <option> usa o fundo claro padrão do navegador, e sem regra
+       própria essas opções também saíam com texto branco, ficando
+       "brancoem branco" (ilegível) quando o menu abria. Fixando fundo
+       escuro + texto claro só nas opções, sem depender do que o
+       navegador escolhe por padrão.
+     */
+    .seletor-planta-admin option {
+      background: #101922;
+      color: #fff;
+    }
 
     /* NOVO: aviso fixo quando o Admin está fora da planta padrão dele */
     .aviso-planta-diferente {
@@ -1387,6 +1399,28 @@
         remover();
       });
     }
+
+    // BUGFIX (menu lateral "se movendo" ao rolar a página): o menu
+    // (.sidebar-erp) usa position:sticky com um offset do topo igual à
+    // altura da .topbar — se esse valor for diferente da altura real
+    // (ex: quando o seletor de planta do Admin aparece e deixa a
+    // topbar mais alta), o menu passa a não caber mais no espaço
+    // sticky calculado e "escapa", parecendo se mover com o scroll.
+    // Mede a altura real da topbar e mantém a variável CSS
+    // --topbar-altura sempre sincronizada com ela.
+    function sincronizarAlturaTopbar() {
+      const topbar = document.querySelector(".topbar");
+      if (!topbar) return;
+      document.documentElement.style.setProperty("--topbar-altura", `${topbar.offsetHeight}px`);
+    }
+    window.addEventListener("resize", sincronizarAlturaTopbar);
+    // ResizeObserver cobre mudanças de altura da topbar que não vêm de
+    // resize da janela — ex: o seletor de planta do Admin aparecendo
+    // depois que listarPlantas() resolve (ver bloco abaixo).
+    if (window.ResizeObserver) {
+      new ResizeObserver(sincronizarAlturaTopbar).observe(document.querySelector(".topbar"));
+    }
+    sincronizarAlturaTopbar();
 
     // Proteção de acesso (Tipo 2 = Logística, 3 = Admin) — os MESMOS dois
     // perfis que antes acessavam portaria.html separadamente.
@@ -3816,4 +3850,5 @@
     }
   </script>
 </body>
+//fim
 </html>
