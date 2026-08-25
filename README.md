@@ -78,3 +78,84 @@ git push
 - Teste local recomendado: criar 1 planta filial de teste, um usuário
   Logística vinculado a ela, e confirmar que os dados da Matriz não
   aparecem para esse usuário (e vice-versa).
+
+## 4) Firestore Rules atualizadas (`firestore.rules`)
+
+Reescrevi o arquivo que você me mandou incorporando as 3 mudanças dos
+itens 1-3 acima. Nada do que já existia foi removido — só adicionado ou
+afrouxado no ponto exato onde era necessário:
+
+- **NF por tipo de processo**: `checkInValido`/`checkOutValido` agora
+  consultam `processTypes/{id}.exigenciaNF` (com `get()`) e só exigem o
+  número da NF quando o tipo de processo pede — mesma lógica de
+  `exigeNFNaEntrada`/`exigeNFNaSaida` do `patioCore.js`. Antes, o
+  check-out sempre exigia NF preenchida, para qualquer tipo.
+- **Multi-planta**: nova seção `match /plantas/{id}` (leitura para
+  qualquer aprovado, escrita só Admin). Toda coleção que ganhou o campo
+  opcional `plantaId` (processTypes, timeSlotRules, timeSlotExceptions,
+  timeSlots, recorrencias, bookings, users) agora aceita esse campo
+  quando presente — sem exigir, então documentos antigos continuam
+  válidos sem migração.
+- **Tipo 4 "Portaria"**: adicionada a função `souPortaria()` e:
+  - `users`: Admin agora pode atribuir tipo `4` e o campo `plantaId`.
+  - `bookings`: Portaria pode **ler** todos os agendamentos, **criar**
+    somente Encaixe (`tipoAgendamento == 'Portaria/Encaixe'`, nunca um
+    agendamento "Operacional" completo) e **atualizar** apenas para
+    check-in / check-out / no-show — nunca para Aprovar/Recusar uma
+    solicitação (a regra só deixa a `aprovacaoStatus` ficar como está ou
+    resolver `PENDENTE → SEM_RESPOSTA`, que é o que o check-in faz
+    sozinho) nem para editar campos como `horaEntrada`/`horaSaida`
+    (edição manual, aba oculta pra esse perfil).
+  - `timeSlots`: Portaria só pode **decrementar** `ocupados` em 1 (é o
+    que acontece ao marcar No-Show) — não pode criar, fechar ou alterar
+    capacidade de vaga.
+  - Portaria **não** ganhou nenhum acesso de escrita a `processTypes`,
+    `timeSlotRules`, `timeSlotExceptions` ou `recorrencias` — essas
+    continuam exclusivas de Logística/Admin, reforçando no servidor o
+    que já estava escondido na interface.
+
+### Como aplicar
+```
+cd YMS-Gestao
+firebase deploy --only firestore:rules
+```
+(ou cole o conteúdo de `firestore.rules` direto no Console do Firebase,
+em Firestore Database → Regras).
+
+### Não deixei de revisar, mas vale você confirmar
+- **`config/capacidadeGlobal`**: se você ainda não tem esse documento
+  criado manualmente, o fallback de 200 veículos/hora por horário segue
+  valendo (comentário original no arquivo já falava disso).
+- Testei o arquivo por balanceamento de chaves/parênteses e revisei
+  campo a campo contra o que o `patioCore.js`/telas realmente enviam ao
+  Firestore, mas não tive como rodar o Firestore Emulator aqui (bloqueado
+  pela rede sandbox) — o ideal é você rodar
+  `firebase emulators:start --only firestore` localmente (ou publicar
+  primeiro num projeto de teste) antes de ir pra produção.
+
+## 5) Admin com acesso total a todas as plantas (`logistica-dashboard.html`)
+
+O Admin agora pode ver e operar qualquer planta cadastrada, sem deixar
+de ter uma planta padrão (a que está salva no cadastro dele). Sempre que
+ele estiver fora dela, aparece um aviso bem visível.
+
+- **Seletor de planta no topo**: só aparece para o Admin (tipo 3). Para
+  Logística/Portaria, continua sendo só o texto "Planta: X" de sempre —
+  esses perfis seguem presos à planta atribuída pelo Admin, sem opção de
+  trocar.
+- **Ao trocar de planta no seletor**: Tipos de Processo, Agendamentos
+  (Painel do Dia, Portaria, Todos, KPIs), Horários & Exceções e
+  Recorrências recarregam automaticamente para a nova planta — e a
+  próxima criação/edição feita pelo Admin passa a gravar `plantaId` da
+  planta selecionada. Gestão de Vagas é feita por busca manual, então
+  só limpei o resultado antigo (o botão "Buscar Vagas" já usa a planta
+  atual quando clicado de novo).
+- **Aviso em destaque**: quando `planta selecionada ≠ planta padrão do
+  Admin`, aparece uma faixa laranja fixa no topo da tela ("Você está
+  fora da sua planta padrão — visualizando e editando [Nome]. Confira
+  antes de criar ou alterar algo.") e o próprio seletor fica destacado
+  em laranja — pensado pra ser difícil de não notar antes de confirmar
+  qualquer ação.
+- Nas Firestore Rules, isso não muda nada: o Admin (`souAdmin()`) já
+  tinha acesso irrestrito a todas as plantas desde a rewrite anterior —
+  essa mudança é só de interface/experiência, não de permissão.

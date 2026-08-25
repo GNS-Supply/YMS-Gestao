@@ -231,6 +231,42 @@
       background: #fff;
       animation: pulsoIndicador 1.2s ease-in-out infinite;
     }
+
+    /* NOVO: seletor de planta do Admin, no topbar */
+    .seletor-planta-admin {
+      margin-top: 2px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.35);
+      background: rgba(255,255,255,0.12);
+      color: inherit;
+      max-width: 160px;
+    }
+    .seletor-planta-admin.fora-da-padrao {
+      background: #f59e0b;
+      border-color: #f59e0b;
+      color: #1a1200;
+    }
+
+    /* NOVO: aviso fixo quando o Admin está fora da planta padrão dele */
+    .aviso-planta-diferente {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      justify-content: center;
+      background: #f59e0b;
+      color: #1a1200;
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 8px 16px;
+      text-align: center;
+      position: sticky;
+      top: 0;
+      z-index: 40;
+    }
+    .aviso-planta-diferente svg { flex-shrink: 0; }
   </style>
 </head>
 <body>
@@ -252,9 +288,24 @@
         <div id="user-nome" style="font-weight: 600;">--</div>
         <div id="user-tipo" style="opacity: 0.75; font-size: 0.75rem;">--</div>
         <div id="user-planta" style="opacity: 0.75; font-size: 0.72rem;"></div>
+        <!-- Só aparece para Admin (tipo 3): troca a planta que está sendo
+             visualizada/editada nesta tela inteira, sem precisar de outra
+             conta. Some para Logística/Portaria, que continuam presos à
+             planta atribuída a eles (ver user-planta acima). -->
+        <select id="seletor-planta-admin" class="seletor-planta-admin" style="display:none;" title="Trocar de planta"></select>
       </div>
       <button id="btn-logout">Sair</button>
     </div>
+  </div>
+
+  <!-- NOVO: aviso de destaque quando o Admin está vendo/editando uma
+       planta diferente da sua planta padrão — objetivo é evitar que ele
+       crie/edite algo na planta errada por engano ao esquecer que
+       trocou o seletor acima. Fica fixo no topo do conteúdo, visível em
+       qualquer aba. -->
+  <div id="aviso-planta-diferente" class="aviso-planta-diferente" style="display:none;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+    Você está fora da sua planta padrão — visualizando e editando <strong id="aviso-planta-nome">--</strong>. Confira antes de criar ou alterar algo.
   </div>
 
   <div class="layout-erp">
@@ -1130,6 +1181,19 @@
     // esta planta — o pátio de cada planta é controlado em paralelo,
     // sem se misturar com o de outra.
     let plantaAtual = PLANTA_PADRAO_ID;
+    // NOVO (Admin vendo outras plantas): a planta "de casa" do Admin —
+    // não muda quando ele troca de planta no seletor do topo. Serve só
+    // pra comparar com `plantaAtual` e decidir se mostra o aviso de
+    // "você está fora da sua planta padrão". Para Logística/Portaria
+    // isso nunca diverge de `plantaAtual`, porque esses perfis não têm
+    // o seletor (ficam presos à planta atribuída pelo Admin).
+    let plantaPadraoAdmin = PLANTA_PADRAO_ID;
+    let listaPlantasCache = [];
+    // Cópia sem filtro do último snapshot de bookings entregue pelo
+    // listener em tempo real — guardada para poder refiltrar por
+    // planta instantaneamente quando o Admin troca de planta no
+    // seletor, sem esperar a próxima atualização do Firestore.
+    let ultimoBookingsBrutos = [];
     let mapProcessos = {};
     // id -> objeto completo do tipo de processo (inclui exigenciaNF),
     // usado para decidir se a Portaria deve pedir Nota Fiscal na
@@ -1328,7 +1392,8 @@
     // perfis que antes acessavam portaria.html separadamente.
     protegerPagina([2, 3, 4], async (user, dadosUser) => {
       usuarioLogado = { uid: user.uid, ...dadosUser };
-      plantaAtual = usuarioLogado.plantaId || PLANTA_PADRAO_ID;
+      plantaPadraoAdmin = usuarioLogado.plantaId || PLANTA_PADRAO_ID;
+      plantaAtual = plantaPadraoAdmin;
       document.getElementById("user-nome").textContent = dadosUser.nome || user.email;
       document.getElementById("user-tipo").textContent =
         dadosUser.tipo === 3 ? "Administrador Master" :
@@ -1344,13 +1409,41 @@
         restringirMenuParaPortaria();
       }
 
-      // Nome amigável da planta no topo, só para o operador confirmar
-      // rapidamente em qual unidade está trabalhando (útil sobretudo
-      // quando existe mais de uma planta cadastrada).
+      // Nome amigável da planta no topo. Para Admin (tipo 3), isso vira
+      // um SELETOR que dá acesso total a todas as plantas cadastradas —
+      // ele pode trocar de planta livremente e continua podendo ler e
+      // editar tudo, mas quando a planta escolhida não é a dele por
+      // padrão, um aviso em destaque aparece pra não editar a planta
+      // errada por engano (ver trocarPlantaAdmin/atualizarAvisoPlanta).
+      // Logística/Portaria continuam presos à planta atribuída a eles,
+      // só com o texto informativo de sempre.
       listarPlantas(db).then(plantas => {
-        const p = plantas.find(x => x.id === plantaAtual);
-        const label = document.getElementById("user-planta");
-        if (label && p) label.textContent = `Planta: ${p.nome}`;
+        listaPlantasCache = plantas;
+        if (Number(dadosUser.tipo) === 3) {
+          const select = document.getElementById("seletor-planta-admin");
+          const labelFixo = document.getElementById("user-planta");
+          if (labelFixo) labelFixo.style.display = "none";
+          if (select) {
+            const opcoes = plantas.length
+              ? plantas
+              : [{ id: PLANTA_PADRAO_ID, nome: "Matriz" }];
+            select.innerHTML = opcoes.map(p => `<option value="${p.id}">${escapeHtml(p.nome)}</option>`).join("");
+            if (!opcoes.some(p => p.id === plantaAtual)) {
+              // Planta padrão do Admin ainda não está cadastrada em
+              // /plantas (ex: matriz nunca criada explicitamente) —
+              // adiciona uma opção pra não deixar o seletor "mudo".
+              select.insertAdjacentHTML("afterbegin", `<option value="${plantaAtual}">Matriz</option>`);
+            }
+            select.value = plantaAtual;
+            select.style.display = "block";
+            select.addEventListener("change", () => trocarPlantaAdmin(select.value));
+          }
+        } else {
+          const p = plantas.find(x => x.id === plantaAtual);
+          const label = document.getElementById("user-planta");
+          if (label && p) label.textContent = `Planta: ${p.nome}`;
+        }
+        atualizarAvisoPlantaDiferente();
       }).catch(() => {});
       
 // Exibe o botão de retorno ao Painel Admin se o tipo de usuário for Administrador (3)
@@ -1558,6 +1651,10 @@
           // filtro por planta acontece aqui antes de qualquer tela usar
           // os dados, mantendo o pátio de cada planta isolado do das
           // demais (bookings antigos sem `plantaId` contam como matriz).
+          // Guarda a lista bruta (todas as plantas) à parte, para o
+          // Admin poder trocar de planta e ver o resultado na hora, sem
+          // esperar a próxima atualização em tempo real do Firestore.
+          ultimoBookingsBrutos = bookings;
           todosBookingsGerais = bookings.filter(b => pertenceAPlanta(b, plantaAtual));
           preencherSelectEmpresasKPIs(todosBookingsGerais);
           rerenderizarAbaAtiva();
@@ -1606,8 +1703,61 @@
         case "solicitacoes": renderizarSolicitacoesPendentes(); break;
         case "todos": carregarTodosAgendamentos(); break;
         case "kpis": atualizarPainelKPIs(); break;
+        case "regras": carregarRegras(); carregarExcecoes(); break;
+        case "processos": carregarTiposProcessoTabela(); break;
+        case "novo-operacional": atualizarHorariosOperacionais(); carregarRecorrencias(); break;
         default: break;
       }
+    }
+
+    // NOVO: dá pro Admin (tipo 3) acesso total a todas as plantas —
+    // troca `plantaAtual` (a mesma variável que todo o resto da tela já
+    // usa para filtrar e gravar dados) e recarrega tudo que depende
+    // dela: tipos de processo, agendamentos (a partir do cache bruto do
+    // listener, sem nova consulta ao Firestore), recorrências e o
+    // conteúdo da aba aberta no momento. Logística/Portaria nunca
+    // chamam essa função — não têm o seletor na tela.
+    async function trocarPlantaAdmin(novaPlantaId) {
+      if (!novaPlantaId || novaPlantaId === plantaAtual) return;
+      plantaAtual = novaPlantaId;
+
+      mapProcessos = await obterTiposProcessoMap();
+      preencherSelectProcessos();
+      preencherSelectProcessoEncaixe();
+
+      todosBookingsGerais = ultimoBookingsBrutos.filter(b => pertenceAPlanta(b, plantaAtual));
+      preencherSelectEmpresasKPIs(todosBookingsGerais);
+
+      // A aba de Gestão de Vagas é feita sob demanda ("Buscar Vagas");
+      // limpa o resultado antigo pra ninguém confundir vaga de outra
+      // planta com a que acabou de ser selecionada.
+      const tbodyVagas = document.getElementById("tbody-vagas");
+      if (tbodyVagas) tbodyVagas.innerHTML = '<tr><td colspan="6" style="text-align:center; opacity:0.7;">Planta alterada — clique em "Buscar Vagas" novamente.</td></tr>';
+
+      await carregarRecorrencias();
+      rerenderizarAbaAtiva();
+      atualizarAvisoPlantaDiferente();
+      mostrarToast(`Agora exibindo a planta selecionada.`, { tipo: "info", duracaoMs: 3000 });
+    }
+
+    // NOVO: mostra/esconde o aviso de destaque quando o Admin está
+    // olhando uma planta diferente da dele por padrão — e também
+    // destaca o próprio seletor no topo, pra chamar atenção nos dois
+    // lugares antes de qualquer criação/edição acontecer na planta
+    // errada por engano.
+    function atualizarAvisoPlantaDiferente() {
+      const foraDaPadrao = Number(usuarioLogado?.tipo) === 3 && plantaAtual !== plantaPadraoAdmin;
+      const aviso = document.getElementById("aviso-planta-diferente");
+      const select = document.getElementById("seletor-planta-admin");
+      if (aviso) {
+        aviso.style.display = foraDaPadrao ? "flex" : "none";
+        if (foraDaPadrao) {
+          const p = listaPlantasCache.find(x => x.id === plantaAtual);
+          const nomeEl = document.getElementById("aviso-planta-nome");
+          if (nomeEl) nomeEl.textContent = p ? p.nome : "planta selecionada";
+        }
+      }
+      if (select) select.classList.toggle("fora-da-padrao", foraDaPadrao);
     }
 
     /* ===================================================================
