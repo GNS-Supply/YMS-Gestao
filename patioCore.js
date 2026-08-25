@@ -250,6 +250,40 @@ export const EXIGENCIA_NF_LABEL = {
   [EXIGENCIA_NF.AMBOS]: "Entrada e Saída (ambos)"
 };
 
+// Tipo de veículo — coletado em toda criação de agendamento (Transportadora,
+// Logística/Admin ou Encaixe da Portaria) e confirmado/corrigido pela
+// Portaria no check-in, caso o veículo físico seja diferente do que foi
+// declarado no agendamento. Alimenta o indicador "Tipos de Veículo mais
+// recorrentes" no Painel de KPIs.
+export const TIPOS_VEICULO = ["Moto", "Carro", "VUC", "3/4", "Toco", "Truck", "Carreta", "Bitruck"];
+
+// Nomes dos dias da semana na mesma ordem de Date.getDay() (0=Domingo).
+// Usado no indicador de movimentação por dia da semana × horário.
+export const DIAS_SEMANA_LABEL = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
+
+/**
+ * Tipo de veículo "de verdade" de um agendamento: o que a Portaria
+ * confirmou (ou corrigiu) no check-in, se já houve check-in; senão, o
+ * que foi declarado na hora de agendar. Uma Entrada por Encaixe já
+ * nasce com os dois campos iguais (não passa por um check-in separado).
+ */
+export function tipoVeiculoEfetivo(booking) {
+  return booking?.checkIn?.tipoVeiculo || booking?.tipoVeiculo || null;
+}
+
+/**
+ * Dia da semana (0=Domingo..6=Sábado) de uma data "AAAA-MM-DD", sem
+ * passar por UTC (new Date("AAAA-MM-DD") interpretaria a data como
+ * meia-noite UTC e viraria o dia errado à noite em fusos negativos como
+ * o do Brasil — mesmo cuidado já tomado em _semanasEntreDatas acima).
+ */
+export function diaSemanaDeData(dataStr) {
+  if (!dataStr) return null;
+  const [ano, mes, dia] = String(dataStr).split("-").map(Number);
+  if (!ano || !mes || !dia) return null;
+  return new Date(ano, mes - 1, dia).getDay();
+}
+
 /**
  * Se a NF é obrigatória na ENTRADA (check-in / encaixe) para este tipo
  * de processo. Documentos antigos sem `exigenciaNF` são tratados como
@@ -840,6 +874,9 @@ function validarCamposObrigatorios(dados) {
   if (!dados.motorista || !String(dados.motorista).trim()) {
     erros.push("Nome do motorista é obrigatório.");
   }
+  if (!dados.tipoVeiculo || !TIPOS_VEICULO.includes(dados.tipoVeiculo)) {
+    erros.push("Tipo de veículo é obrigatório.");
+  }
 
   if (erros.length > 0) {
     throw new Error(erros.join(" "));
@@ -945,6 +982,7 @@ export async function criarAgendamentoOperacional(db, usuarioLogado, dados, opco
       placaCavalo: String(dados.placaCavalo).trim().toUpperCase(),
       placaCarreta: dados.placaCarreta ? String(dados.placaCarreta).trim().toUpperCase() : "",
       motorista: String(dados.motorista).trim(),
+      tipoVeiculo: dados.tipoVeiculo,
       observacoes: dados.observacoes ? String(dados.observacoes).trim() : "",
       ...dimsIniciais,
       historicoEstados: [
@@ -1050,6 +1088,7 @@ export async function criarAgendamentoTransportadora(db, usuarioAtual, dados, sl
       placaCavalo: String(dados.placaCavalo).trim().toUpperCase(),
       placaCarreta: dados.placaCarreta ? String(dados.placaCarreta).trim().toUpperCase() : "",
       motorista: String(dados.motorista).trim(),
+      tipoVeiculo: dados.tipoVeiculo,
       observacoes: dados.observacoes ? String(dados.observacoes).trim() : "",
       ...dimsIniciais,
       historicoEstados: [
@@ -1151,6 +1190,93 @@ export function calcularKPIs(bookingsFiltrados) {
     dwellTime: { mediaMinutos, formatado: dwellTimeFormatado, totalAtendidos: concluidos.length },
     totalDivergencias
   };
+}
+
+/**
+ * Distribuição por tipo de veículo (Moto, Carro, VUC, 3/4, Toco, Truck,
+ * Carreta, Bitruck) no conjunto de agendamentos filtrado — usa o tipo
+ * "efetivo" (confirmado no check-in quando existir, senão o declarado no
+ * agendamento). Ordenado do mais para o menos recorrente.
+ */
+export function calcularDistribuicaoTiposVeiculo(bookingsFiltrados) {
+  const contagem = {};
+  TIPOS_VEICULO.forEach(t => { contagem[t] = 0; });
+
+  let semInformacao = 0;
+  bookingsFiltrados.forEach(b => {
+    const tipo = tipoVeiculoEfetivo(b);
+    if (tipo && Object.prototype.hasOwnProperty.call(contagem, tipo)) contagem[tipo]++;
+    else semInformacao++;
+  });
+
+  const total = bookingsFiltrados.length;
+  const distribuicao = TIPOS_VEICULO
+    .map(tipo => ({
+      tipo,
+      quantidade: contagem[tipo],
+      percentual: total > 0 ? ((contagem[tipo] / total) * 100).toFixed(1) : "0.0"
+    }))
+    .sort((a, b) => b.quantidade - a.quantidade);
+
+  return { distribuicao, semInformacao, total };
+}
+
+/**
+ * Movimentação por dia da semana × horário — quantos veículos têm
+ * horário agendado em cada combinação de dia/hora, para identificar os
+ * picos e os horários mais vazios. Usa `horaInicio` (o horário
+ * AGENDADO), não o do check-in de fato: o que se quer aqui é a demanda
+ * que o pátio precisa estar preparado para atender, não só quem chegou.
+ *
+ * Retorna um objeto com uma chave por tipo de processo (id) mais uma
+ * chave especial "__todos__" com o agregado de todos os tipos juntos —
+ * a tela deixa o usuário escolher entre "Todos os Processos" ou um
+ * tipo específico. Cada entrada tem:
+ *   - matriz[diaSemana][hora] = quantidade
+ *   - porDiaSemana[0..6] = total do dia (soma de todas as horas)
+ *   - maisMovimentados / menosMovimentados = top 5 combinações dia+hora
+ *     (menosMovimentados ignora combinações com 0, pra não virar uma
+ *     lista de 5 empates em zero sem nenhum valor informativo)
+ */
+export function calcularMovimentacaoPorHorario(bookingsFiltrados) {
+  const baldes = {};
+
+  function balde(chave) {
+    if (!baldes[chave]) {
+      baldes[chave] = { matriz: {}, porDiaSemana: [0, 0, 0, 0, 0, 0, 0] };
+    }
+    return baldes[chave];
+  }
+
+  bookingsFiltrados.forEach(b => {
+    const dia = diaSemanaDeData(b.dataAgendada);
+    const hora = String(b.horaInicio || "").slice(0, 2);
+    if (dia === null || !hora) return;
+
+    const chaves = ["__todos__"];
+    if (b.tipoProcessoId) chaves.push(b.tipoProcessoId);
+
+    chaves.forEach(chave => {
+      const bd = balde(chave);
+      bd.matriz[dia] = bd.matriz[dia] || {};
+      bd.matriz[dia][hora] = (bd.matriz[dia][hora] || 0) + 1;
+      bd.porDiaSemana[dia]++;
+    });
+  });
+
+  Object.values(baldes).forEach(bd => {
+    const slots = [];
+    Object.entries(bd.matriz).forEach(([dia, horas]) => {
+      Object.entries(horas).forEach(([hora, quantidade]) => {
+        slots.push({ diaSemana: Number(dia), hora, quantidade });
+      });
+    });
+    slots.sort((a, b) => b.quantidade - a.quantidade);
+    bd.maisMovimentados = slots.slice(0, 5);
+    bd.menosMovimentados = slots.filter(s => s.quantidade > 0).slice(-5).reverse();
+  });
+
+  return baldes;
 }
 
 /* #######################################################################
@@ -1363,9 +1489,17 @@ export async function registrarCheckIn(db, usuarioLogado, bookingId, dadosConfir
     const placaCavalo = String(dadosConfirmados.placaCavalo || "").trim().toUpperCase();
     const placaCarreta = dadosConfirmados.placaCarreta ? String(dadosConfirmados.placaCarreta).trim().toUpperCase() : "";
     const motorista = String(dadosConfirmados.motorista || "").trim();
+    // A Portaria confirma (ou corrige) o tipo de veículo no check-in —
+    // se não vier nada informado (telas antigas em cache, por exemplo),
+    // cai no que já estava declarado no agendamento, pra nunca perder o
+    // dado por completo.
+    const tipoVeiculo = TIPOS_VEICULO.includes(dadosConfirmados.tipoVeiculo)
+      ? dadosConfirmados.tipoVeiculo
+      : (dadosAtuais.tipoVeiculo || null);
     const divergente = placaCavalo !== (dadosAtuais.placaCavalo || "")
       || placaCarreta !== (dadosAtuais.placaCarreta || "")
-      || motorista !== (dadosAtuais.motorista || "");
+      || motorista !== (dadosAtuais.motorista || "")
+      || tipoVeiculo !== (dadosAtuais.tipoVeiculo || null);
 
     const novasDims = { aprovacaoStatus: aprovacaoFinal, comparecimentoStatus: novoComparecimento, operacionalStatus: OPERACIONAL.EM_PATIO };
 
@@ -1390,6 +1524,7 @@ export async function registrarCheckIn(db, usuarioLogado, bookingId, dadosConfir
         pontualidade,
         dadosConferidos: true,
         divergente,
+        tipoVeiculo,
         notaFiscalEntrada: notaFiscalEntrada || ""
       },
       historicoEstados: arrayUnion(...historico),
@@ -1537,6 +1672,7 @@ export async function criarEntradaEncaixe(db, usuarioLogado, dados) {
     placaCavalo: String(dados.placaCavalo).trim().toUpperCase(),
     placaCarreta: dados.placaCarreta ? String(dados.placaCarreta).trim().toUpperCase() : "",
     motorista: String(dados.motorista).trim(),
+    tipoVeiculo: dados.tipoVeiculo,
     observacoes: dados.observacoes ? String(dados.observacoes).trim() : "",
     ...dimsIniciais,
     historicoEstados: [
@@ -1552,6 +1688,7 @@ export async function criarEntradaEncaixe(db, usuarioLogado, dados) {
       pontualidade: PONTUALIDADE.PONTUAL,
       dadosConferidos: true,
       divergente: false,
+      tipoVeiculo: dados.tipoVeiculo,
       notaFiscalEntrada: notaFiscalEntrada || ""
     },
     criadoEm: serverTimestamp(),

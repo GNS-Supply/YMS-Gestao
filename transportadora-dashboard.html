@@ -120,6 +120,13 @@
           </div>
 
           <div class="campo">
+            <label for="tipoVeiculo">Tipo de Veículo</label>
+            <select id="tipoVeiculo" required>
+              <option value="">Selecione...</option>
+            </select>
+          </div>
+
+          <div class="campo">
             <label for="observacoes">Observações</label>
             <textarea id="observacoes" rows="3" placeholder="Detalhes da carga, restrições de acesso, etc."></textarea>
           </div>
@@ -226,7 +233,8 @@
       situacaoDetalhadaLabel,
       listarPlantas,
       PLANTA_PADRAO_ID,
-      pertenceAPlanta
+      pertenceAPlanta,
+      TIPOS_VEICULO
     } from "./patioCore.js";
     // Máscara de placa, disponibilidade e normalização de booking vêm
     // TODOS de patioCore.js — a única implementação do sistema (ver
@@ -428,6 +436,9 @@
     // ---------------- Elementos do DOM ----------------
     const form = document.getElementById("form-agendamento");
     const selectTipoProcesso = document.getElementById("tipoProcesso");
+    const selectTipoVeiculo = document.getElementById("tipoVeiculo");
+    selectTipoVeiculo.innerHTML = '<option value="">Selecione...</option>' +
+      TIPOS_VEICULO.map(t => `<option value="${t}">${t}</option>`).join("");
     const selectPlanta = document.getElementById("planta");
     const campoPlantaWrapper = document.getElementById("campo-planta-wrapper");
     const inputData = document.getElementById("data");
@@ -646,10 +657,16 @@
       document.getElementById("placaCavalo").value = placaCavalo;
       document.getElementById("placaCarreta").value = placaCarreta;
       const motorista = document.getElementById("motorista").value.trim();
+      const tipoVeiculo = selectTipoVeiculo.value;
       const observacoes = document.getElementById("observacoes").value.trim();
 
       if (!horaInicio) {
         erroBox.textContent = "Por favor, selecione um horário disponível no grid acima.";
+        return;
+      }
+
+      if (!tipoVeiculo) {
+        erroBox.textContent = "Selecione o tipo de veículo.";
         return;
       }
 
@@ -697,6 +714,7 @@
           placaCavalo,
           placaCarreta,
           motorista,
+          tipoVeiculo,
           observacoes
         }, slotSelecionado);
 
@@ -966,7 +984,12 @@
           <div class="detalhes">
             Processo: <strong>${escapeHtml(mapTiposProcessoCache[a.tipoProcessoId] || "-")}</strong><br>
             Placas: ${escapeHtml(a.placaCavalo || "-")}${a.placaCarreta ? " / " + escapeHtml(a.placaCarreta) : ""}<br>
-            Motorista: ${escapeHtml(a.motorista || "-")}
+            Motorista: ${escapeHtml(a.motorista || "-")}<br>
+            Veículo: ${escapeHtml(a.tipoVeiculo || "-")}${
+              a.checkIn?.tipoVeiculo && a.checkIn.tipoVeiculo !== a.tipoVeiculo
+                ? ` <span style="opacity:0.75;">(confirmado na portaria como ${escapeHtml(a.checkIn.tipoVeiculo)})</span>`
+                : ""
+            }
             ${a.observacoes ? `<br>Obs.: ${escapeHtml(a.observacoes)}` : ""}
           </div>
           ${podeCancelar ? `

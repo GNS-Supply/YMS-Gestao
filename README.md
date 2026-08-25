@@ -203,3 +203,40 @@ Dia" da Logística, adaptados para a Transportadora:
   fechado, mas com fundo claro padrão do navegador — texto branco em
   fundo claro, ilegível. Agora as opções têm fundo escuro fixo e texto
   branco, com bom contraste em qualquer navegador.
+
+## 8) Tipo de Veículo (`patioCore.js`, `transportadora-dashboard.html`, `logistica-dashboard.html`, `firestore.rules`)
+
+Todo agendamento — feito pela Transportadora, pela Logística/Admin
+("Novo Agendamento") ou pela Portaria (Encaixe) — agora pergunta o
+**Tipo de Veículo**: Moto, Carro, VUC, 3/4, Toco, Truck, Carreta ou
+Bitruck. Campo obrigatório nos três fluxos.
+
+- **Confirmação no Check-in**: a tela de Check-in vem pré-preenchida
+  com o tipo declarado no agendamento, mas a Portaria pode trocar caso
+  o veículo físico seja outro. Se ela mudar, isso conta como uma
+  **divergência de cadastro** — mesma lógica já usada para placa e
+  motorista — e o dado "de verdade" (o confirmado no check-in)
+  prevalece sobre o declarado para fins de indicador.
+- **Entrada por Encaixe**: como já nasce "Em Pátio" sem passar por um
+  check-in separado, o tipo informado no formulário de Encaixe já vale
+  como confirmado.
+- **Indicador "Tipos de Veículo Mais Recorrentes"** (aba KPIs): barra
+  horizontal por tipo, ordenada do mais para o menos frequente, com
+  quantidade e percentual — usa o mesmo filtro de período/empresa já
+  existente no painel de KPIs.
+- **Indicador "Movimentação por Dia da Semana × Horário"** (aba KPIs):
+  um heatmap (linhas = horário, colunas = dia da semana, intensidade de
+  cor = volume) com um seletor de **Tipo de Processo** (ou "Todos"),
+  além de duas listas — "Horários de Maior Movimento" e "Horários de
+  Menor Movimento" — com as 5 combinações dia+horário mais e menos
+  movimentadas. Usa o horário AGENDADO (não o do check-in), pra refletir
+  a demanda que o pátio precisa se preparar para atender.
+- Bookings antigos, feitos antes deste recurso existir, ficam sem
+  `tipoVeiculo` — eles entram como "sem informação" no indicador de
+  distribuição (mostrado à parte, sem quebrar a contagem) e simplesmente
+  não aparecem no heatmap de movimentação (que também não depende desse
+  campo).
+- **Firestore Rules**: `tipoVeiculo` passou a ser exigido (dentro da
+  lista de 8 tipos) em toda criação de agendamento; no check-in, é
+  aceito também como ausente/nulo, para não travar o check-in de
+  bookings antigos sem esse campo.

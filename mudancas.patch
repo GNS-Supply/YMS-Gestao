@@ -307,10 +307,70 @@ index 4eb1438..a225a4c 100644
  
      form?.addEventListener("submit", async (e) => {
 diff --git a/logistica-dashboard.html b/logistica-dashboard.html
-index aade230..05ac371 100644
+index aade230..43b0660 100644
 --- a/logistica-dashboard.html
 +++ b/logistica-dashboard.html
-@@ -231,6 +231,54 @@
+@@ -79,6 +79,59 @@
+       vertical-align: middle;
+     }
+ 
++    /* NOVO — Indicador "Tipos de Veículo Mais Recorrentes": barra
++       horizontal proporcional à quantidade, mais simples que um gráfico
++       de verdade e já responde à pergunta ("qual tipo aparece mais?")
++       sem depender de nenhuma lib de gráficos. */
++    .barra-tipo-veiculo {
++      display: flex;
++      align-items: center;
++      gap: 10px;
++      margin-bottom: 10px;
++      font-size: 0.85rem;
++    }
++    .barra-tipo-veiculo .rotulo {
++      width: 90px;
++      flex-shrink: 0;
++      font-weight: 600;
++    }
++    .barra-tipo-veiculo .trilha {
++      flex: 1;
++      background: #eef0f1;
++      border-radius: 6px;
++      height: 20px;
++      overflow: hidden;
++    }
++    .barra-tipo-veiculo .preenchimento {
++      height: 100%;
++      background: var(--azul-escuro, #0f2942);
++      border-radius: 6px;
++      transition: width 0.3s;
++    }
++    .barra-tipo-veiculo .valor {
++      width: 90px;
++      flex-shrink: 0;
++      text-align: right;
++      color: var(--texto-suave, #666);
++    }
++
++    /* NOVO — Heatmap de Movimentação por Dia × Horário: intensidade de
++       cor por célula em vez de gráfico 3D, mais fácil de ler numa
++       tabela e de implementar sem lib externa. A cor vem de uma escala
++       fixa de 5 degraus (ver classes nivel-0..nivel-4 aplicadas em JS
++       conforme a proporção da célula em relação ao máximo da tabela). */
++    #kpi-heatmap-tabela td.celula-heatmap {
++      text-align: center;
++      font-weight: 600;
++      font-size: 0.8rem;
++      min-width: 42px;
++    }
++    #kpi-heatmap-tabela .nivel-0 { background: #f8f9fa; color: #ccc; }
++    #kpi-heatmap-tabela .nivel-1 { background: #d6e4f0; color: #0f2942; }
++    #kpi-heatmap-tabela .nivel-2 { background: #a8c8e0; color: #0f2942; }
++    #kpi-heatmap-tabela .nivel-3 { background: #6fa3cc; color: #fff; }
++    #kpi-heatmap-tabela .nivel-4 { background: #0f2942; color: #fff; }
++
+     /* =====================================================================
+        LAYOUT ERP — MENU LATERAL: movido para style.css nesta revisão
+        (seção "LAYOUT ERP — SIDEBAR (compartilhado entre painéis
+@@ -231,6 +284,54 @@
        background: #fff;
        animation: pulsoIndicador 1.2s ease-in-out infinite;
      }
@@ -365,7 +425,7 @@ index aade230..05ac371 100644
    </style>
  </head>
  <body>
-@@ -251,11 +299,27 @@
+@@ -251,11 +352,27 @@
        <div class="info-usuario">
          <div id="user-nome" style="font-weight: 600;">--</div>
          <div id="user-tipo" style="opacity: 0.75; font-size: 0.75rem;">--</div>
@@ -393,7 +453,68 @@ index aade230..05ac371 100644
    <div class="layout-erp">
  
      <div class="sidebar-overlay" id="sidebar-overlay"></div>
-@@ -883,6 +947,16 @@
+@@ -536,6 +653,13 @@
+               <input type="text" id="op-motorista" required>
+             </div>
+ 
++            <div class="campo">
++              <label for="op-tipo-veiculo">Tipo de Veículo</label>
++              <select id="op-tipo-veiculo" required>
++                <option value="">Selecione...</option>
++              </select>
++            </div>
++
+             <div class="campo">
+               <label for="op-observacoes">Observações (opcional)</label>
+               <textarea id="op-observacoes" rows="2"></textarea>
+@@ -710,8 +834,46 @@
+             </tbody>
+           </table>
+         </div>
++
++        <div class="card">
++          <h4><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg> Tipos de Veículo Mais Recorrentes</h4>
++          <p style="font-size: 0.85rem; color: #666; margin-bottom: 16px;">
++            Baseado no tipo confirmado pela Portaria no check-in (ou no declarado no agendamento, quando ainda não houve check-in).
++          </p>
++          <div id="kpi-tipos-veiculo-lista"></div>
++        </div>
++
++        <div class="card">
++          <h4><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg> Movimentação por Dia da Semana × Horário</h4>
++          <p style="font-size: 0.85rem; color: #666; margin-bottom: 16px;">
++            Volume de veículos agendados em cada combinação de dia da semana e horário, separado por tipo de processo — ajuda a identificar os horários de pico e os de menor movimento para dimensionar a equipe do pátio.
++          </p>
++
++          <div class="campo" style="max-width: 320px; margin-bottom: 16px;">
++            <label for="kpi-heatmap-processo">Tipo de Processo</label>
++            <select id="kpi-heatmap-processo">
++              <option value="__todos__">Todos os Processos</option>
++            </select>
++          </div>
++
++          <div id="kpi-heatmap-wrapper" style="overflow-x: auto;">
++            <table class="tabela-kpi" id="kpi-heatmap-tabela"></table>
++          </div>
++
++          <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 18px;">
++            <div style="flex: 1; min-width: 260px;">
++              <h5 style="margin-bottom: 8px;">🔺 Horários de Maior Movimento</h5>
++              <ol id="kpi-horarios-pico" style="padding-left: 20px; font-size: 0.85rem;"></ol>
++            </div>
++            <div style="flex: 1; min-width: 260px;">
++              <h5 style="margin-bottom: 8px;">🔻 Horários de Menor Movimento</h5>
++              <ol id="kpi-horarios-vazios" style="padding-left: 20px; font-size: 0.85rem;"></ol>
++            </div>
++          </div>
++        </div>
+       </div>
+ 
++
+       <div class="tab-conteudo" id="tab-regras">
+         <div class="card">
+           <h3><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"></line><circle cx="9" cy="6" r="2"></circle><line x1="4" y1="12" x2="20" y2="12"></line><circle cx="15" cy="12" r="2"></circle><line x1="4" y1="18" x2="20" y2="18"></line><circle cx="11" cy="18" r="2"></circle></svg> Regra Padrão de Atendimento</h3>
+@@ -883,6 +1045,16 @@
                <label for="nomeProcesso">Nome do Tipo de Processo *</label>
                <input type="text" id="nomeProcesso" required placeholder="Ex: Carga Geral">
              </div>
@@ -410,7 +531,7 @@ index aade230..05ac371 100644
              <div id="processo-error" style="color:var(--vermelho, #c0392b); font-size:0.85rem; margin-bottom:10px;"></div>
              <button type="submit" class="btn-primario" style="width:auto; padding:10px 20px;">Cadastrar Tipo de Processo</button>
            </form>
-@@ -893,11 +967,12 @@
+@@ -893,11 +1065,12 @@
                  <tr>
                    <th>Nome</th>
                    <th>Status</th>
@@ -424,10 +545,18 @@ index aade230..05ac371 100644
                </tbody>
              </table>
            </div>
-@@ -941,6 +1016,11 @@
+@@ -941,6 +1114,19 @@
            <input type="text" id="checkin-motorista" required>
          </div>
  
++        <div class="campo">
++          <label for="checkin-tipo-veiculo">Tipo de Veículo</label>
++          <select id="checkin-tipo-veiculo" required>
++            <option value="">Selecione...</option>
++          </select>
++          <small id="checkin-tipo-veiculo-agendado" style="display:block; margin-top:4px; color:var(--texto-suave); font-size:0.78rem;"></small>
++        </div>
++
 +        <div class="campo" id="checkin-nf-wrapper" style="display:none;">
 +          <label for="checkin-nf">Número da Nota Fiscal (NF) *</label>
 +          <input type="text" id="checkin-nf" placeholder="Ex: 102938">
@@ -436,7 +565,7 @@ index aade230..05ac371 100644
          <div class="campo">
            <label for="checkin-pontualidade">Pontualidade Calculada</label>
            <input type="text" id="checkin-pontualidade" readonly style="background: #e9ecef; font-weight: bold;">
-@@ -963,9 +1043,9 @@
+@@ -963,9 +1149,9 @@
          <input type="hidden" id="checkout-booking-id">
          <input type="hidden" id="checkout-entrada-timestamp">
  
@@ -449,7 +578,21 @@ index aade230..05ac371 100644
          </div>
  
          <div class="campo">
-@@ -1020,6 +1100,11 @@
+@@ -1013,6 +1199,13 @@
+           <input type="text" id="encaixe-motorista" required>
+         </div>
+ 
++        <div class="campo">
++          <label for="encaixe-tipo-veiculo">Tipo de Veículo *</label>
++          <select id="encaixe-tipo-veiculo" required>
++            <option value="">Selecione...</option>
++          </select>
++        </div>
++
+         <div class="campo">
+           <label for="encaixe-processo">Tipo de Processo *</label>
+           <select id="encaixe-processo" required>
+@@ -1020,6 +1213,11 @@
            </select>
          </div>
  
@@ -461,7 +604,7 @@ index aade230..05ac371 100644
          <div class="campo">
            <label for="encaixe-obs">Observação / Motivo do Encaixe</label>
            <input type="text" id="encaixe-obs" placeholder="Ex: Carga emergencial liberada por Logística">
-@@ -1084,7 +1169,16 @@
+@@ -1084,7 +1282,21 @@
        excluirRegraRecorrencia,
        garantirOcorrenciasRecorrencia,
        garantirTodasRecorrencias,
@@ -475,11 +618,16 @@ index aade230..05ac371 100644
 +      PLANTA_PADRAO_ID,
 +      plantaEfetiva,
 +      pertenceAPlanta,
-+      listarPlantas
++      listarPlantas,
++      TIPOS_VEICULO,
++      DIAS_SEMANA_LABEL,
++      tipoVeiculoEfetivo,
++      calcularDistribuicaoTiposVeiculo,
++      calcularMovimentacaoPorHorario
      } from "./patioCore.js";
      // Máscara de placa, cálculo de disponibilidade, transições de
      // estado e o listener em tempo real da lista de agendamentos vêm
-@@ -1092,7 +1186,31 @@
+@@ -1092,7 +1304,31 @@
      // dessas regras por conta própria (ver revisão estrutural).
  
      let usuarioLogado = null;
@@ -511,7 +659,7 @@ index aade230..05ac371 100644
      let listaTransportadoras = [];
      let todosBookingsGerais = [];
      let filtroPortariaAtual = "todos";
-@@ -1282,12 +1400,85 @@
+@@ -1282,12 +1518,85 @@
        });
      }
  
@@ -599,7 +747,7 @@ index aade230..05ac371 100644
        
  // Exibe o botão de retorno ao Painel Admin se o tipo de usuário for Administrador (3)
        if (Number(dadosUser.tipo) === 3) {
-@@ -1348,6 +1539,24 @@
+@@ -1348,6 +1657,24 @@
         pelo antigo portaria.html, que agora só redireciona pra cá com
         "?tab=portaria" em vez de ser uma página própria.
         =================================================================== */
@@ -624,7 +772,7 @@ index aade230..05ac371 100644
      function inicializarAbas() {
        const btns = document.querySelectorAll(".sidebar-item[data-tab]");
        const conteudos = document.querySelectorAll(".tab-conteudo");
-@@ -1355,6 +1564,7 @@
+@@ -1355,6 +1682,7 @@
        btns.forEach(btn => {
          btn.addEventListener("click", () => {
            const target = btn.dataset.tab;
@@ -632,7 +780,7 @@ index aade230..05ac371 100644
            btns.forEach(b => b.classList.remove("ativo"));
            conteudos.forEach(c => c.classList.remove("ativo"));
  
-@@ -1381,6 +1591,10 @@
+@@ -1381,6 +1709,10 @@
  
        const tabParam = new URLSearchParams(window.location.search).get("tab");
        if (tabParam === "hoje") {
@@ -643,7 +791,7 @@ index aade230..05ac371 100644
          // "Agendamento de Hoje" foi removido por ser uma segunda
          // implementação da mesma informação que "Todos os Agendamentos"
          // já mostra com filtro de data = hoje. Qualquer link/favorito
-@@ -1390,7 +1604,7 @@
+@@ -1390,7 +1722,7 @@
          document.getElementById("filtro-data-fim").value = hojeIso;
          const alvoTodos = document.querySelector('.sidebar-item[data-tab="todos"]');
          if (alvoTodos) alvoTodos.click();
@@ -652,7 +800,7 @@ index aade230..05ac371 100644
          const alvo = document.querySelector(`.sidebar-item[data-tab="${tabParam}"]`);
          if (alvo) alvo.click();
        } else {
-@@ -1466,7 +1680,16 @@
+@@ -1466,7 +1798,16 @@
        cancelarListenerBookings = escutarBookings(
          db,
          async (bookings) => {
@@ -670,7 +818,7 @@ index aade230..05ac371 100644
            preencherSelectEmpresasKPIs(todosBookingsGerais);
            rerenderizarAbaAtiva();
            if (!primeiraCarga) mostrarIndicadorTempoReal();
-@@ -1514,10 +1737,63 @@
+@@ -1514,10 +1855,63 @@
          case "solicitacoes": renderizarSolicitacoesPendentes(); break;
          case "todos": carregarTodosAgendamentos(); break;
          case "kpis": atualizarPainelKPIs(); break;
@@ -734,7 +882,7 @@ index aade230..05ac371 100644
      /* ===================================================================
         RESTAURAÇÃO DO PAINEL DO DIA (TIRA DE DIAS + HORA A HORA)
         =================================================================== */
-@@ -1578,7 +1854,7 @@
+@@ -1578,7 +1972,7 @@
        container.innerHTML = '<p style="text-align:center; color:#888; padding:20px;">Calculando horários e reservas...</p>';
  
        try {
@@ -743,7 +891,32 @@ index aade230..05ac371 100644
          // Aprovado cobre Em Pátio/Concluído/No-Show também (aprovacaoStatus
          // permanece "Aprovado" nessas 3 dimensões independentes — ver patioCore.js).
          const agendamentosDia = todosBookingsGerais.filter(b => b.dataAgendada === dataIso && [APROVACAO.PENDENTE, APROVACAO.APROVADO].includes(b.aprovacaoStatus));
-@@ -1949,6 +2225,18 @@
+@@ -1737,6 +2131,7 @@
+           <small>
+             Placa: <b>${escapeHtml(b.placaCavalo)}</b>${b.placaCarreta ? ` / ${escapeHtml(b.placaCarreta)}` : ""} |
+             Motorista: ${escapeHtml(b.motorista)} |
++            Veículo: ${escapeHtml(tipoVeiculoEfetivo(b) || "-")} |
+             Status: <span class="badge-status ${classeStatus}">${escapeHtml(rotulo)}</span>
+           </small>
+           ${b.observacoes ? `
+@@ -1946,9 +2341,35 @@
+           document.getElementById("checkin-motorista").value = booking.motorista || "";
+           document.getElementById("checkin-hora-agendada").value = booking.horaInicio;
+ 
++          // Pré-preenche com o tipo de veículo declarado no agendamento —
++          // a Portaria só precisa mexer aqui se o veículo que chegou de
++          // verdade for diferente do que foi agendado.
++          const selectTipoVeiculoCheckin = document.getElementById("checkin-tipo-veiculo");
++          const avisoTipoVeiculoAgendado = document.getElementById("checkin-tipo-veiculo-agendado");
++          if (selectTipoVeiculoCheckin) {
++            selectTipoVeiculoCheckin.value = booking.tipoVeiculo || "";
++            if (avisoTipoVeiculoAgendado) {
++              avisoTipoVeiculoAgendado.textContent = booking.tipoVeiculo
++                ? `Agendado como: ${booking.tipoVeiculo}. Corrija se o veículo que chegou for diferente.`
++                : "Este agendamento não tinha um tipo de veículo declarado — selecione o que chegou.";
++            }
++          }
++
            const pontualidade = calcularPontualidade(booking.horaInicio, new Date());
            document.getElementById("checkin-pontualidade").value = pontualidade;
  
@@ -762,7 +935,7 @@ index aade230..05ac371 100644
            abrirModalPortaria("modal-checkin");
          });
        });
-@@ -1963,6 +2251,18 @@
+@@ -1963,6 +2384,18 @@
            document.getElementById("checkout-nf").value = booking.checkOut?.notaFiscal || "";
            document.getElementById("checkout-obs").value = "";
  
@@ -781,7 +954,21 @@ index aade230..05ac371 100644
            const entradaDate = booking.checkIn?.dataHora?.toDate ? booking.checkIn.dataHora.toDate() : new Date();
            document.getElementById("checkout-entrada-timestamp").value = entradaDate.getTime();
  
-@@ -2025,6 +2325,8 @@
+@@ -1996,6 +2429,13 @@
+       configurarMascaraPlaca(document.getElementById("encaixe-placa-cavalo"));
+       configurarMascaraPlaca(document.getElementById("encaixe-placa-carreta"));
+ 
++      const opcoesTipoVeiculo = '<option value="">Selecione...</option>' +
++        TIPOS_VEICULO.map(t => `<option value="${t}">${t}</option>`).join("");
++      const selectCheckinVeiculo = document.getElementById("checkin-tipo-veiculo");
++      const selectEncaixeVeiculo = document.getElementById("encaixe-tipo-veiculo");
++      if (selectCheckinVeiculo) selectCheckinVeiculo.innerHTML = opcoesTipoVeiculo;
++      if (selectEncaixeVeiculo) selectEncaixeVeiculo.innerHTML = opcoesTipoVeiculo;
++
+       document.querySelectorAll("#tab-portaria .btn-filtro").forEach(btn => {
+         btn.addEventListener("click", () => {
+           document.querySelectorAll("#tab-portaria .btn-filtro").forEach(b => b.classList.remove("ativo"));
+@@ -2025,6 +2465,8 @@
  
        document.getElementById("btn-abrir-encaixe").addEventListener("click", () => {
          document.getElementById("form-encaixe").reset();
@@ -790,26 +977,27 @@ index aade230..05ac371 100644
          abrirModalPortaria("modal-encaixe");
        });
  
-@@ -2044,6 +2346,7 @@
+@@ -2044,6 +2486,8 @@
          document.getElementById("checkin-placa-cavalo").value = placaCavalo;
          document.getElementById("checkin-placa-carreta").value = placaCarreta;
          const motorista = document.getElementById("checkin-motorista").value.trim();
++        const tipoVeiculo = document.getElementById("checkin-tipo-veiculo").value;
 +        const notaFiscal = document.getElementById("checkin-nf").value.trim();
  
          try {
            // registrarCheckIn() centraliza em patioCore.js: muda as
-@@ -2051,7 +2354,9 @@
+@@ -2051,7 +2495,9 @@
            // comparecimento (null -> Compareceu/Compareceu Atrasado) na
            // mesma transação, calculando pontualidade e divergência de
            // dados internamente, sem sobrescrever a dimensão de aprovação.
 -          await registrarCheckIn(db, usuarioLogado, id, { placaCavalo, placaCarreta, motorista });
 +          // A própria transação em patioCore.js confere se a NF é
 +          // obrigatória na entrada para o tipo de processo do agendamento.
-+          await registrarCheckIn(db, usuarioLogado, id, { placaCavalo, placaCarreta, motorista, notaFiscal });
++          await registrarCheckIn(db, usuarioLogado, id, { placaCavalo, placaCarreta, motorista, tipoVeiculo, notaFiscal });
  
            await registrarAuditLog(id, "Check-In");
            fecharModaisPortaria();
-@@ -2072,8 +2377,10 @@
+@@ -2072,8 +2518,10 @@
          const notaFiscal = document.getElementById("checkout-nf").value.trim();
          const obsSaida = document.getElementById("checkout-obs").value.trim();
  
@@ -822,15 +1010,17 @@ index aade230..05ac371 100644
            return;
          }
  
-@@ -2102,6 +2409,7 @@
+@@ -2101,7 +2549,9 @@
+         document.getElementById("encaixe-placa-cavalo").value = placaCavalo;
          document.getElementById("encaixe-placa-carreta").value = placaCarreta;
          const motorista = document.getElementById("encaixe-motorista").value.trim();
++        const tipoVeiculo = document.getElementById("encaixe-tipo-veiculo").value;
          const tipoProcessoId = document.getElementById("encaixe-processo").value;
 +        const notaFiscal = document.getElementById("encaixe-nf").value.trim();
          const obs = document.getElementById("encaixe-obs").value.trim();
  
          const agora = new Date();
-@@ -2114,11 +2422,13 @@
+@@ -2114,11 +2564,14 @@
            const { bookingId } = await criarEntradaEncaixe(db, usuarioLogado, {
              empresa,
              tipoProcessoId,
@@ -840,11 +1030,12 @@ index aade230..05ac371 100644
              placaCavalo,
              placaCarreta,
              motorista,
++            tipoVeiculo,
 +            notaFiscal,
              observacoes: obs ? `[ENCAIXE PORTARIA] ${obs}` : "[ENCAIXE PORTARIA]"
            });
            await registrarAuditLog(bookingId, "Entrada Encaixe Portaria");
-@@ -2177,6 +2487,23 @@
+@@ -2177,6 +2630,23 @@
        });
      }
  
@@ -868,7 +1059,20 @@ index aade230..05ac371 100644
      /* ===================================================================
         ETAPA 2B: NOVO AGENDAMENTO OPERACIONAL DIRETO
         =================================================================== */
-@@ -2249,6 +2576,7 @@
+@@ -2211,6 +2681,12 @@
+       const inputData = document.getElementById("op-data");
+       const form = document.getElementById("form-agendamento-operacional");
+ 
++      const selectTipoVeiculo = document.getElementById("op-tipo-veiculo");
++      if (selectTipoVeiculo) {
++        selectTipoVeiculo.innerHTML = '<option value="">Selecione...</option>' +
++          TIPOS_VEICULO.map(t => `<option value="${t}">${t}</option>`).join("");
++      }
++
+       configurarMascaraPlaca(document.getElementById("op-placa-cavalo"));
+       configurarMascaraPlaca(document.getElementById("op-placa-carreta"));
+ 
+@@ -2249,12 +2725,14 @@
            await criarAgendamentoOperacional(db, usuarioLogado, {
              transportadoraId: usuarioId,
              empresa,
@@ -876,7 +1080,14 @@ index aade230..05ac371 100644
              dataAgendada: inputData.value,
              horaInicio: document.getElementById("op-horario").value,
              tipoProcessoId: document.getElementById("op-processo").value,
-@@ -2353,6 +2681,7 @@
+             placaCavalo,
+             placaCarreta,
+             motorista: document.getElementById("op-motorista").value.trim(),
++            tipoVeiculo: document.getElementById("op-tipo-veiculo").value,
+             observacoes: document.getElementById("op-observacoes").value.trim()
+           });
+ 
+@@ -2353,6 +2831,7 @@
              horaInicio: document.getElementById("rec-horario").value,
              transportadoraId: usuarioId,
              empresa,
@@ -884,7 +1095,7 @@ index aade230..05ac371 100644
              tipoProcessoId: document.getElementById("rec-processo").value,
              placaCavaloPadrao: placaCavalo,
              placaCarretaPadrao: placaCarreta,
-@@ -2386,7 +2715,8 @@
+@@ -2386,7 +2865,8 @@
        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Carregando recorrências...</td></tr>';
  
        try {
@@ -894,7 +1105,7 @@ index aade230..05ac371 100644
  
          if (regras.length === 0) {
            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#888;">Nenhuma recorrência cadastrada ainda.</td></tr>';
-@@ -2490,7 +2820,7 @@
+@@ -2490,7 +2970,7 @@
          // incluirFechados:false (padrão) — não faz sentido oferecer, no
          // formulário de lançamento operacional, um horário que a própria
          // Logística fechou manualmente para esta data.
@@ -903,7 +1114,144 @@ index aade230..05ac371 100644
          selectHorario.innerHTML = '<option value="" disabled selected>Selecione um horário...</option>';
  
          slots.forEach(s => {
-@@ -2851,6 +3181,7 @@
+@@ -2551,7 +3031,7 @@
+             <td><b>${formatarData(b.dataAgendada)}</b><br><small>${escapeHtml(b.horaInicio || "-")}</small>${seloSemResposta}</td>
+             <td>${escapeHtml(b.empresa)}</td>
+             <td>${escapeHtml(mapProcessos[b.tipoProcessoId] || b.tipoProcessoId)}</td>
+-            <td>Cavalo: ${escapeHtml(b.placaCavalo)}<br><small>Motorista: ${escapeHtml(b.motorista)}</small></td>
++            <td>Cavalo: ${escapeHtml(b.placaCavalo)}<br><small>Motorista: ${escapeHtml(b.motorista)} · ${escapeHtml(tipoVeiculoEfetivo(b) || "-")}</small></td>
+             <td><small>${b.criadoEm ? new Date(b.criadoEm.toDate ? b.criadoEm.toDate() : b.criadoEm).toLocaleString() : '-'}</small></td>
+             <td>
+               <div style="display:flex; flex-direction:column; gap:6px; align-items:flex-start;">
+@@ -2665,12 +3145,116 @@
+       });
+     }
+ 
++    let ultimosBookingsFiltradosKpis = [];
++
++    function preencherSelectHeatmapProcessos() {
++      const select = document.getElementById("kpi-heatmap-processo");
++      if (!select) return;
++      const valorAtual = select.value || "__todos__";
++      select.innerHTML = '<option value="__todos__">Todos os Processos</option>' +
++        Object.keys(mapProcessos).map(id => `<option value="${id}">${escapeHtml(mapProcessos[id])}</option>`).join("");
++      select.value = Object.prototype.hasOwnProperty.call(mapProcessos, valorAtual) || valorAtual === "__todos__" ? valorAtual : "__todos__";
++    }
++
++    // Indicador "Tipos de Veículo Mais Recorrentes": barra horizontal
++    // proporcional à quantidade — simples de ler e não depende de
++    // nenhuma lib de gráficos.
++    function renderizarBarrasTiposVeiculo(filtrados) {
++      const container = document.getElementById("kpi-tipos-veiculo-lista");
++      if (!container) return;
++
++      const { distribuicao, semInformacao, total } = calcularDistribuicaoTiposVeiculo(filtrados);
++      if (total === 0) {
++        container.innerHTML = '<p style="font-size:0.85rem; opacity:0.7;">Nenhum agendamento no período/filtro selecionado.</p>';
++        return;
++      }
++
++      const maiorQuantidade = Math.max(1, ...distribuicao.map(d => d.quantidade));
++      let html = distribuicao.map(d => `
++        <div class="barra-tipo-veiculo">
++          <span class="rotulo">${escapeHtml(d.tipo)}</span>
++          <div class="trilha"><div class="preenchimento" style="width:${((d.quantidade / maiorQuantidade) * 100).toFixed(0)}%;"></div></div>
++          <span class="valor">${d.quantidade} (${d.percentual}%)</span>
++        </div>
++      `).join("");
++
++      if (semInformacao > 0) {
++        html += `<p style="font-size:0.78rem; color:var(--texto-suave,#666); margin-top:6px;">${semInformacao} agendamento(s) sem tipo de veículo informado (cadastrados antes deste recurso existir).</p>`;
++      }
++      container.innerHTML = html;
++    }
++
++    // Indicador "Movimentação por Dia da Semana × Horário": heatmap por
++    // intensidade de cor em vez de gráfico 3D — mais fácil de ler numa
++    // tabela simples. As colunas de hora se ajustam sozinhas ao que
++    // existe nos dados (não desenha 24h fixas se o pátio só opera de
++    // manhã, por exemplo).
++    function renderizarHeatmapMovimentacao(filtrados) {
++      const movimentacao = calcularMovimentacaoPorHorario(filtrados);
++      const chave = document.getElementById("kpi-heatmap-processo")?.value || "__todos__";
++      const dados = movimentacao[chave] || { matriz: {}, maisMovimentados: [], menosMovimentados: [] };
++
++      const horasPresentes = new Set();
++      Object.values(dados.matriz).forEach(horas => Object.keys(horas).forEach(h => horasPresentes.add(h)));
++      const horasOrdenadas = Array.from(horasPresentes).sort();
++
++      const tabela = document.getElementById("kpi-heatmap-tabela");
++      if (tabela) {
++        if (horasOrdenadas.length === 0) {
++          tabela.innerHTML = '<tr><td style="padding:10px; text-align:center; opacity:0.7;">Sem dados suficientes para este filtro.</td></tr>';
++        } else {
++          const maiorValor = Math.max(1, ...horasOrdenadas.flatMap(h =>
++            [0, 1, 2, 3, 4, 5, 6].map(dia => (dados.matriz[dia] && dados.matriz[dia][h]) || 0)
++          ));
++
++          function nivelDe(valor) {
++            if (valor === 0) return 0;
++            const proporcao = valor / maiorValor;
++            if (proporcao > 0.75) return 4;
++            if (proporcao > 0.5) return 3;
++            if (proporcao > 0.25) return 2;
++            return 1;
++          }
++
++          const thead = "<thead><tr><th>Horário</th>" + DIAS_SEMANA_LABEL.map(d => `<th>${d.slice(0, 3)}</th>`).join("") + "</tr></thead>";
++          const tbody = "<tbody>" + horasOrdenadas.map(h => {
++            const celulas = [0, 1, 2, 3, 4, 5, 6].map(dia => {
++              const valor = (dados.matriz[dia] && dados.matriz[dia][h]) || 0;
++              return `<td class="celula-heatmap nivel-${nivelDe(valor)}">${valor || ""}</td>`;
++            }).join("");
++            return `<tr><td style="font-weight:600;">${h}h</td>${celulas}</tr>`;
++          }).join("") + "</tbody>";
++
++          tabela.innerHTML = thead + tbody;
++        }
++      }
++
++      const listaPico = document.getElementById("kpi-horarios-pico");
++      const listaVazios = document.getElementById("kpi-horarios-vazios");
++      const formatarSlot = s => `${DIAS_SEMANA_LABEL[s.diaSemana]}, ${s.hora}h — <strong>${s.quantidade}</strong> veículo(s)`;
++      if (listaPico) {
++        listaPico.innerHTML = dados.maisMovimentados?.length
++          ? dados.maisMovimentados.map(s => `<li>${formatarSlot(s)}</li>`).join("")
++          : '<li style="opacity:0.7; list-style:none; margin-left:-20px;">Sem dados suficientes.</li>';
++      }
++      if (listaVazios) {
++        listaVazios.innerHTML = dados.menosMovimentados?.length
++          ? dados.menosMovimentados.map(s => `<li>${formatarSlot(s)}</li>`).join("")
++          : '<li style="opacity:0.7; list-style:none; margin-left:-20px;">Sem dados suficientes.</li>';
++      }
++    }
++
++    document.getElementById("kpi-heatmap-processo")?.addEventListener("change", () => {
++      renderizarHeatmapMovimentacao(ultimosBookingsFiltradosKpis);
++    });
++
+     function atualizarPainelKPIs() {
+       const dataInicio = document.getElementById("kpi-data-inicio").value;
+       const dataFim = document.getElementById("kpi-data-fim").value;
+       const empresa = document.getElementById("kpi-empresa").value;
+ 
+       const filtrados = filtrarBookings(todosBookingsGerais, dataInicio, dataFim, empresa);
++      ultimosBookingsFiltradosKpis = filtrados;
+       const kpis = calcularKPIs(filtrados);
+ 
+       document.getElementById("kpi-card-dwell").textContent = kpis.dwellTime.formatado;
+@@ -2696,6 +3280,10 @@
+ 
+       document.getElementById("kpi-qtd-encaixes").textContent = kpis.modalidade.totalEncaixes;
+       document.getElementById("kpi-pct-encaixes").textContent = `${kpis.modalidade.pctEncaixe}%`;
++
++      preencherSelectHeatmapProcessos();
++      renderizarBarrasTiposVeiculo(filtrados);
++      renderizarHeatmapMovimentacao(filtrados);
+     }
+ 
+     document.getElementById("btn-filtrar-kpis").addEventListener("click", atualizarPainelKPIs);
+@@ -2851,6 +3439,7 @@
          const snap = await getDocs(collection(db, "timeSlotRules"));
          const regras = snap.docs
            .map(d => ({ id: d.id, ...d.data() }))
@@ -911,7 +1259,7 @@ index aade230..05ac371 100644
            .sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
  
          if (regras.length === 0) {
-@@ -2988,7 +3319,7 @@
+@@ -2988,7 +3577,7 @@
          return;
        }
  
@@ -920,7 +1268,7 @@ index aade230..05ac371 100644
        const btn = document.getElementById("btn-salvar-regra");
        btn.disabled = true;
        btn.textContent = "Salvando...";
-@@ -3021,6 +3352,7 @@
+@@ -3021,6 +3610,7 @@
          const snap = await getDocs(collection(db, "timeSlotExceptions"));
          const excecoes = snap.docs
            .map(d => ({ id: d.id, ...d.data() }))
@@ -928,7 +1276,7 @@ index aade230..05ac371 100644
            .sort((a, b) => (a.horaInicio || "").localeCompare(b.horaInicio || ""));
  
          if (excecoes.length === 0) {
-@@ -3142,7 +3474,7 @@
+@@ -3142,7 +3732,7 @@
          return;
        }
  
@@ -937,7 +1285,7 @@ index aade230..05ac371 100644
        const btn = document.getElementById("btn-salvar-excecao");
        btn.disabled = true;
        btn.textContent = "Salvando...";
-@@ -3185,7 +3517,7 @@
+@@ -3185,7 +3775,7 @@
        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Carregando vagas...</td></tr>';
  
        try {
@@ -946,7 +1294,7 @@ index aade230..05ac371 100644
  
          if (slots.length === 0) {
            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#888;">Nenhum horário de atendimento configurado (Regra Padrão/Exceção) para esta data.</td></tr>';
-@@ -3306,7 +3638,7 @@
+@@ -3306,7 +3896,7 @@
  
            btn.disabled = true;
            try {
@@ -955,7 +1303,7 @@ index aade230..05ac371 100644
              await deleteDoc(doc(db, "timeSlots", slotId));
              mostrarToast("Horário restaurado para o padrão.", { tipo: "sucesso" });
              await carregarVagas();
-@@ -3320,11 +3652,12 @@
+@@ -3320,11 +3910,12 @@
      }
  
      async function salvarAjusteVaga(dataStr, slot, { capacidadeMax, ativo }) {
@@ -969,7 +1317,7 @@ index aade230..05ac371 100644
          capacidadeMax,
          ativo,
          ocupados: slot.ocupados
-@@ -3337,8 +3670,10 @@
+@@ -3337,8 +3928,10 @@
      document.getElementById("form-processo").addEventListener("submit", async (e) => {
        e.preventDefault();
        const inputNome = document.getElementById("nomeProcesso");
@@ -980,7 +1328,7 @@ index aade230..05ac371 100644
  
        if (!nome) return;
        erroBox.textContent = "";
-@@ -3350,9 +3685,12 @@
+@@ -3350,9 +3943,12 @@
          await addDoc(collection(db, "processTypes"), {
            nome,
            ativo: true,
@@ -993,7 +1341,7 @@ index aade230..05ac371 100644
          mostrarToast("Tipo de processo cadastrado.", { tipo: "sucesso" });
  
          mapProcessos = await obterTiposProcessoMap();
-@@ -3370,28 +3708,78 @@
+@@ -3370,28 +3966,78 @@
      async function carregarTiposProcessoTabela() {
        const tbody = document.getElementById("tbody-processos");
        if (!tbody) return;
@@ -1074,7 +1422,7 @@ index aade230..05ac371 100644
          tbody.querySelectorAll(".btn-toggle-processo").forEach(btn => {
            btn.addEventListener("click", async () => {
              const id = btn.closest("tr").dataset.id;
-@@ -3415,7 +3803,7 @@
+@@ -3415,7 +4061,7 @@
          });
        } catch (err) {
          console.error("Erro ao carregar tipos de processo:", err);
@@ -1083,7 +1431,7 @@ index aade230..05ac371 100644
        }
      }
  
-@@ -3424,9 +3812,15 @@
+@@ -3424,9 +4070,15 @@
         =================================================================== */
      async function obterTiposProcessoMap() {
        const map = {};
@@ -1101,7 +1449,7 @@ index aade230..05ac371 100644
        return map;
      }
 diff --git a/patioCore.js b/patioCore.js
-index 6123d8e..f4ab544 100644
+index 6123d8e..e9af0e2 100644
 --- a/patioCore.js
 +++ b/patioCore.js
 @@ -44,6 +44,7 @@ import {
@@ -1148,7 +1496,7 @@ index 6123d8e..f4ab544 100644
  export const STATUS_LEGADO = [
    STATUS.PENDENTE, STATUS.APROVADO, STATUS.RECUSADO, STATUS.EXPIRADO,
    STATUS.CANCELADO, STATUS.SEM_RESPOSTA
-@@ -190,6 +220,58 @@ export function checkOutValido(checkOut) {
+@@ -190,6 +220,92 @@ export function checkOutValido(checkOut) {
    return !!checkOut && typeof checkOut.notaFiscal === "string";
  }
  
@@ -1182,6 +1530,40 @@ index 6123d8e..f4ab544 100644
 +  [EXIGENCIA_NF.AMBOS]: "Entrada e Saída (ambos)"
 +};
 +
++// Tipo de veículo — coletado em toda criação de agendamento (Transportadora,
++// Logística/Admin ou Encaixe da Portaria) e confirmado/corrigido pela
++// Portaria no check-in, caso o veículo físico seja diferente do que foi
++// declarado no agendamento. Alimenta o indicador "Tipos de Veículo mais
++// recorrentes" no Painel de KPIs.
++export const TIPOS_VEICULO = ["Moto", "Carro", "VUC", "3/4", "Toco", "Truck", "Carreta", "Bitruck"];
++
++// Nomes dos dias da semana na mesma ordem de Date.getDay() (0=Domingo).
++// Usado no indicador de movimentação por dia da semana × horário.
++export const DIAS_SEMANA_LABEL = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
++
++/**
++ * Tipo de veículo "de verdade" de um agendamento: o que a Portaria
++ * confirmou (ou corrigiu) no check-in, se já houve check-in; senão, o
++ * que foi declarado na hora de agendar. Uma Entrada por Encaixe já
++ * nasce com os dois campos iguais (não passa por um check-in separado).
++ */
++export function tipoVeiculoEfetivo(booking) {
++  return booking?.checkIn?.tipoVeiculo || booking?.tipoVeiculo || null;
++}
++
++/**
++ * Dia da semana (0=Domingo..6=Sábado) de uma data "AAAA-MM-DD", sem
++ * passar por UTC (new Date("AAAA-MM-DD") interpretaria a data como
++ * meia-noite UTC e viraria o dia errado à noite em fusos negativos como
++ * o do Brasil — mesmo cuidado já tomado em _semanasEntreDatas acima).
++ */
++export function diaSemanaDeData(dataStr) {
++  if (!dataStr) return null;
++  const [ano, mes, dia] = String(dataStr).split("-").map(Number);
++  if (!ano || !mes || !dia) return null;
++  return new Date(ano, mes - 1, dia).getDay();
++}
++
 +/**
 + * Se a NF é obrigatória na ENTRADA (check-in / encaixe) para este tipo
 + * de processo. Documentos antigos sem `exigenciaNF` são tratados como
@@ -1207,7 +1589,7 @@ index 6123d8e..f4ab544 100644
  /* #######################################################################
     PARTE 1B — MODELO TRIDIMENSIONAL DE ESTADOS (fonte de verdade)
     ####################################################################### */
-@@ -523,8 +605,54 @@ export function minutosParaHora(min) {
+@@ -523,8 +639,54 @@ export function minutosParaHora(min) {
    return `${h}:${m}`;
  }
  
@@ -1264,7 +1646,7 @@ index 6123d8e..f4ab544 100644
  }
  
  export function calcularBlocosHorario(obj) {
-@@ -574,14 +702,18 @@ export function regraSeAplicaNaData(regra, dataStr) {
+@@ -574,14 +736,18 @@ export function regraSeAplicaNaData(regra, dataStr) {
  }
  
  export async function buscarSlotsVirtuaisDoDia(db, dataStr, opcoes = {}) {
@@ -1284,7 +1666,7 @@ index 6123d8e..f4ab544 100644
      if (!(r.diasSemana || []).includes(diaSemana)) return;
      if (!regraSeAplicaNaData(r, dataStr)) return;
      calcularBlocosHorario(r).forEach(min => {
-@@ -593,6 +725,7 @@ export async function buscarSlotsVirtuaisDoDia(db, dataStr, opcoes = {}) {
+@@ -593,6 +759,7 @@ export async function buscarSlotsVirtuaisDoDia(db, dataStr, opcoes = {}) {
    const snapExc = await getDocs(query(collection(db, "timeSlotExceptions"), where("ativo", "==", true)));
    snapExc.docs.forEach(d => {
      const ex = d.data();
@@ -1292,7 +1674,7 @@ index 6123d8e..f4ab544 100644
      if (!(ex.diasSemana || []).includes(diaSemana)) return;
      calcularBlocosHorario(ex).forEach(min => {
        const hora = minutosParaHora(min);
-@@ -612,7 +745,11 @@ export async function buscarSlotsVirtuaisDoDia(db, dataStr, opcoes = {}) {
+@@ -612,7 +779,11 @@ export async function buscarSlotsVirtuaisDoDia(db, dataStr, opcoes = {}) {
    //    nunca sobrescreve a regra recorrente em si).
    const snapManual = await getDocs(query(collection(db, "timeSlots"), where("data", "==", dataStr)));
    const manuais = {};
@@ -1305,7 +1687,16 @@ index 6123d8e..f4ab544 100644
  
    Object.keys(manuais).forEach(hora => {
      const m = manuais[hora];
-@@ -709,8 +846,8 @@ function validarCamposObrigatorios(dados) {
+@@ -703,14 +874,17 @@ function validarCamposObrigatorios(dados) {
+   if (!dados.motorista || !String(dados.motorista).trim()) {
+     erros.push("Nome do motorista é obrigatório.");
+   }
++  if (!dados.tipoVeiculo || !TIPOS_VEICULO.includes(dados.tipoVeiculo)) {
++    erros.push("Tipo de veículo é obrigatório.");
++  }
+ 
+   if (erros.length > 0) {
+     throw new Error(erros.join(" "));
    }
  }
  
@@ -1316,7 +1707,7 @@ index 6123d8e..f4ab544 100644
    const slot = slots.find(s => s.horaInicio === horaInicio);
    return slot ? slot : null;
  }
-@@ -726,16 +863,17 @@ export async function criarAgendamentoOperacional(db, usuarioLogado, dados, opco
+@@ -726,16 +900,17 @@ export async function criarAgendamentoOperacional(db, usuarioLogado, dados, opco
  
    const transportadoraCadastrada = await buscarTransportadoraCadastrada(db, dados.transportadoraId);
  
@@ -1336,7 +1727,7 @@ index 6123d8e..f4ab544 100644
    const slotRef = doc(db, "timeSlots", slotId);
    const bookingRef = doc(collection(db, "bookings"));
  
-@@ -789,6 +927,7 @@ export async function criarAgendamentoOperacional(db, usuarioLogado, dados, opco
+@@ -789,6 +964,7 @@ export async function criarAgendamentoOperacional(db, usuarioLogado, dados, opco
        data: dataAgendada,
        horaInicio,
        horaFim,
@@ -1344,7 +1735,7 @@ index 6123d8e..f4ab544 100644
        capacidadeMax,
        ativo: true,
        ocupados
-@@ -798,6 +937,7 @@ export async function criarAgendamentoOperacional(db, usuarioLogado, dados, opco
+@@ -798,6 +974,7 @@ export async function criarAgendamentoOperacional(db, usuarioLogado, dados, opco
        usuarioId: transportadoraCadastrada ? transportadoraCadastrada.uid : null,
        transportadoraCadastrada: !!transportadoraCadastrada,
        empresa: String(dados.empresa).trim(),
@@ -1352,7 +1743,15 @@ index 6123d8e..f4ab544 100644
        tipoProcessoId: dados.tipoProcessoId,
        dataAgendada,
        horaInicio,
-@@ -856,7 +996,8 @@ export async function criarAgendamentoTransportadora(db, usuarioAtual, dados, sl
+@@ -805,6 +982,7 @@ export async function criarAgendamentoOperacional(db, usuarioLogado, dados, opco
+       placaCavalo: String(dados.placaCavalo).trim().toUpperCase(),
+       placaCarreta: dados.placaCarreta ? String(dados.placaCarreta).trim().toUpperCase() : "",
+       motorista: String(dados.motorista).trim(),
++      tipoVeiculo: dados.tipoVeiculo,
+       observacoes: dados.observacoes ? String(dados.observacoes).trim() : "",
+       ...dimsIniciais,
+       historicoEstados: [
+@@ -856,7 +1034,8 @@ export async function criarAgendamentoTransportadora(db, usuarioAtual, dados, sl
      throw new Error("Este horário não está mais disponível. Selecione a data novamente.");
    }
  
@@ -1362,7 +1761,7 @@ index 6123d8e..f4ab544 100644
    const slotRef = doc(db, "timeSlots", slotId);
    const bookingRef = doc(collection(db, "bookings"));
  
-@@ -892,6 +1033,7 @@ export async function criarAgendamentoTransportadora(db, usuarioAtual, dados, sl
+@@ -892,6 +1071,7 @@ export async function criarAgendamentoTransportadora(db, usuarioAtual, dados, sl
        data: dados.dataAgendada,
        horaInicio: dados.horaInicio,
        horaFim: slotReferencia.horaFim,
@@ -1370,7 +1769,7 @@ index 6123d8e..f4ab544 100644
        capacidadeMax,
        ativo: true,
        ocupados: ocupadosAtuais + 1
-@@ -900,6 +1042,7 @@ export async function criarAgendamentoTransportadora(db, usuarioAtual, dados, sl
+@@ -900,6 +1080,7 @@ export async function criarAgendamentoTransportadora(db, usuarioAtual, dados, sl
      transaction.set(bookingRef, {
        usuarioId: usuarioAtual.uid,
        empresa: String(dados.empresa).trim(),
@@ -1378,7 +1777,109 @@ index 6123d8e..f4ab544 100644
        tipoProcessoId: dados.tipoProcessoId,
        dataAgendada: dados.dataAgendada,
        horaInicio: dados.horaInicio,
-@@ -1053,7 +1196,7 @@ export async function mudarStatusBooking(db, usuarioLogado, booking, novoStatus)
+@@ -907,6 +1088,7 @@ export async function criarAgendamentoTransportadora(db, usuarioAtual, dados, sl
+       placaCavalo: String(dados.placaCavalo).trim().toUpperCase(),
+       placaCarreta: dados.placaCarreta ? String(dados.placaCarreta).trim().toUpperCase() : "",
+       motorista: String(dados.motorista).trim(),
++      tipoVeiculo: dados.tipoVeiculo,
+       observacoes: dados.observacoes ? String(dados.observacoes).trim() : "",
+       ...dimsIniciais,
+       historicoEstados: [
+@@ -1010,6 +1192,93 @@ export function calcularKPIs(bookingsFiltrados) {
+   };
+ }
+ 
++/**
++ * Distribuição por tipo de veículo (Moto, Carro, VUC, 3/4, Toco, Truck,
++ * Carreta, Bitruck) no conjunto de agendamentos filtrado — usa o tipo
++ * "efetivo" (confirmado no check-in quando existir, senão o declarado no
++ * agendamento). Ordenado do mais para o menos recorrente.
++ */
++export function calcularDistribuicaoTiposVeiculo(bookingsFiltrados) {
++  const contagem = {};
++  TIPOS_VEICULO.forEach(t => { contagem[t] = 0; });
++
++  let semInformacao = 0;
++  bookingsFiltrados.forEach(b => {
++    const tipo = tipoVeiculoEfetivo(b);
++    if (tipo && Object.prototype.hasOwnProperty.call(contagem, tipo)) contagem[tipo]++;
++    else semInformacao++;
++  });
++
++  const total = bookingsFiltrados.length;
++  const distribuicao = TIPOS_VEICULO
++    .map(tipo => ({
++      tipo,
++      quantidade: contagem[tipo],
++      percentual: total > 0 ? ((contagem[tipo] / total) * 100).toFixed(1) : "0.0"
++    }))
++    .sort((a, b) => b.quantidade - a.quantidade);
++
++  return { distribuicao, semInformacao, total };
++}
++
++/**
++ * Movimentação por dia da semana × horário — quantos veículos têm
++ * horário agendado em cada combinação de dia/hora, para identificar os
++ * picos e os horários mais vazios. Usa `horaInicio` (o horário
++ * AGENDADO), não o do check-in de fato: o que se quer aqui é a demanda
++ * que o pátio precisa estar preparado para atender, não só quem chegou.
++ *
++ * Retorna um objeto com uma chave por tipo de processo (id) mais uma
++ * chave especial "__todos__" com o agregado de todos os tipos juntos —
++ * a tela deixa o usuário escolher entre "Todos os Processos" ou um
++ * tipo específico. Cada entrada tem:
++ *   - matriz[diaSemana][hora] = quantidade
++ *   - porDiaSemana[0..6] = total do dia (soma de todas as horas)
++ *   - maisMovimentados / menosMovimentados = top 5 combinações dia+hora
++ *     (menosMovimentados ignora combinações com 0, pra não virar uma
++ *     lista de 5 empates em zero sem nenhum valor informativo)
++ */
++export function calcularMovimentacaoPorHorario(bookingsFiltrados) {
++  const baldes = {};
++
++  function balde(chave) {
++    if (!baldes[chave]) {
++      baldes[chave] = { matriz: {}, porDiaSemana: [0, 0, 0, 0, 0, 0, 0] };
++    }
++    return baldes[chave];
++  }
++
++  bookingsFiltrados.forEach(b => {
++    const dia = diaSemanaDeData(b.dataAgendada);
++    const hora = String(b.horaInicio || "").slice(0, 2);
++    if (dia === null || !hora) return;
++
++    const chaves = ["__todos__"];
++    if (b.tipoProcessoId) chaves.push(b.tipoProcessoId);
++
++    chaves.forEach(chave => {
++      const bd = balde(chave);
++      bd.matriz[dia] = bd.matriz[dia] || {};
++      bd.matriz[dia][hora] = (bd.matriz[dia][hora] || 0) + 1;
++      bd.porDiaSemana[dia]++;
++    });
++  });
++
++  Object.values(baldes).forEach(bd => {
++    const slots = [];
++    Object.entries(bd.matriz).forEach(([dia, horas]) => {
++      Object.entries(horas).forEach(([hora, quantidade]) => {
++        slots.push({ diaSemana: Number(dia), hora, quantidade });
++      });
++    });
++    slots.sort((a, b) => b.quantidade - a.quantidade);
++    bd.maisMovimentados = slots.slice(0, 5);
++    bd.menosMovimentados = slots.filter(s => s.quantidade > 0).slice(-5).reverse();
++  });
++
++  return baldes;
++}
++
+ /* #######################################################################
+    PARTE 5 — LIBERAÇÃO DE VAGA (helper interno compartilhado)
+    ####################################################################### */
+@@ -1053,7 +1322,7 @@ export async function mudarStatusBooking(db, usuarioLogado, booking, novoStatus)
  
      let slotSnap = null;
      if (precisaLiberarVaga) {
@@ -1387,7 +1888,7 @@ index 6123d8e..f4ab544 100644
        slotSnap = await transaction.get(slotRef);
      }
  
-@@ -1136,7 +1279,7 @@ export async function recusarSolicitacao(db, usuarioLogado, bookingId) {
+@@ -1136,7 +1405,7 @@ export async function recusarSolicitacao(db, usuarioLogado, bookingId) {
      const precisaLiberarVaga = dadosAtuais.vagaLiberada !== true;
      let slotSnap = null;
      if (precisaLiberarVaga) {
@@ -1396,7 +1897,7 @@ index 6123d8e..f4ab544 100644
        slotSnap = await transaction.get(slotRef);
      }
  
-@@ -1194,6 +1337,16 @@ export async function registrarCheckIn(db, usuarioLogado, bookingId, dadosConfir
+@@ -1194,6 +1463,16 @@ export async function registrarCheckIn(db, usuarioLogado, bookingId, dadosConfir
        throw new Error("Este agendamento foi cancelado pela transportadora. Se o veículo está fisicamente no local, registre-o pela Entrada Expressa (Encaixe).");
      }
  
@@ -1413,17 +1914,37 @@ index 6123d8e..f4ab544 100644
      const agora = new Date();
      const pontualidade = calcularPontualidade(dadosAtuais.horaInicio, agora);
      const novoComparecimento = pontualidade === PONTUALIDADE.ATRASADO
-@@ -1236,7 +1389,8 @@ export async function registrarCheckIn(db, usuarioLogado, bookingId, dadosConfir
+@@ -1210,9 +1489,17 @@ export async function registrarCheckIn(db, usuarioLogado, bookingId, dadosConfir
+     const placaCavalo = String(dadosConfirmados.placaCavalo || "").trim().toUpperCase();
+     const placaCarreta = dadosConfirmados.placaCarreta ? String(dadosConfirmados.placaCarreta).trim().toUpperCase() : "";
+     const motorista = String(dadosConfirmados.motorista || "").trim();
++    // A Portaria confirma (ou corrige) o tipo de veículo no check-in —
++    // se não vier nada informado (telas antigas em cache, por exemplo),
++    // cai no que já estava declarado no agendamento, pra nunca perder o
++    // dado por completo.
++    const tipoVeiculo = TIPOS_VEICULO.includes(dadosConfirmados.tipoVeiculo)
++      ? dadosConfirmados.tipoVeiculo
++      : (dadosAtuais.tipoVeiculo || null);
+     const divergente = placaCavalo !== (dadosAtuais.placaCavalo || "")
+       || placaCarreta !== (dadosAtuais.placaCarreta || "")
+-      || motorista !== (dadosAtuais.motorista || "");
++      || motorista !== (dadosAtuais.motorista || "")
++      || tipoVeiculo !== (dadosAtuais.tipoVeiculo || null);
+ 
+     const novasDims = { aprovacaoStatus: aprovacaoFinal, comparecimentoStatus: novoComparecimento, operacionalStatus: OPERACIONAL.EM_PATIO };
+ 
+@@ -1236,7 +1523,9 @@ export async function registrarCheckIn(db, usuarioLogado, bookingId, dadosConfir
          dataHora: serverTimestamp(),
          pontualidade,
          dadosConferidos: true,
 -        divergente
 +        divergente,
++        tipoVeiculo,
 +        notaFiscalEntrada: notaFiscalEntrada || ""
        },
        historicoEstados: arrayUnion(...historico),
        atualizadoEm: serverTimestamp(),
-@@ -1259,8 +1413,16 @@ export async function registrarCheckOut(db, usuarioLogado, bookingId, dados) {
+@@ -1259,8 +1548,16 @@ export async function registrarCheckOut(db, usuarioLogado, bookingId, dados) {
        throw new Error(`Só é possível dar check-out em veículos Em Pátio (situação atual: "${situacaoDetalhadaLabel(dadosAtuais)}").`);
      }
  
@@ -1441,7 +1962,7 @@ index 6123d8e..f4ab544 100644
  
      const agora = new Date();
      const permanenciaMinutos = calcularTempoPermanenciaMinutos(dadosAtuais.checkIn?.dataHora, agora);
-@@ -1312,7 +1474,7 @@ export async function registrarNoShow(db, usuarioLogado, bookingId) {
+@@ -1312,7 +1609,7 @@ export async function registrarNoShow(db, usuarioLogado, bookingId) {
      const precisaLiberarVaga = dadosAtuais.vagaLiberada !== true;
      let slotSnap = null;
      if (precisaLiberarVaga) {
@@ -1450,7 +1971,7 @@ index 6123d8e..f4ab544 100644
        slotSnap = await transaction.get(slotRef);
      }
  
-@@ -1344,6 +1506,19 @@ export async function criarEntradaEncaixe(db, usuarioLogado, dados) {
+@@ -1344,6 +1641,19 @@ export async function criarEntradaEncaixe(db, usuarioLogado, dados) {
    if (!usuarioLogado || !usuarioLogado.uid) throw new Error("Usuário não identificado.");
    validarCamposObrigatorios(dados);
  
@@ -1470,7 +1991,7 @@ index 6123d8e..f4ab544 100644
    const dimsIniciais = {
      aprovacaoStatus: APROVACAO.APROVADO,
      comparecimentoStatus: COMPARECIMENTO.COMPARECEU,
-@@ -1353,6 +1528,7 @@ export async function criarEntradaEncaixe(db, usuarioLogado, dados) {
+@@ -1353,6 +1663,7 @@ export async function criarEntradaEncaixe(db, usuarioLogado, dados) {
    const bookingRef = await addDoc(collection(db, "bookings"), {
      usuarioId: null,
      transportadoraCadastrada: false,
@@ -1478,17 +1999,26 @@ index 6123d8e..f4ab544 100644
      empresa: String(dados.empresa).trim(),
      tipoProcessoId: dados.tipoProcessoId,
      dataAgendada: dados.dataAgendada,
-@@ -1375,7 +1551,8 @@ export async function criarEntradaEncaixe(db, usuarioLogado, dados) {
+@@ -1361,6 +1672,7 @@ export async function criarEntradaEncaixe(db, usuarioLogado, dados) {
+     placaCavalo: String(dados.placaCavalo).trim().toUpperCase(),
+     placaCarreta: dados.placaCarreta ? String(dados.placaCarreta).trim().toUpperCase() : "",
+     motorista: String(dados.motorista).trim(),
++    tipoVeiculo: dados.tipoVeiculo,
+     observacoes: dados.observacoes ? String(dados.observacoes).trim() : "",
+     ...dimsIniciais,
+     historicoEstados: [
+@@ -1375,7 +1687,9 @@ export async function criarEntradaEncaixe(db, usuarioLogado, dados) {
        dataHora: serverTimestamp(),
        pontualidade: PONTUALIDADE.PONTUAL,
        dadosConferidos: true,
 -      divergente: false
 +      divergente: false,
++      tipoVeiculo: dados.tipoVeiculo,
 +      notaFiscalEntrada: notaFiscalEntrada || ""
      },
      criadoEm: serverTimestamp(),
      criadoPor: usuarioLogado.uid,
-@@ -1392,7 +1569,7 @@ export async function criarEntradaEncaixe(db, usuarioLogado, dados) {
+@@ -1392,7 +1706,7 @@ export async function criarEntradaEncaixe(db, usuarioLogado, dados) {
  
  async function liberarVagaSemMudarStatus(db, usuarioLogado, booking) {
    const bookingRef = doc(db, "bookings", booking.id);
@@ -1497,7 +2027,7 @@ index 6123d8e..f4ab544 100644
  
    await runTransaction(db, async (transaction) => {
      const bookingSnap = await transaction.get(bookingRef);
-@@ -1506,6 +1683,7 @@ export async function criarRegraRecorrencia(db, usuarioLogado, dados) {
+@@ -1506,6 +1820,7 @@ export async function criarRegraRecorrencia(db, usuarioLogado, dados) {
    const payload = {
      diasSemana: dados.diasSemana.slice().sort((a, b) => a - b),
      horaInicio: dados.horaInicio,
@@ -1505,7 +2035,7 @@ index 6123d8e..f4ab544 100644
      transportadoraId: dados.transportadoraId || null,
      empresa: String(dados.empresa).trim(),
      tipoProcessoId: dados.tipoProcessoId,
-@@ -1596,6 +1774,7 @@ export async function garantirOcorrenciasRecorrencia(db, usuarioLogado, regra, h
+@@ -1596,6 +1911,7 @@ export async function garantirOcorrenciasRecorrencia(db, usuarioLogado, regra, h
          await criarAgendamentoOperacional(db, usuarioLogado, {
            transportadoraId: regra.transportadoraId,
            empresa: regra.empresa,
@@ -1542,7 +2072,7 @@ index 404d5e4..06e4cc2 100644
    flex-direction: column;
    padding: 14px 0;
 diff --git a/transportadora-dashboard.html b/transportadora-dashboard.html
-index 7def650..3e8697b 100644
+index 7def650..6f9b064 100644
 --- a/transportadora-dashboard.html
 +++ b/transportadora-dashboard.html
 @@ -9,6 +9,44 @@
@@ -1604,7 +2134,21 @@ index 7def650..3e8697b 100644
            <div class="campo">
              <label for="tipoProcesso">Tipo de Processo</label>
              <select id="tipoProcesso" required>
-@@ -87,12 +132,39 @@
+@@ -74,6 +119,13 @@
+             <input type="text" id="motorista" required>
+           </div>
+ 
++          <div class="campo">
++            <label for="tipoVeiculo">Tipo de Veículo</label>
++            <select id="tipoVeiculo" required>
++              <option value="">Selecione...</option>
++            </select>
++          </div>
++
+           <div class="campo">
+             <label for="observacoes">Observações</label>
+             <textarea id="observacoes" rows="3" placeholder="Detalhes da carga, restrições de acesso, etc."></textarea>
+@@ -87,12 +139,39 @@
  
      <div class="tab-conteudo" id="tab-meus">
        <div class="card">
@@ -1646,7 +2190,7 @@ index 7def650..3e8697b 100644
              <label for="ordenar-meus-agendamentos">Ordenar por</label>
              <select id="ordenar-meus-agendamentos">
                <option value="data_desc">Data (mais recente primeiro)</option>
-@@ -101,10 +173,25 @@
+@@ -101,10 +180,25 @@
                <option value="horario_desc">Horário (decrescente)</option>
                <option value="motorista_asc">Motorista (A-Z)</option>
                <option value="placa_asc">Placa do Cavalo (A-Z)</option>
@@ -1672,7 +2216,7 @@ index 7def650..3e8697b 100644
          <div class="lista-agendamentos" id="lista-agendamentos">
            <div class="estado-vazio">Carregando...</div>
          </div>
-@@ -136,7 +223,10 @@
+@@ -136,7 +230,11 @@
        aplicarMascaraPlaca,
        configurarMascaraPlaca,
        placaCompleta,
@@ -1680,20 +2224,24 @@ index 7def650..3e8697b 100644
 +      situacaoDetalhadaLabel,
 +      listarPlantas,
 +      PLANTA_PADRAO_ID,
-+      pertenceAPlanta
++      pertenceAPlanta,
++      TIPOS_VEICULO
      } from "./patioCore.js";
      // Máscara de placa, disponibilidade e normalização de booking vêm
      // TODOS de patioCore.js — a única implementação do sistema (ver
-@@ -338,6 +428,8 @@
+@@ -338,6 +436,11 @@
      // ---------------- Elementos do DOM ----------------
      const form = document.getElementById("form-agendamento");
      const selectTipoProcesso = document.getElementById("tipoProcesso");
++    const selectTipoVeiculo = document.getElementById("tipoVeiculo");
++    selectTipoVeiculo.innerHTML = '<option value="">Selecione...</option>' +
++      TIPOS_VEICULO.map(t => `<option value="${t}">${t}</option>`).join("");
 +    const selectPlanta = document.getElementById("planta");
 +    const campoPlantaWrapper = document.getElementById("campo-planta-wrapper");
      const inputData = document.getElementById("data");
      const slotsGrid = document.getElementById("slots-grid");
      const slotsMsg = document.getElementById("slots-msg");
-@@ -347,6 +439,13 @@
+@@ -347,6 +450,13 @@
      const inputPlacaCavalo = document.getElementById("placaCavalo");
      const inputPlacaCarreta = document.getElementById("placaCarreta");
  
@@ -1707,7 +2255,7 @@ index 7def650..3e8697b 100644
      // Máscara de placa: importada de patioCore.js. Nenhuma cópia local
      // aqui — ver logistica-dashboard.html, que usa a mesma implementação.
      configurarMascaraPlaca(inputPlacaCavalo);
-@@ -385,11 +484,49 @@
+@@ -385,11 +495,49 @@
  
        preencherCampoEmpresa(perfil);
  
@@ -1757,7 +2305,7 @@ index 7def650..3e8697b 100644
      /* ===================================================================
         1. CARREGAR TIPOS DE PROCESSO ATIVOS
         =================================================================== */
-@@ -402,6 +539,7 @@
+@@ -402,6 +550,7 @@
          selectTipoProcesso.innerHTML = '<option value="">Selecione o tipo de processo...</option>';
          snap.docs.forEach(docSnap => {
            const p = docSnap.data();
@@ -1765,7 +2313,7 @@ index 7def650..3e8697b 100644
            const opt = document.createElement("option");
            opt.value = docSnap.id;
            opt.textContent = p.nome;
-@@ -433,7 +571,7 @@
+@@ -433,7 +582,7 @@
        try {
          // incluirFechados=false (padrão): horários fechados manualmente
          // pela Logística para esta data não aparecem aqui.
@@ -1774,7 +2322,27 @@ index 7def650..3e8697b 100644
  
          // Se a data escolhida é HOJE, remove da lista qualquer horário cujo
          // início já passou (ou está em andamento) — não faz sentido oferecer
-@@ -553,6 +691,7 @@
+@@ -508,6 +657,7 @@
+       document.getElementById("placaCavalo").value = placaCavalo;
+       document.getElementById("placaCarreta").value = placaCarreta;
+       const motorista = document.getElementById("motorista").value.trim();
++      const tipoVeiculo = selectTipoVeiculo.value;
+       const observacoes = document.getElementById("observacoes").value.trim();
+ 
+       if (!horaInicio) {
+@@ -515,6 +665,11 @@
+         return;
+       }
+ 
++      if (!tipoVeiculo) {
++        erroBox.textContent = "Selecione o tipo de veículo.";
++        return;
++      }
++
+       // Trava de segurança: se o usuário demorou para confirmar e o horário
+       // selecionado já passou nesse meio tempo (data = hoje), bloqueia o envio.
+       if (dataAgendada === dataDeHojeStr() && horaInicio <= horaAtualStr()) {
+@@ -553,11 +708,13 @@
          const resultado = await criarAgendamentoTransportadora(db, usuarioAtual, {
            empresa,
            tipoProcessoId,
@@ -1782,7 +2350,13 @@ index 7def650..3e8697b 100644
            dataAgendada,
            horaInicio,
            placaCavalo,
-@@ -583,6 +722,10 @@
+           placaCarreta,
+           motorista,
++          tipoVeiculo,
+           observacoes
+         }, slotSelecionado);
+ 
+@@ -583,6 +740,10 @@
          document.querySelectorAll(".tab-conteudo").forEach(c => c.classList.remove("ativo"));
          document.querySelector('.tab-btn[data-tab="meus"]')?.classList.add("ativo");
          document.getElementById("tab-meus")?.classList.add("ativo");
@@ -1793,7 +2367,7 @@ index 7def650..3e8697b 100644
          idParaDestacarPendente = resultado.bookingId;
          renderizarListaAgendamentos();
  
-@@ -608,6 +751,15 @@
+@@ -608,6 +769,15 @@
      let idParaDestacarPendente = null;
      let buscaMeusAgendamentosTexto = "";
      let ordenacaoMeusAgendamentos = "data_desc";
@@ -1809,7 +2383,7 @@ index 7def650..3e8697b 100644
  
      document.getElementById("busca-meus-agendamentos")?.addEventListener("input", (e) => {
        buscaMeusAgendamentosTexto = e.target.value.trim();
-@@ -619,6 +771,80 @@
+@@ -619,6 +789,80 @@
        renderizarListaAgendamentos();
      });
  
@@ -1890,7 +2464,7 @@ index 7def650..3e8697b 100644
      function iniciarListenerMeusAgendamentos() {
        if (cancelarListenerMeusAgendamentos) return;
        const q = query(collection(db, "bookings"), where("usuarioId", "==", usuarioAtual.uid));
-@@ -656,9 +882,28 @@
+@@ -656,9 +900,28 @@
        horario_desc: (a, b) => (b.horaInicio || "").localeCompare(a.horaInicio || ""),
        motorista_asc: (a, b) => (a.motorista || "").localeCompare(b.motorista || "", "pt-BR"),
        placa_asc: (a, b) => (a.placaCavalo || "").localeCompare(b.placaCavalo || "", "pt-BR"),
@@ -1919,7 +2493,7 @@ index 7def650..3e8697b 100644
      function filtrarESordenarMeusAgendamentos(lista) {
        let resultado = lista;
        if (buscaMeusAgendamentosTexto) {
-@@ -668,6 +913,13 @@
+@@ -668,6 +931,13 @@
            return alvo.includes(termo);
          });
        }
@@ -1933,7 +2507,7 @@ index 7def650..3e8697b 100644
        const comparador = COMPARADORES_ORDENACAO_MEUS[ordenacaoMeusAgendamentos] || COMPARADORES_ORDENACAO_MEUS.data_desc;
        return resultado.slice().sort(comparador);
      }
-@@ -677,13 +929,22 @@
+@@ -677,13 +947,22 @@
  
        if (meusAgendamentos.length === 0) {
          listaAgendamentos.innerHTML = '<div class="estado-vazio">Você ainda não possui agendamentos cadastrados.</div>';
@@ -1957,3 +2531,17 @@ index 7def650..3e8697b 100644
          return;
        }
  
+@@ -705,7 +984,12 @@
+           <div class="detalhes">
+             Processo: <strong>${escapeHtml(mapTiposProcessoCache[a.tipoProcessoId] || "-")}</strong><br>
+             Placas: ${escapeHtml(a.placaCavalo || "-")}${a.placaCarreta ? " / " + escapeHtml(a.placaCarreta) : ""}<br>
+-            Motorista: ${escapeHtml(a.motorista || "-")}
++            Motorista: ${escapeHtml(a.motorista || "-")}<br>
++            Veículo: ${escapeHtml(a.tipoVeiculo || "-")}${
++              a.checkIn?.tipoVeiculo && a.checkIn.tipoVeiculo !== a.tipoVeiculo
++                ? ` <span style="opacity:0.75;">(confirmado na portaria como ${escapeHtml(a.checkIn.tipoVeiculo)})</span>`
++                : ""
++            }
+             ${a.observacoes ? `<br>Obs.: ${escapeHtml(a.observacoes)}` : ""}
+           </div>
+           ${podeCancelar ? `

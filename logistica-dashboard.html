@@ -79,6 +79,59 @@
       vertical-align: middle;
     }
 
+    /* NOVO — Indicador "Tipos de Veículo Mais Recorrentes": barra
+       horizontal proporcional à quantidade, mais simples que um gráfico
+       de verdade e já responde à pergunta ("qual tipo aparece mais?")
+       sem depender de nenhuma lib de gráficos. */
+    .barra-tipo-veiculo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      font-size: 0.85rem;
+    }
+    .barra-tipo-veiculo .rotulo {
+      width: 90px;
+      flex-shrink: 0;
+      font-weight: 600;
+    }
+    .barra-tipo-veiculo .trilha {
+      flex: 1;
+      background: #eef0f1;
+      border-radius: 6px;
+      height: 20px;
+      overflow: hidden;
+    }
+    .barra-tipo-veiculo .preenchimento {
+      height: 100%;
+      background: var(--azul-escuro, #0f2942);
+      border-radius: 6px;
+      transition: width 0.3s;
+    }
+    .barra-tipo-veiculo .valor {
+      width: 90px;
+      flex-shrink: 0;
+      text-align: right;
+      color: var(--texto-suave, #666);
+    }
+
+    /* NOVO — Heatmap de Movimentação por Dia × Horário: intensidade de
+       cor por célula em vez de gráfico 3D, mais fácil de ler numa
+       tabela e de implementar sem lib externa. A cor vem de uma escala
+       fixa de 5 degraus (ver classes nivel-0..nivel-4 aplicadas em JS
+       conforme a proporção da célula em relação ao máximo da tabela). */
+    #kpi-heatmap-tabela td.celula-heatmap {
+      text-align: center;
+      font-weight: 600;
+      font-size: 0.8rem;
+      min-width: 42px;
+    }
+    #kpi-heatmap-tabela .nivel-0 { background: #f8f9fa; color: #ccc; }
+    #kpi-heatmap-tabela .nivel-1 { background: #d6e4f0; color: #0f2942; }
+    #kpi-heatmap-tabela .nivel-2 { background: #a8c8e0; color: #0f2942; }
+    #kpi-heatmap-tabela .nivel-3 { background: #6fa3cc; color: #fff; }
+    #kpi-heatmap-tabela .nivel-4 { background: #0f2942; color: #fff; }
+
     /* =====================================================================
        LAYOUT ERP — MENU LATERAL: movido para style.css nesta revisão
        (seção "LAYOUT ERP — SIDEBAR (compartilhado entre painéis
@@ -601,6 +654,13 @@
             </div>
 
             <div class="campo">
+              <label for="op-tipo-veiculo">Tipo de Veículo</label>
+              <select id="op-tipo-veiculo" required>
+                <option value="">Selecione...</option>
+              </select>
+            </div>
+
+            <div class="campo">
               <label for="op-observacoes">Observações (opcional)</label>
               <textarea id="op-observacoes" rows="2"></textarea>
             </div>
@@ -774,7 +834,45 @@
             </tbody>
           </table>
         </div>
+
+        <div class="card">
+          <h4><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg> Tipos de Veículo Mais Recorrentes</h4>
+          <p style="font-size: 0.85rem; color: #666; margin-bottom: 16px;">
+            Baseado no tipo confirmado pela Portaria no check-in (ou no declarado no agendamento, quando ainda não houve check-in).
+          </p>
+          <div id="kpi-tipos-veiculo-lista"></div>
+        </div>
+
+        <div class="card">
+          <h4><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg> Movimentação por Dia da Semana × Horário</h4>
+          <p style="font-size: 0.85rem; color: #666; margin-bottom: 16px;">
+            Volume de veículos agendados em cada combinação de dia da semana e horário, separado por tipo de processo — ajuda a identificar os horários de pico e os de menor movimento para dimensionar a equipe do pátio.
+          </p>
+
+          <div class="campo" style="max-width: 320px; margin-bottom: 16px;">
+            <label for="kpi-heatmap-processo">Tipo de Processo</label>
+            <select id="kpi-heatmap-processo">
+              <option value="__todos__">Todos os Processos</option>
+            </select>
+          </div>
+
+          <div id="kpi-heatmap-wrapper" style="overflow-x: auto;">
+            <table class="tabela-kpi" id="kpi-heatmap-tabela"></table>
+          </div>
+
+          <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 18px;">
+            <div style="flex: 1; min-width: 260px;">
+              <h5 style="margin-bottom: 8px;">🔺 Horários de Maior Movimento</h5>
+              <ol id="kpi-horarios-pico" style="padding-left: 20px; font-size: 0.85rem;"></ol>
+            </div>
+            <div style="flex: 1; min-width: 260px;">
+              <h5 style="margin-bottom: 8px;">🔻 Horários de Menor Movimento</h5>
+              <ol id="kpi-horarios-vazios" style="padding-left: 20px; font-size: 0.85rem;"></ol>
+            </div>
+          </div>
+        </div>
       </div>
+
 
       <div class="tab-conteudo" id="tab-regras">
         <div class="card">
@@ -1016,6 +1114,14 @@
           <input type="text" id="checkin-motorista" required>
         </div>
 
+        <div class="campo">
+          <label for="checkin-tipo-veiculo">Tipo de Veículo</label>
+          <select id="checkin-tipo-veiculo" required>
+            <option value="">Selecione...</option>
+          </select>
+          <small id="checkin-tipo-veiculo-agendado" style="display:block; margin-top:4px; color:var(--texto-suave); font-size:0.78rem;"></small>
+        </div>
+
         <div class="campo" id="checkin-nf-wrapper" style="display:none;">
           <label for="checkin-nf">Número da Nota Fiscal (NF) *</label>
           <input type="text" id="checkin-nf" placeholder="Ex: 102938">
@@ -1091,6 +1197,13 @@
         <div class="campo">
           <label for="encaixe-motorista">Nome do Motorista *</label>
           <input type="text" id="encaixe-motorista" required>
+        </div>
+
+        <div class="campo">
+          <label for="encaixe-tipo-veiculo">Tipo de Veículo *</label>
+          <select id="encaixe-tipo-veiculo" required>
+            <option value="">Selecione...</option>
+          </select>
         </div>
 
         <div class="campo">
@@ -1178,7 +1291,12 @@
       PLANTA_PADRAO_ID,
       plantaEfetiva,
       pertenceAPlanta,
-      listarPlantas
+      listarPlantas,
+      TIPOS_VEICULO,
+      DIAS_SEMANA_LABEL,
+      tipoVeiculoEfetivo,
+      calcularDistribuicaoTiposVeiculo,
+      calcularMovimentacaoPorHorario
     } from "./patioCore.js";
     // Máscara de placa, cálculo de disponibilidade, transições de
     // estado e o listener em tempo real da lista de agendamentos vêm
@@ -2013,6 +2131,7 @@
           <small>
             Placa: <b>${escapeHtml(b.placaCavalo)}</b>${b.placaCarreta ? ` / ${escapeHtml(b.placaCarreta)}` : ""} |
             Motorista: ${escapeHtml(b.motorista)} |
+            Veículo: ${escapeHtml(tipoVeiculoEfetivo(b) || "-")} |
             Status: <span class="badge-status ${classeStatus}">${escapeHtml(rotulo)}</span>
           </small>
           ${b.observacoes ? `
@@ -2222,6 +2341,20 @@
           document.getElementById("checkin-motorista").value = booking.motorista || "";
           document.getElementById("checkin-hora-agendada").value = booking.horaInicio;
 
+          // Pré-preenche com o tipo de veículo declarado no agendamento —
+          // a Portaria só precisa mexer aqui se o veículo que chegou de
+          // verdade for diferente do que foi agendado.
+          const selectTipoVeiculoCheckin = document.getElementById("checkin-tipo-veiculo");
+          const avisoTipoVeiculoAgendado = document.getElementById("checkin-tipo-veiculo-agendado");
+          if (selectTipoVeiculoCheckin) {
+            selectTipoVeiculoCheckin.value = booking.tipoVeiculo || "";
+            if (avisoTipoVeiculoAgendado) {
+              avisoTipoVeiculoAgendado.textContent = booking.tipoVeiculo
+                ? `Agendado como: ${booking.tipoVeiculo}. Corrija se o veículo que chegou for diferente.`
+                : "Este agendamento não tinha um tipo de veículo declarado — selecione o que chegou.";
+            }
+          }
+
           const pontualidade = calcularPontualidade(booking.horaInicio, new Date());
           document.getElementById("checkin-pontualidade").value = pontualidade;
 
@@ -2296,6 +2429,13 @@
       configurarMascaraPlaca(document.getElementById("encaixe-placa-cavalo"));
       configurarMascaraPlaca(document.getElementById("encaixe-placa-carreta"));
 
+      const opcoesTipoVeiculo = '<option value="">Selecione...</option>' +
+        TIPOS_VEICULO.map(t => `<option value="${t}">${t}</option>`).join("");
+      const selectCheckinVeiculo = document.getElementById("checkin-tipo-veiculo");
+      const selectEncaixeVeiculo = document.getElementById("encaixe-tipo-veiculo");
+      if (selectCheckinVeiculo) selectCheckinVeiculo.innerHTML = opcoesTipoVeiculo;
+      if (selectEncaixeVeiculo) selectEncaixeVeiculo.innerHTML = opcoesTipoVeiculo;
+
       document.querySelectorAll("#tab-portaria .btn-filtro").forEach(btn => {
         btn.addEventListener("click", () => {
           document.querySelectorAll("#tab-portaria .btn-filtro").forEach(b => b.classList.remove("ativo"));
@@ -2346,6 +2486,7 @@
         document.getElementById("checkin-placa-cavalo").value = placaCavalo;
         document.getElementById("checkin-placa-carreta").value = placaCarreta;
         const motorista = document.getElementById("checkin-motorista").value.trim();
+        const tipoVeiculo = document.getElementById("checkin-tipo-veiculo").value;
         const notaFiscal = document.getElementById("checkin-nf").value.trim();
 
         try {
@@ -2356,7 +2497,7 @@
           // dados internamente, sem sobrescrever a dimensão de aprovação.
           // A própria transação em patioCore.js confere se a NF é
           // obrigatória na entrada para o tipo de processo do agendamento.
-          await registrarCheckIn(db, usuarioLogado, id, { placaCavalo, placaCarreta, motorista, notaFiscal });
+          await registrarCheckIn(db, usuarioLogado, id, { placaCavalo, placaCarreta, motorista, tipoVeiculo, notaFiscal });
 
           await registrarAuditLog(id, "Check-In");
           fecharModaisPortaria();
@@ -2408,6 +2549,7 @@
         document.getElementById("encaixe-placa-cavalo").value = placaCavalo;
         document.getElementById("encaixe-placa-carreta").value = placaCarreta;
         const motorista = document.getElementById("encaixe-motorista").value.trim();
+        const tipoVeiculo = document.getElementById("encaixe-tipo-veiculo").value;
         const tipoProcessoId = document.getElementById("encaixe-processo").value;
         const notaFiscal = document.getElementById("encaixe-nf").value.trim();
         const obs = document.getElementById("encaixe-obs").value.trim();
@@ -2428,6 +2570,7 @@
             placaCavalo,
             placaCarreta,
             motorista,
+            tipoVeiculo,
             notaFiscal,
             observacoes: obs ? `[ENCAIXE PORTARIA] ${obs}` : "[ENCAIXE PORTARIA]"
           });
@@ -2538,6 +2681,12 @@
       const inputData = document.getElementById("op-data");
       const form = document.getElementById("form-agendamento-operacional");
 
+      const selectTipoVeiculo = document.getElementById("op-tipo-veiculo");
+      if (selectTipoVeiculo) {
+        selectTipoVeiculo.innerHTML = '<option value="">Selecione...</option>' +
+          TIPOS_VEICULO.map(t => `<option value="${t}">${t}</option>`).join("");
+      }
+
       configurarMascaraPlaca(document.getElementById("op-placa-cavalo"));
       configurarMascaraPlaca(document.getElementById("op-placa-carreta"));
 
@@ -2583,6 +2732,7 @@
             placaCavalo,
             placaCarreta,
             motorista: document.getElementById("op-motorista").value.trim(),
+            tipoVeiculo: document.getElementById("op-tipo-veiculo").value,
             observacoes: document.getElementById("op-observacoes").value.trim()
           });
 
@@ -2881,7 +3031,7 @@
             <td><b>${formatarData(b.dataAgendada)}</b><br><small>${escapeHtml(b.horaInicio || "-")}</small>${seloSemResposta}</td>
             <td>${escapeHtml(b.empresa)}</td>
             <td>${escapeHtml(mapProcessos[b.tipoProcessoId] || b.tipoProcessoId)}</td>
-            <td>Cavalo: ${escapeHtml(b.placaCavalo)}<br><small>Motorista: ${escapeHtml(b.motorista)}</small></td>
+            <td>Cavalo: ${escapeHtml(b.placaCavalo)}<br><small>Motorista: ${escapeHtml(b.motorista)} · ${escapeHtml(tipoVeiculoEfetivo(b) || "-")}</small></td>
             <td><small>${b.criadoEm ? new Date(b.criadoEm.toDate ? b.criadoEm.toDate() : b.criadoEm).toLocaleString() : '-'}</small></td>
             <td>
               <div style="display:flex; flex-direction:column; gap:6px; align-items:flex-start;">
@@ -2995,12 +3145,116 @@
       });
     }
 
+    let ultimosBookingsFiltradosKpis = [];
+
+    function preencherSelectHeatmapProcessos() {
+      const select = document.getElementById("kpi-heatmap-processo");
+      if (!select) return;
+      const valorAtual = select.value || "__todos__";
+      select.innerHTML = '<option value="__todos__">Todos os Processos</option>' +
+        Object.keys(mapProcessos).map(id => `<option value="${id}">${escapeHtml(mapProcessos[id])}</option>`).join("");
+      select.value = Object.prototype.hasOwnProperty.call(mapProcessos, valorAtual) || valorAtual === "__todos__" ? valorAtual : "__todos__";
+    }
+
+    // Indicador "Tipos de Veículo Mais Recorrentes": barra horizontal
+    // proporcional à quantidade — simples de ler e não depende de
+    // nenhuma lib de gráficos.
+    function renderizarBarrasTiposVeiculo(filtrados) {
+      const container = document.getElementById("kpi-tipos-veiculo-lista");
+      if (!container) return;
+
+      const { distribuicao, semInformacao, total } = calcularDistribuicaoTiposVeiculo(filtrados);
+      if (total === 0) {
+        container.innerHTML = '<p style="font-size:0.85rem; opacity:0.7;">Nenhum agendamento no período/filtro selecionado.</p>';
+        return;
+      }
+
+      const maiorQuantidade = Math.max(1, ...distribuicao.map(d => d.quantidade));
+      let html = distribuicao.map(d => `
+        <div class="barra-tipo-veiculo">
+          <span class="rotulo">${escapeHtml(d.tipo)}</span>
+          <div class="trilha"><div class="preenchimento" style="width:${((d.quantidade / maiorQuantidade) * 100).toFixed(0)}%;"></div></div>
+          <span class="valor">${d.quantidade} (${d.percentual}%)</span>
+        </div>
+      `).join("");
+
+      if (semInformacao > 0) {
+        html += `<p style="font-size:0.78rem; color:var(--texto-suave,#666); margin-top:6px;">${semInformacao} agendamento(s) sem tipo de veículo informado (cadastrados antes deste recurso existir).</p>`;
+      }
+      container.innerHTML = html;
+    }
+
+    // Indicador "Movimentação por Dia da Semana × Horário": heatmap por
+    // intensidade de cor em vez de gráfico 3D — mais fácil de ler numa
+    // tabela simples. As colunas de hora se ajustam sozinhas ao que
+    // existe nos dados (não desenha 24h fixas se o pátio só opera de
+    // manhã, por exemplo).
+    function renderizarHeatmapMovimentacao(filtrados) {
+      const movimentacao = calcularMovimentacaoPorHorario(filtrados);
+      const chave = document.getElementById("kpi-heatmap-processo")?.value || "__todos__";
+      const dados = movimentacao[chave] || { matriz: {}, maisMovimentados: [], menosMovimentados: [] };
+
+      const horasPresentes = new Set();
+      Object.values(dados.matriz).forEach(horas => Object.keys(horas).forEach(h => horasPresentes.add(h)));
+      const horasOrdenadas = Array.from(horasPresentes).sort();
+
+      const tabela = document.getElementById("kpi-heatmap-tabela");
+      if (tabela) {
+        if (horasOrdenadas.length === 0) {
+          tabela.innerHTML = '<tr><td style="padding:10px; text-align:center; opacity:0.7;">Sem dados suficientes para este filtro.</td></tr>';
+        } else {
+          const maiorValor = Math.max(1, ...horasOrdenadas.flatMap(h =>
+            [0, 1, 2, 3, 4, 5, 6].map(dia => (dados.matriz[dia] && dados.matriz[dia][h]) || 0)
+          ));
+
+          function nivelDe(valor) {
+            if (valor === 0) return 0;
+            const proporcao = valor / maiorValor;
+            if (proporcao > 0.75) return 4;
+            if (proporcao > 0.5) return 3;
+            if (proporcao > 0.25) return 2;
+            return 1;
+          }
+
+          const thead = "<thead><tr><th>Horário</th>" + DIAS_SEMANA_LABEL.map(d => `<th>${d.slice(0, 3)}</th>`).join("") + "</tr></thead>";
+          const tbody = "<tbody>" + horasOrdenadas.map(h => {
+            const celulas = [0, 1, 2, 3, 4, 5, 6].map(dia => {
+              const valor = (dados.matriz[dia] && dados.matriz[dia][h]) || 0;
+              return `<td class="celula-heatmap nivel-${nivelDe(valor)}">${valor || ""}</td>`;
+            }).join("");
+            return `<tr><td style="font-weight:600;">${h}h</td>${celulas}</tr>`;
+          }).join("") + "</tbody>";
+
+          tabela.innerHTML = thead + tbody;
+        }
+      }
+
+      const listaPico = document.getElementById("kpi-horarios-pico");
+      const listaVazios = document.getElementById("kpi-horarios-vazios");
+      const formatarSlot = s => `${DIAS_SEMANA_LABEL[s.diaSemana]}, ${s.hora}h — <strong>${s.quantidade}</strong> veículo(s)`;
+      if (listaPico) {
+        listaPico.innerHTML = dados.maisMovimentados?.length
+          ? dados.maisMovimentados.map(s => `<li>${formatarSlot(s)}</li>`).join("")
+          : '<li style="opacity:0.7; list-style:none; margin-left:-20px;">Sem dados suficientes.</li>';
+      }
+      if (listaVazios) {
+        listaVazios.innerHTML = dados.menosMovimentados?.length
+          ? dados.menosMovimentados.map(s => `<li>${formatarSlot(s)}</li>`).join("")
+          : '<li style="opacity:0.7; list-style:none; margin-left:-20px;">Sem dados suficientes.</li>';
+      }
+    }
+
+    document.getElementById("kpi-heatmap-processo")?.addEventListener("change", () => {
+      renderizarHeatmapMovimentacao(ultimosBookingsFiltradosKpis);
+    });
+
     function atualizarPainelKPIs() {
       const dataInicio = document.getElementById("kpi-data-inicio").value;
       const dataFim = document.getElementById("kpi-data-fim").value;
       const empresa = document.getElementById("kpi-empresa").value;
 
       const filtrados = filtrarBookings(todosBookingsGerais, dataInicio, dataFim, empresa);
+      ultimosBookingsFiltradosKpis = filtrados;
       const kpis = calcularKPIs(filtrados);
 
       document.getElementById("kpi-card-dwell").textContent = kpis.dwellTime.formatado;
@@ -3026,6 +3280,10 @@
 
       document.getElementById("kpi-qtd-encaixes").textContent = kpis.modalidade.totalEncaixes;
       document.getElementById("kpi-pct-encaixes").textContent = `${kpis.modalidade.pctEncaixe}%`;
+
+      preencherSelectHeatmapProcessos();
+      renderizarBarrasTiposVeiculo(filtrados);
+      renderizarHeatmapMovimentacao(filtrados);
     }
 
     document.getElementById("btn-filtrar-kpis").addEventListener("click", atualizarPainelKPIs);
@@ -3850,4 +4108,5 @@
     }
   </script>
 </body>
+//fim
 </html>
