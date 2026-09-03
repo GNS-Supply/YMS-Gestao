@@ -2044,10 +2044,22 @@ index 6123d8e..e9af0e2 100644
            dataAgendada: cursor,
            horaInicio: regra.horaInicio,
 diff --git a/style.css b/style.css
-index 404d5e4..06e4cc2 100644
+index 404d5e4..2ce3e93 100644
 --- a/style.css
 +++ b/style.css
-@@ -1379,9 +1379,21 @@ button:focus-visible,
+@@ -422,6 +422,11 @@ button.btn-primario:disabled { opacity: 0.6; cursor: not-allowed; }
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
++  /* Faixa de destaque em âmbar logo abaixo do cabeçalho escuro — o
++     mesmo tom de "Sinalização de Doca" (--laranja) já usado nos avisos
++     e badges do sistema, aplicado aqui como uma linha fina para dar
++     identidade visual ao topo de todas as telas. */
++  border-bottom: 3px solid var(--laranja);
+ }
+ 
+ .topbar .marca { font-weight: 700; font-size: 1.1rem; }
+@@ -1379,9 +1384,21 @@ button:focus-visible,
    flex: 0 0 232px;
    width: 232px;
    background: var(--azul-escuro);
@@ -2064,10 +2076,10 @@ index 404d5e4..06e4cc2 100644
 +     da altura real da .topbar (ver logistica-dashboard.html) e cai
 +     para 60px por padrão nas telas que não fazem essa medição.
 +     */
-+  min-height: calc(100vh - var(--topbar-altura, 60px));
++  min-height: calc(100vh - var(--topbar-altura, 63px));
    position: sticky;
 -  top: 60px;
-+  top: var(--topbar-altura, 60px);
++  top: var(--topbar-altura, 63px);
    display: flex;
    flex-direction: column;
    padding: 14px 0;

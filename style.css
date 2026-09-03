@@ -422,6 +422,11 @@ button.btn-primario:disabled { opacity: 0.6; cursor: not-allowed; }
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* Faixa de destaque em âmbar logo abaixo do cabeçalho escuro — o
+     mesmo tom de "Sinalização de Doca" (--laranja) já usado nos avisos
+     e badges do sistema, aplicado aqui como uma linha fina para dar
+     identidade visual ao topo de todas as telas. */
+  border-bottom: 3px solid var(--laranja);
 }
 
 .topbar .marca { font-weight: 700; font-size: 1.1rem; }
@@ -1391,9 +1396,9 @@ button:focus-visible,
      da altura real da .topbar (ver logistica-dashboard.html) e cai
      para 60px por padrão nas telas que não fazem essa medição.
      */
-  min-height: calc(100vh - var(--topbar-altura, 60px));
+  min-height: calc(100vh - var(--topbar-altura, 63px));
   position: sticky;
-  top: var(--topbar-altura, 60px);
+  top: var(--topbar-altura, 63px);
   display: flex;
   flex-direction: column;
   padding: 14px 0;
